@@ -123,7 +123,7 @@ function buildStoreBreakdown(
   activeMonths: number[],
   brand: string,
   channel: string,
-  ticketRows: Array<{ storeCode: string; tickets: number; totalSales: number }>,
+  ticketRows: Array<{ storeCode: string; tickets: number; totalSales: number; month: number }>,
   storeMap: Map<string, string>,
 ): StoreBreakdownRow[] {
   const canonical = brand !== "total" ? brandIdToCanonical(brand) : null;
@@ -146,7 +146,7 @@ function buildStoreBreakdown(
   // Aggregate tickets by store (cosupc → cosujd via storeMap)
   const ticketsByStore = new Map<string, { tickets: number; sales: number }>();
   for (const t of ticketRows) {
-    if (!activeMonths.includes((t as any).month)) continue;
+    if (!activeMonths.includes(t.month)) continue;
     const cosujd = storeMap.get(t.storeCode)?.trim().toUpperCase() ?? "";
     if (!cosujd) continue;
     const acc = ticketsByStore.get(cosujd) ?? { tickets: 0, sales: 0 };

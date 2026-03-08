@@ -338,9 +338,8 @@ export function useKpiDashboard(): UseKpiDashboardResult {
     for (const t of filteredPrevTickets) { prevTotalTickets += t.tickets; prevTotalSales += t.totalSales; }
 
     // ── Detalle diario → unidades (UPT) y devoluciones ────────────────────
-    let positiveUnits = 0, positiveNeto = 0, absNegativeNeto = 0;
+    let positiveNeto = 0, absNegativeNeto = 0;
     for (const r of daily) {
-      if (r.units > 0) positiveUnits   += r.units;
       if (r.neto > 0)  positiveNeto    += r.neto;
       if (r.neto < 0)  absNegativeNeto += Math.abs(r.neto);
     }

@@ -6,7 +6,7 @@
  * Categorias dinamicas con colores editables.
  * CRUD de eventos con Supabase Realtime.
  *
- * BD: authClient (tablas calendar_events, calendar_categories).
+ * Datos via useCalendar() hook — este componente es solo UI.
  */
 import { useState, useRef, useEffect, useCallback } from "react";
 import FullCalendar from "@fullcalendar/react";
@@ -14,50 +14,13 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import type {
-  EventInput,
   DateSelectArg,
   EventClickArg,
   EventDropArg,
 } from "@fullcalendar/core";
 import { Modal } from "@/components/ui/modal";
 import { useModal } from "@/hooks/useModal";
-import { authClient } from "@/api/client";
-
-// ── Types ────────────────────────────────────────────────────────────────────
-
-interface DbEvent {
-  id: string;
-  title: string;
-  start_date: string;
-  end_date: string | null;
-  category: string;
-}
-
-interface DbCategory {
-  id: string;
-  label: string;
-  color: string;
-}
-
-interface CalendarEvent extends EventInput {
-  extendedProps: { calendar: string };
-}
-
-function toFC(row: DbEvent): CalendarEvent {
-  return {
-    id: row.id,
-    title: row.title,
-    start: row.start_date,
-    end: row.end_date ?? undefined,
-    extendedProps: { calendar: row.category },
-  };
-}
-
-const COLOR_PALETTE = [
-  "#465fff", "#12b76a", "#f04438", "#fb6514", "#eab308",
-  "#a855f7", "#8b5cf6", "#06b6d4", "#14b8a6", "#ec4899",
-  "#f59e0b", "#667085", "#b45309",
-];
+import { useCalendar, type CalendarEvent, type DbCategory } from "./hooks/useCalendar";
 
 // ── Year View helpers ────────────────────────────────────────────────────────
 
@@ -66,6 +29,12 @@ const MONTHS_ES = [
   "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
 ];
 const DOW_ES = ["L","M","M","J","V","S","D"];
+
+const COLOR_PALETTE = [
+  "#465fff", "#12b76a", "#f04438", "#fb6514", "#eab308",
+  "#a855f7", "#8b5cf6", "#06b6d4", "#14b8a6", "#ec4899",
+  "#f59e0b", "#667085", "#b45309",
+];
 
 function eventsForDay(dateStr: string, events: CalendarEvent[]): CalendarEvent[] {
   return events.filter((ev) => {
@@ -160,8 +129,11 @@ function MiniMonth({ year, month, events, categories, today, onDayClick }: MiniM
 // ── Main Calendar component ──────────────────────────────────────────────────
 
 export default function CalendarPage() {
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [categories, setCategories] = useState<Record<string, DbCategory>>({});
+  const {
+    events, categories,
+    addEvent, updateEvent, deleteEvent, moveEvent,
+    updateCategoryColor, addCategory,
+  } = useCalendar();
 
   // Year view
   const [yearViewActive, setYearViewActive] = useState(false);
@@ -186,54 +158,6 @@ export default function CalendarPage() {
 
   const calendarRef = useRef<FullCalendar>(null);
   const { isOpen, openModal, closeModal } = useModal();
-
-  // ── Data + Realtime ────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    authClient.from("calendar_categories").select("*").then(({ data }) => {
-      if (!data) return;
-      const map: Record<string, DbCategory> = {};
-      (data as DbCategory[]).forEach((c) => { map[c.id] = c; });
-      setCategories(map);
-    });
-
-    authClient.from("calendar_events").select("*").then(({ data, error }) => {
-      if (error) { console.error("Error cargando eventos:", error); return; }
-      setEvents((data as DbEvent[]).map(toFC));
-    });
-
-    const evCh = authClient.channel("cal_ev_rt")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "calendar_events" }, (p) => {
-        const row = p.new as DbEvent;
-        setEvents((prev) => prev.some((e) => e.id === row.id) ? prev : [...prev, toFC(row)]);
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "calendar_events" }, (p) => {
-        const row = p.new as DbEvent;
-        setEvents((prev) => prev.map((e) => e.id === row.id ? toFC(row) : e));
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "calendar_events" }, (p) => {
-        const row = p.old as { id: string };
-        setEvents((prev) => prev.filter((e) => e.id !== row.id));
-      })
-      .subscribe();
-
-    const catCh = authClient.channel("cal_cat_rt")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "calendar_categories" }, (p) => {
-        const row = p.new as DbCategory;
-        setCategories((prev) => ({ ...prev, [row.id]: row }));
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "calendar_categories" }, (p) => {
-        const row = p.new as DbCategory;
-        setCategories((prev) => ({ ...prev, [row.id]: row }));
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "calendar_categories" }, (p) => {
-        const row = p.old as { id: string };
-        setCategories((prev) => { const n = { ...prev }; delete n[row.id]; return n; });
-      })
-      .subscribe();
-
-    return () => { authClient.removeChannel(evCh); authClient.removeChannel(catCh); };
-  }, []);
 
   // ── Day view date picker ─────────────────────────────────────────────────
 
@@ -325,64 +249,46 @@ export default function CalendarPage() {
     const { event } = dropInfo;
     const start = event.start?.toISOString().split("T")[0] ?? "";
     const end = event.end?.toISOString().split("T")[0] ?? null;
-    await authClient.from("calendar_events").update({ start_date: start, end_date: end }).eq("id", event.id);
-    setEvents((prev) => prev.map((ev) => ev.id === event.id ? { ...ev, start, end: end ?? undefined } : ev));
+    await moveEvent(event.id, start, end);
   };
 
   const handleEventResize = async (resizeInfo: { event: EventDropArg["event"] }) => {
     const { event } = resizeInfo;
     const start = event.start?.toISOString().split("T")[0] ?? "";
     const end = event.end?.toISOString().split("T")[0] ?? null;
-    await authClient.from("calendar_events").update({ start_date: start, end_date: end }).eq("id", event.id);
-    setEvents((prev) => prev.map((ev) => ev.id === event.id ? { ...ev, start, end: end ?? undefined } : ev));
+    await moveEvent(event.id, start, end);
   };
 
   const handleAddOrUpdateEvent = async () => {
     if (!eventTitle.trim() || !eventCategory) return;
+    const input = {
+      title: eventTitle, startDate: eventStartDate,
+      endDate: eventEndDate, category: eventCategory,
+    };
     if (selectedEvent) {
-      await authClient.from("calendar_events").update({
-        title: eventTitle, start_date: eventStartDate,
-        end_date: eventEndDate || null, category: eventCategory,
-      }).eq("id", selectedEvent.id);
-      setEvents((prev) => prev.map((ev) => ev.id === selectedEvent.id
-        ? { ...ev, title: eventTitle, start: eventStartDate, end: eventEndDate || undefined, extendedProps: { calendar: eventCategory } }
-        : ev));
+      await updateEvent(selectedEvent.id!, input);
     } else {
-      const newId = crypto.randomUUID();
-      await authClient.from("calendar_events").insert({
-        id: newId, title: eventTitle,
-        start_date: eventStartDate, end_date: eventEndDate || null, category: eventCategory,
-      });
-      setEvents((prev) => [...prev, {
-        id: newId, title: eventTitle, start: eventStartDate,
-        end: eventEndDate || undefined, allDay: true,
-        extendedProps: { calendar: eventCategory },
-      }]);
+      await addEvent(input);
     }
     closeModal(); resetModalFields();
   };
 
   const handleDeleteEvent = async () => {
     if (!selectedEvent) return;
-    await authClient.from("calendar_events").delete().eq("id", selectedEvent.id);
-    setEvents((prev) => prev.filter((ev) => ev.id !== selectedEvent.id));
+    await deleteEvent(selectedEvent.id!);
     closeModal(); resetModalFields();
   };
 
   // ── Category handlers ──────────────────────────────────────────────────────
 
   const handleCategoryColorChange = async (id: string, color: string) => {
-    setCategories((prev) => ({ ...prev, [id]: { ...prev[id], color } }));
-    await authClient.from("calendar_categories").update({ color }).eq("id", id);
+    await updateCategoryColor(id, color);
   };
 
   const handleAddCategory = async () => {
     const label = newCatLabel.trim();
     if (!label) return;
-    const id = label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-    const newCat: DbCategory = { id, label, color: newCatColor };
-    await authClient.from("calendar_categories").insert(newCat);
-    setCategories((prev) => ({ ...prev, [id]: newCat }));
+    const id = await addCategory(label, newCatColor);
     setEventCategory(id);
     setShowNewCat(false); setNewCatLabel(""); setNewCatColor("#465fff");
   };
