@@ -292,7 +292,7 @@
 | ID | Hallazgo | Severidad | Detalle |
 |----|----------|-----------|---------|
 | D1 | fjdhstvta1 sin ORDER BY en paginacion | MEDIO | `paginate.ts` documenta que `.order()` causa timeout en tablas grandes sin indice. Mitigation: paginacion secuencial. Riesgo residual: filas duplicadas/faltantes entre paginas. |
-| D2 | v_inventario cartesiano: fix en SQL pero no confirmado en BD | MEDIO | `sql/001_indices_y_vistas.sql` tiene el fix pero no se sabe si fue ejecutado en produccion. 429K filas vs 54K reales. |
+| D2 | ~~v_inventario cartesiano~~ ✅ VERIFICADO 07/03/2026 | RESUELTO | v_inventario=54,624 filas (1:1 con fjdexisemp). mv_stock_tienda=38,686 (filtros+GROUP BY). JOINs con talla correctos en ambas vistas. |
 | D3 | Indices definidos pero no confirmados en BD | MEDIO | 8 indices en el SQL file. No hay verificacion de que existan en la instancia de produccion. |
 | D4 | RLS no habilitado | MEDIO | Supabase con anon key accede a todas las tablas. Aceptable para app interna pero no para multi-tenant. |
 | D5 | Refresh de vistas materializadas sin schedule | BAJO | `mv_stock_tienda` y `mv_ventas_12m_por_tienda_sku` necesitan refresh periodico (pg_cron). |
@@ -330,7 +330,7 @@
 | 13 | Extraer filtrado compartido a `domain/filters/applySalesFilter.ts` | 1h | Eliminar DRY violation |
 | 14 | Sanitizar datos en exportHtml.ts (escape HTML entities) | 30 min | Prevenir XSS potencial |
 | 15 | Eliminar dead code (6 form-elements, iconos no usados) | 30 min | Limpieza |
-| 16 | Confirmar que indices y fix v_inventario estan aplicados en Supabase | 30 min | Verificar BD produccion |
+| 16 | ~~Confirmar indices y fix v_inventario~~ ✅ VERIFICADO 07/03/2026 | — | v_inventario y mv_stock_tienda correctas |
 
 ### Bloque 4: Mejoras (cuando haya tiempo)
 

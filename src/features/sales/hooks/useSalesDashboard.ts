@@ -156,6 +156,11 @@ export function useSalesDashboard(): SalesDashboardData {
     let real = 0, cogs = 0, bruto = 0, dcto = 0;
     for (const r of currRows) { real += r.neto; cogs += r.cogs; bruto += r.bruto; dcto += r.dcto; }
 
+    // YoY simétrico: solo meses cerrados para ambos lados.
+    // Evita comparar "Ene+Feb+7d Mar" vs "Ene+Feb" durante mes parcial.
+    let closedReal = 0;
+    for (const r of filteredCY.filter((r) => closedMonths.includes(r.month))) { closedReal += r.neto; }
+
     let prevNeto = 0;
     for (const r of prevRows) { prevNeto += r.neto; }
 
@@ -166,7 +171,7 @@ export function useSalesDashboard(): SalesDashboardData {
     const grossMarginPct = calcGrossMargin(real, cogs);
     const markdownPct = calcMarkdownDependency(dcto, bruto);
     const budgetAttainment = budget > 0 ? (real / budget) * 100 : 0;
-    const growthVsLY = calcYoY(real, prevNeto);
+    const growthVsLY = closedMonths.length > 0 ? calcYoY(closedReal, prevNeto) : 0;
 
     return {
       real,
