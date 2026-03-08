@@ -7,6 +7,15 @@
 import type { ActionItemFull } from "@/domain/actionQueue/waterfall";
 import type { RiskLevel, WaterfallLevel } from "@/domain/actionQueue/types";
 
+function esc(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 const RISK_COLORS: Record<RiskLevel, string> = {
   critical:  "#FEE2E2",
   low:       "#FEF3C7",
@@ -32,15 +41,15 @@ function row(item: ActionItemFull): string {
   const bg = item.paretoFlag ? "background:#FFFBEB;" : "";
   return `<tr style="${bg}">
     <td style="padding:6px 8px;border:1px solid #E5E7EB;">${item.rank}${item.paretoFlag ? " ★" : ""}</td>
-    <td style="padding:6px 8px;border:1px solid #E5E7EB;font-weight:bold;">${item.store}</td>
-    <td style="padding:6px 8px;border:1px solid #E5E7EB;">${item.sku}<br><span style="font-size:10px;color:#6B7280;">${item.description}</span></td>
-    <td style="padding:6px 8px;border:1px solid #E5E7EB;">${item.brand}</td>
+    <td style="padding:6px 8px;border:1px solid #E5E7EB;font-weight:bold;">${esc(item.store)}</td>
+    <td style="padding:6px 8px;border:1px solid #E5E7EB;">${esc(item.sku)}<br><span style="font-size:10px;color:#6B7280;">${esc(item.description)}</span></td>
+    <td style="padding:6px 8px;border:1px solid #E5E7EB;">${esc(item.brand)}</td>
     <td style="padding:6px 8px;border:1px solid #E5E7EB;"><span style="background:${RISK_COLORS[item.risk]};padding:2px 6px;border-radius:4px;font-size:10px;">${RISK_TEXT[item.risk]}</span></td>
     <td style="padding:6px 8px;border:1px solid #E5E7EB;font-size:10px;">${LEVEL_TEXT[item.waterfallLevel]}</td>
     <td style="padding:6px 8px;border:1px solid #E5E7EB;font-weight:bold;">${item.suggestedUnits}</td>
     <td style="padding:6px 8px;border:1px solid #E5E7EB;">${item.historicalAvg > 0 ? item.historicalAvg.toFixed(1) : "—"}</td>
-    <td style="padding:6px 8px;border:1px solid #E5E7EB;font-size:10px;">${item.timeRestriction}</td>
-    <td style="padding:6px 8px;border:1px solid #E5E7EB;font-size:11px;">${item.recommendedAction}</td>
+    <td style="padding:6px 8px;border:1px solid #E5E7EB;font-size:10px;">${esc(item.timeRestriction)}</td>
+    <td style="padding:6px 8px;border:1px solid #E5E7EB;font-size:11px;">${esc(item.recommendedAction)}</td>
   </tr>`;
 }
 
