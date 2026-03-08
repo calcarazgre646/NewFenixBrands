@@ -6,12 +6,15 @@ import "./index.css";
 import "flatpickr/dist/flatpickr.css";
 import App from "./App";
 import { queryClient } from "@/lib/queryClient";
+import { initSentry } from "@/lib/sentry";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { FilterProvider } from "@/context/FilterContext";
 import { SidebarProvider } from "@/context/SidebarContext";
 import { AppWrapper } from "@/components/common/PageMeta";
+
+initSentry();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

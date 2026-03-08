@@ -57,14 +57,19 @@ export const Modal: React.FC<ModalProps> = ({
     <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-99999">
       {!isFullscreen && (
         <div
+          role="presentation"
           className="fixed inset-0 h-full w-full bg-gray-400/50 backdrop-blur-[32px]"
           onClick={onClose}
         ></div>
       )}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- dialog stopPropagation is intentional */}
       <div
         ref={modalRef}
+        role="dialog"
+        aria-modal="true"
         className={`${contentClasses}  ${className}`}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
       >
         {showCloseButton && (
           <button

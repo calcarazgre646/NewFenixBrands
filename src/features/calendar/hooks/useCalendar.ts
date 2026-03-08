@@ -49,6 +49,7 @@ function toFC(row: DbEvent): CalendarEvent {
 export function useCalendar() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [categories, setCategories] = useState<Record<string, DbCategory>>({});
+  const [saving, setSaving] = useState(false);
 
   // ── Fetch + Realtime ─────────────────────────────────────────────────────
 
@@ -103,33 +104,42 @@ export function useCalendar() {
   const addEvent = useCallback(async (input: {
     title: string; startDate: string; endDate: string; category: string;
   }) => {
-    const newId = crypto.randomUUID();
-    await authClient.from("calendar_events").insert({
-      id: newId, title: input.title,
-      start_date: input.startDate, end_date: input.endDate || null, category: input.category,
-    });
-    setEvents((prev) => [...prev, {
-      id: newId, title: input.title, start: input.startDate,
-      end: input.endDate || undefined, allDay: true,
-      extendedProps: { calendar: input.category },
-    }]);
+    setSaving(true);
+    try {
+      const newId = crypto.randomUUID();
+      await authClient.from("calendar_events").insert({
+        id: newId, title: input.title,
+        start_date: input.startDate, end_date: input.endDate || null, category: input.category,
+      });
+      setEvents((prev) => [...prev, {
+        id: newId, title: input.title, start: input.startDate,
+        end: input.endDate || undefined, allDay: true,
+        extendedProps: { calendar: input.category },
+      }]);
+    } finally { setSaving(false); }
   }, []);
 
   const updateEvent = useCallback(async (id: string, input: {
     title: string; startDate: string; endDate: string; category: string;
   }) => {
-    await authClient.from("calendar_events").update({
-      title: input.title, start_date: input.startDate,
-      end_date: input.endDate || null, category: input.category,
-    }).eq("id", id);
-    setEvents((prev) => prev.map((ev) => ev.id === id
-      ? { ...ev, title: input.title, start: input.startDate, end: input.endDate || undefined, extendedProps: { calendar: input.category } }
-      : ev));
+    setSaving(true);
+    try {
+      await authClient.from("calendar_events").update({
+        title: input.title, start_date: input.startDate,
+        end_date: input.endDate || null, category: input.category,
+      }).eq("id", id);
+      setEvents((prev) => prev.map((ev) => ev.id === id
+        ? { ...ev, title: input.title, start: input.startDate, end: input.endDate || undefined, extendedProps: { calendar: input.category } }
+        : ev));
+    } finally { setSaving(false); }
   }, []);
 
   const deleteEvent = useCallback(async (id: string) => {
-    await authClient.from("calendar_events").delete().eq("id", id);
-    setEvents((prev) => prev.filter((ev) => ev.id !== id));
+    setSaving(true);
+    try {
+      await authClient.from("calendar_events").delete().eq("id", id);
+      setEvents((prev) => prev.filter((ev) => ev.id !== id));
+    } finally { setSaving(false); }
   }, []);
 
   const moveEvent = useCallback(async (id: string, start: string, end: string | null) => {
@@ -153,7 +163,7 @@ export function useCalendar() {
   }, []);
 
   return {
-    events, categories,
+    events, categories, saving,
     addEvent, updateEvent, deleteEvent, moveEvent,
     updateCategoryColor, addCategory,
   };

@@ -87,7 +87,10 @@ function MiniMonth({ year, month, events, categories, today, onDayClick }: MiniM
           return (
             <div
               key={i}
+              role={hasEvents ? "button" : undefined}
+              tabIndex={hasEvents ? 0 : undefined}
               onClick={() => hasEvents && onDayClick(dateStr)}
+              onKeyDown={(e) => { if (hasEvents && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onDayClick(dateStr); } }}
               className={`flex flex-col items-center py-0.5 ${hasEvents ? "cursor-pointer" : ""}`}
             >
               <span
@@ -130,7 +133,7 @@ function MiniMonth({ year, month, events, categories, today, onDayClick }: MiniM
 
 export default function CalendarPage() {
   const {
-    events, categories,
+    events, categories, saving,
     addEvent, updateEvent, deleteEvent, moveEvent,
     updateCategoryColor, addCategory,
   } = useCalendar();
@@ -452,10 +455,11 @@ export default function CalendarPage() {
           <div className="mt-8">
             {/* Title */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              <label htmlFor="cal-event-title" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
                 Titulo del Evento
               </label>
               <input
+                id="cal-event-title"
                 type="text"
                 value={eventTitle}
                 onChange={(e) => setEventTitle(e.target.value)}
@@ -466,10 +470,10 @@ export default function CalendarPage() {
 
             {/* Category */}
             <div className="mt-6">
-              <label className="mb-4 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              <span id="cal-category-label" className="mb-4 block text-sm font-medium text-gray-700 dark:text-gray-400">
                 Categoria
-              </label>
-              <div className="flex flex-wrap items-center gap-4 sm:gap-5">
+              </span>
+              <div role="radiogroup" aria-labelledby="cal-category-label" className="flex flex-wrap items-center gap-4 sm:gap-5">
                 {Object.values(categories).map((cat) => (
                   <label
                     key={cat.id}
@@ -551,16 +555,16 @@ export default function CalendarPage() {
 
             {/* Start date */}
             <div className="mt-6">
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Fecha de Inicio</label>
-              <input type="date" value={eventStartDate} onChange={(e) => setEventStartDate(e.target.value)}
+              <label htmlFor="cal-start-date" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Fecha de Inicio</label>
+              <input id="cal-start-date" type="date" value={eventStartDate} onChange={(e) => setEventStartDate(e.target.value)}
                 className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:focus:border-brand-800"
               />
             </div>
 
             {/* End date */}
             <div className="mt-6">
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Fecha de Fin</label>
-              <input type="date" value={eventEndDate} onChange={(e) => setEventEndDate(e.target.value)}
+              <label htmlFor="cal-end-date" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Fecha de Fin</label>
+              <input id="cal-end-date" type="date" value={eventEndDate} onChange={(e) => setEventEndDate(e.target.value)}
                 className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:focus:border-brand-800"
               />
             </div>
@@ -569,15 +573,15 @@ export default function CalendarPage() {
           {/* Footer */}
           <div className="mt-6 flex items-center gap-3 sm:justify-end">
             {selectedEvent && (
-              <button onClick={handleDeleteEvent} type="button" className="flex w-full justify-center rounded-lg border border-error-300 bg-white px-4 py-2.5 text-sm font-medium text-error-700 hover:bg-error-50 dark:border-error-700 dark:bg-gray-800 dark:text-error-400 dark:hover:bg-error-500/10 sm:w-auto">
-                Eliminar
+              <button onClick={handleDeleteEvent} type="button" disabled={saving} className="flex w-full justify-center rounded-lg border border-error-300 bg-white px-4 py-2.5 text-sm font-medium text-error-700 hover:bg-error-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-error-700 dark:bg-gray-800 dark:text-error-400 dark:hover:bg-error-500/10 sm:w-auto">
+                {saving ? "Eliminando..." : "Eliminar"}
               </button>
             )}
             <button onClick={closeModal} type="button" className="flex w-full justify-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] sm:w-auto">
               Cancelar
             </button>
-            <button onClick={handleAddOrUpdateEvent} type="button" disabled={!eventTitle.trim() || !eventCategory} className="flex w-full justify-center rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
-              {selectedEvent ? "Guardar Cambios" : "Agregar Evento"}
+            <button onClick={handleAddOrUpdateEvent} type="button" disabled={saving || !eventTitle.trim() || !eventCategory} className="flex w-full justify-center rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
+              {saving ? "Guardando..." : selectedEvent ? "Guardar Cambios" : "Agregar Evento"}
             </button>
           </div>
         </div>
