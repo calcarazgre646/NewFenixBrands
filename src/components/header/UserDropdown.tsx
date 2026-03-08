@@ -7,11 +7,13 @@
 import { useState } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { useAuth } from "../../context/AuthContext";
+import { useFilters } from "../../context/FilterContext";
 import { useNavigate } from "react-router";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, logout } = useAuth();
+  const { resetFilters } = useFilters();
   const navigate = useNavigate();
 
   function toggleDropdown() {
@@ -23,6 +25,7 @@ export default function UserDropdown() {
   }
 
   function handleLogout() {
+    resetFilters();
     logout();
     navigate("/signin");
   }

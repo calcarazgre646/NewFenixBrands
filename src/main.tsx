@@ -6,6 +6,7 @@ import "./index.css";
 import "flatpickr/dist/flatpickr.css";
 import App from "./App";
 import { queryClient } from "@/lib/queryClient";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { FilterProvider } from "@/context/FilterContext";
@@ -14,6 +15,7 @@ import { AppWrapper } from "@/components/common/PageMeta";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
+    <ErrorBoundary>
     {/* 1. Theme — debe estar primero para aplicar clase .dark al DOM */}
     <ThemeProvider>
       {/* 2. TanStack Query — proveedor de toda la capa de datos */}
@@ -34,5 +36,6 @@ createRoot(document.getElementById("root")!).render(
         {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
       </QueryClientProvider>
     </ThemeProvider>
+    </ErrorBoundary>
   </StrictMode>
 );

@@ -14,6 +14,7 @@ import {
 } from "react";
 import type { User, Session } from "@supabase/supabase-js";
 import { authClient } from "@/api/client";
+import { queryClient } from "@/lib/queryClient";
 
 interface AuthContextValue {
   user:            User | null;
@@ -81,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await authClient.auth.signOut();
+    queryClient.clear();
   }, []);
 
   return (
