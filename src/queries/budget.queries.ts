@@ -12,6 +12,7 @@
  */
 import { dataClient } from "@/api/client";
 import { parsePYGString, trimStr, toNum } from "@/api/normalize";
+import { fetchAllRows } from "@/queries/paginate";
 
 export interface BudgetRow {
   year:    number;
@@ -40,17 +41,20 @@ export async function fetchBudget(year: number): Promise<BudgetRow[]> {
   // La tabla se llama Budget_2026 — si el año es otro habrá que actualizar
   const tableName = `Budget_${year}`;
 
-  const { data, error } = await dataClient
-    .from(tableName)
-    .select('"Year", "Month", "Area", "Brand", "Channel/Store", "Units", "Revenue", "COGS", "Gross Margin", "%GM"')
-    .eq("Year", year);
+  const buildQuery = () =>
+    dataClient
+      .from(tableName)
+      .select('"Year", "Month", "Area", "Brand", "Channel/Store", "Units", "Revenue", "COGS", "Gross Margin", "%GM"')
+      .eq("Year", year);
 
-  if (error) {
-    console.warn(`fetchBudget: tabla ${tableName} no disponible — ${error.message}`);
+  let data: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
+  try {
+    data = await fetchAllRows(buildQuery);
+  } catch {
     return [];
   }
 
-  return (data ?? []).reduce<BudgetRow[]>((acc, r) => {
+  return data.reduce<BudgetRow[]>((acc, r) => {
     const month = parseMonthName(trimStr(r["Month"]));
     if (!month) return acc; // fila inválida
 

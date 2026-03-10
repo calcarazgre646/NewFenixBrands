@@ -8,6 +8,8 @@ import {
   calcMarkdownDependency,
   calcAOV,
   calcUPT,
+  classifyMarginHealth,
+  marginHealthThresholds,
 } from '../calculations'
 
 describe('calcGrossMargin', () => {
@@ -59,4 +61,46 @@ describe('calcAOV', () => {
 describe('calcUPT', () => {
   it('div por 0 → 0', () => expect(calcUPT(500, 0)).toBe(0))
   it('calcUPT(500, 100) → 5', () => expect(calcUPT(500, 100)).toBe(5))
+})
+
+describe('classifyMarginHealth', () => {
+  // B2C / Total (Fénix): Verde ≥ 55%, Amarillo 50–54.99%, Rojo < 50%
+  it('B2C: 55% → healthy', () => expect(classifyMarginHealth(55, 'b2c')).toBe('healthy'))
+  it('B2C: 60% → healthy', () => expect(classifyMarginHealth(60, 'b2c')).toBe('healthy'))
+  it('B2C: 54.99% → moderate', () => expect(classifyMarginHealth(54.99, 'b2c')).toBe('moderate'))
+  it('B2C: 50% → moderate', () => expect(classifyMarginHealth(50, 'b2c')).toBe('moderate'))
+  it('B2C: 49.99% → low', () => expect(classifyMarginHealth(49.99, 'b2c')).toBe('low'))
+  it('B2C: 30% → low', () => expect(classifyMarginHealth(30, 'b2c')).toBe('low'))
+  it('total defaults to B2C thresholds', () => expect(classifyMarginHealth(52, 'total')).toBe('moderate'))
+  it('default channel = total', () => expect(classifyMarginHealth(56)).toBe('healthy'))
+
+  // B2B: Verde ≥ 50%, Amarillo 40–49.99%, Rojo < 40%
+  it('B2B: 50% → healthy', () => expect(classifyMarginHealth(50, 'b2b')).toBe('healthy'))
+  it('B2B: 55% → healthy', () => expect(classifyMarginHealth(55, 'b2b')).toBe('healthy'))
+  it('B2B: 49.99% → moderate', () => expect(classifyMarginHealth(49.99, 'b2b')).toBe('moderate'))
+  it('B2B: 40% → moderate', () => expect(classifyMarginHealth(40, 'b2b')).toBe('moderate'))
+  it('B2B: 39.99% → low', () => expect(classifyMarginHealth(39.99, 'b2b')).toBe('low'))
+  it('B2B: 20% → low', () => expect(classifyMarginHealth(20, 'b2b')).toBe('low'))
+
+  // Edge cases
+  it('0% → low for any channel', () => {
+    expect(classifyMarginHealth(0, 'b2c')).toBe('low')
+    expect(classifyMarginHealth(0, 'b2b')).toBe('low')
+  })
+  it('100% → healthy for any channel', () => {
+    expect(classifyMarginHealth(100, 'b2c')).toBe('healthy')
+    expect(classifyMarginHealth(100, 'b2b')).toBe('healthy')
+  })
+})
+
+describe('marginHealthThresholds', () => {
+  it('B2C: red=50, yellow=55', () => {
+    expect(marginHealthThresholds('b2c')).toEqual({ red: 50, yellow: 55 })
+  })
+  it('total: same as B2C', () => {
+    expect(marginHealthThresholds('total')).toEqual({ red: 50, yellow: 55 })
+  })
+  it('B2B: red=40, yellow=50', () => {
+    expect(marginHealthThresholds('b2b')).toEqual({ red: 40, yellow: 50 })
+  })
 })

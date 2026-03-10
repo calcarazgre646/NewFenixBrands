@@ -25,9 +25,12 @@ export default function AppLayout() {
         } ${isMobileOpen ? "ml-0" : ""}`}
       >
         <AppHeader />
-        <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">
+        <main id="main-content" className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">
           <Outlet />
-        </div>
+        </main>
+        <p className="pb-6 pt-2 text-center text-[10px] font-light tracking-wide text-gray-300 dark:text-gray-700">
+          Desarrollado por Subestática · {new Date().getFullYear()}
+        </p>
       </div>
     </div>
   );

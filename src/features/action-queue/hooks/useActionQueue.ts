@@ -6,19 +6,17 @@
  *
  * Pattern: fetch data → compute pure → memoize result.
  */
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useFilters } from "@/context/FilterContext";
 import { fetchInventory, toInventoryRecord } from "@/queries/inventory.queries";
 import { fetchSalesHistory } from "@/queries/salesHistory.queries";
 import type { SalesHistoryMap } from "@/queries/salesHistory.queries";
-import { inventoryKeys, salesHistoryKeys } from "@/queries/keys";
+import { inventoryKeys, salesHistoryKeys, STALE_30MIN, GC_60MIN } from "@/queries/keys";
 import { getStoreCluster } from "@/domain/actionQueue/clusters";
 import { computeActionQueue } from "@/domain/actionQueue/waterfall";
 import type { ActionItemFull } from "@/domain/actionQueue/waterfall";
 import type { InventoryRecord } from "@/domain/actionQueue/types";
-
-const STALE_30MIN = 30 * 60 * 1000;
-const GC_60MIN    = 60 * 60 * 1000;
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -26,14 +24,14 @@ export type ChannelMode = "b2c" | "b2b";
 
 export interface ActionQueueFilters {
   channel: ChannelMode;
-  brand: string | null;
-  linea: string | null;
-  categoria: string | null;
-  store: string | null;
+  /** Brand from global FilterContext ("total"|"martel"|"wrangler"|"lee") */
+  brand: string;
 }
 
 export interface ActionQueueData {
   items: ActionItemFull[];
+  /** Total units currently in stock per store (all SKUs, not just actioned ones) */
+  storeStockMap: Map<string, number>;
   totalItems: number;
   paretoCount: number;
   criticalCount: number;
@@ -42,38 +40,19 @@ export interface ActionQueueData {
   uniqueSkus: number;
   filters: ActionQueueFilters;
   setChannel: (ch: ChannelMode) => void;
-  setBrand: (b: string | null) => void;
-  setLinea: (l: string | null) => void;
-  setCategoria: (c: string | null) => void;
-  setStore: (s: string | null) => void;
-  clearFilters: () => void;
-  hasFilters: boolean;
   isLoading: boolean;
   isHistoryLoading: boolean;
   error: string | null;
-  availableBrands: string[];
-  availableLineas: string[];
-  availableCategorias: string[];
-  availableStores: string[];
 }
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useActionQueue(): ActionQueueData {
+  const { filters: globalFilters } = useFilters();
   const [channel, setChannel] = useState<ChannelMode>("b2c");
-  const [brand, setBrand] = useState<string | null>(null);
-  const [linea, setLinea] = useState<string | null>(null);
-  const [categoria, setCategoria] = useState<string | null>(null);
-  const [store, setStore] = useState<string | null>(null);
 
-  const clearFilters = useCallback(() => {
-    setBrand(null);
-    setLinea(null);
-    setCategoria(null);
-    setStore(null);
-  }, []);
-
-  const hasFilters = brand !== null || linea !== null || categoria !== null || store !== null;
+  // Brand comes from global FilterContext (header avatars)
+  const brand = globalFilters.brand === "total" ? null : globalFilters.brand;
 
   // ── Fetch inventory ────────────────────────────────────────────────────────
   const inventoryQ = useQuery({
@@ -105,48 +84,39 @@ export function useActionQueue(): ActionQueueData {
 
   // ── Fetch sales history (depends on inventory SKUs) ────────────────────────
   const historyQ = useQuery({
-    queryKey: salesHistoryKeys.byStore(uniqueSkuList, 12),
+    queryKey: salesHistoryKeys.byStore(uniqueSkuList, 6),
     queryFn: () => fetchSalesHistory(uniqueSkuList),
     enabled: uniqueSkuList.length > 0,
     staleTime: STALE_30MIN,
     gcTime: GC_60MIN,
   });
 
-  const bestDayMap = useMemo(() => new Map<string, string>(), []);
-
-  // ── Extract available filter options ───────────────────────────────────────
-  const { availableBrands, availableLineas, availableCategorias, availableStores } = useMemo(() => {
-    const brands     = new Set<string>();
-    const lineas     = new Set<string>();
-    const categorias = new Set<string>();
-    const stores     = new Set<string>();
+  // ── Total stock per store (all SKUs, for occupancy display) ───────────────
+  const storeStockMap = useMemo(() => {
+    const map = new Map<string, number>();
     for (const r of records) {
-      if (r.brand) brands.add(r.brand);
-      if (r.linea && r.linea !== "Sin linea") lineas.add(r.linea);
-      if (r.categoria && r.categoria !== "Sin categoria") categorias.add(r.categoria);
-      if (r.store) stores.add(r.store);
+      const store = r.store.trim().toUpperCase();
+      map.set(store, (map.get(store) ?? 0) + r.units);
     }
-    return {
-      availableBrands: Array.from(brands).sort(),
-      availableLineas: Array.from(lineas).sort(),
-      availableCategorias: Array.from(categorias).sort(),
-      availableStores: Array.from(stores).sort(),
-    };
+    return map;
   }, [records]);
 
   // ── Run waterfall algorithm ────────────────────────────────────────────────
+  // IMPORTANT: Wait for sales history before computing. Running without history
+  // produces wrong deficit/surplus classification that flickers when history loads.
   const items = useMemo(() => {
     if (records.length === 0) return [];
+    if (!historyQ.data && historyQ.isLoading) return [];
     const history: SalesHistoryMap = historyQ.data ?? new Map();
     return computeActionQueue(
-      { inventory: records, salesHistory: history, bestDayMap },
+      { inventory: records, salesHistory: history },
       channel,
       brand,
-      linea,
-      categoria,
-      store,
+      null,
+      null,
+      null,
     );
-  }, [records, historyQ.data, bestDayMap, channel, brand, linea, categoria, store]);
+  }, [records, historyQ.data, historyQ.isLoading, channel, brand]);
 
   // ── Derived stats ──────────────────────────────────────────────────────────
   const { totalItems, paretoCount, criticalCount, lowCount, overstockCount, uniqueSkus } =
@@ -172,26 +142,17 @@ export function useActionQueue(): ActionQueueData {
 
   return {
     items,
+    storeStockMap,
     totalItems,
     paretoCount,
     criticalCount,
     lowCount,
     overstockCount,
     uniqueSkus,
-    filters: { channel, brand, linea, categoria, store },
+    filters: { channel, brand: globalFilters.brand },
     setChannel,
-    setBrand,
-    setLinea,
-    setCategoria,
-    setStore,
-    clearFilters,
-    hasFilters,
-    isLoading: inventoryQ.isLoading,
+    isLoading: inventoryQ.isLoading || (historyQ.isLoading && records.length > 0),
     isHistoryLoading: historyQ.isLoading,
     error: inventoryQ.error?.message ?? historyQ.error?.message ?? null,
-    availableBrands,
-    availableLineas,
-    availableCategorias,
-    availableStores,
   };
 }

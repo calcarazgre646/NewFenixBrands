@@ -4,109 +4,79 @@
  * Logistica / ETAs de Importacion.
  *
  * Secciones:
- *   1. Header + filtros (marca, categoria, ver pasados)
- *   2. Summary cards (ordenes activas, unidades, proxima llegada, por origen)
- *   3. Tabla agrupada por orden (marca + proveedor + ETA), expandible
+ *   1. Header global: filtro de marca (avatares, consistente con Inicio/Ventas/Acciones)
+ *   2. Filtros in-page: categoria, ver pasados
+ *   3. Summary cards (ordenes activas, unidades, atrasados, proxima llegada, por origen)
+ *   4. Tabla agrupada por orden (marca + proveedor + ETA), expandible
  *
  * REGLA: Sin logica de negocio. Solo layout + composicion.
  */
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useLogistics } from "./hooks/useLogistics";
 import { statusLabel } from "@/domain/logistics/arrivals";
+import { Badge } from "@/components/ui/badge/Badge";
+import { Card } from "@/components/ui/card/Card";
+import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
 import type { ArrivalStatus, LogisticsGroup, LogisticsArrival } from "@/domain/logistics/types";
 
 // ─── Status badge styles ─────────────────────────────────────────────────────
 
 const STATUS_STYLE: Record<ArrivalStatus, string> = {
+  overdue:    "bg-error-100 dark:bg-error-500/15 text-error-700 dark:text-error-400",
   past:       "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400",
   this_month: "bg-warning-100 dark:bg-warning-500/15 text-warning-700 dark:text-warning-400",
   next_month: "bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400",
   upcoming:   "bg-success-100 dark:bg-success-500/15 text-success-700 dark:text-success-400",
 };
 
-// ─── Skeleton ────────────────────────────────────────────────────────────────
-
-function LogisticsSkeleton() {
-  return (
-    <div className="animate-pulse space-y-6 p-4 sm:p-6">
-      <div className="h-14 rounded-2xl bg-gray-100 dark:bg-gray-800" />
-      <div className="grid grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-20 rounded-2xl bg-gray-100 dark:bg-gray-800" />
-        ))}
-      </div>
-      <div className="h-96 rounded-2xl bg-gray-100 dark:bg-gray-800" />
-    </div>
-  );
-}
-
-// ─── Filter Select ───────────────────────────────────────────────────────────
-
-function FilterSelect({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string | null;
-  options: string[];
-  onChange: (v: string | null) => void;
-}) {
-  return (
-    <select
-      value={value ?? ""}
-      onChange={(e) => onChange(e.target.value || null)}
-      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
-      aria-label={label}
-    >
-      <option value="">{label}</option>
-      {options.map((o) => (
-        <option key={o} value={o}>{o}</option>
-      ))}
-    </select>
-  );
-}
-
 // ─── Stat Card ───────────────────────────────────────────────────────────────
 
-function StatCard({ label, children }: { label: string; children: React.ReactNode }) {
+function LogisticsStatCard({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
+    <Card padding="sm">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">
         {label}
       </p>
       {children}
-    </div>
+    </Card>
   );
 }
 
-// ─── Badge ───────────────────────────────────────────────────────────────────
+// ─── Chevron icon ────────────────────────────────────────────────────────────
 
-function Badge({ text, className }: { text: string; className: string }) {
+function ChevronIcon({ open, className }: { open: boolean; className?: string }) {
   return (
-    <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${className}`}>
-      {text}
-    </span>
-  );
-}
-
-// ─── Chevron icons (inline SVG) ──────────────────────────────────────────────
-
-function ChevronDown({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <svg
+      className={`transition-transform duration-200 ${open ? "rotate-180" : ""} ${className ?? "h-4 w-4 text-gray-400"}`}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
     </svg>
   );
 }
 
-function ChevronUp({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-    </svg>
-  );
+// ─── PVP Range helper ────────────────────────────────────────────────────────
+
+function pvpRange(rows: LogisticsArrival[]): string {
+  const vals = rows.map(r => r.pvpB2C).filter(v => v > 0);
+  if (vals.length === 0) return "—";
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  if (min === max) return min.toLocaleString("es-PY");
+  return `${min.toLocaleString("es-PY")}–${max.toLocaleString("es-PY")}`;
+}
+
+function marginRange(rows: LogisticsArrival[]): { label: string; value: number } {
+  const vals = rows.map(r => r.marginB2C).filter(v => v > 0);
+  if (vals.length === 0) return { label: "—", value: 0 };
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
+  if (min === max) return { label: `${min}%`, value: min };
+  return { label: `${min}–${max}%`, value: avg };
 }
 
 // ─── Group Row ───────────────────────────────────────────────────────────────
@@ -120,21 +90,23 @@ function GroupRow({
   isExpanded: boolean;
   onToggle: () => void;
 }) {
+  const margin = marginRange(group.rows);
+
   return (
     <>
       <tr
         onClick={onToggle}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
+        tabIndex={0}
+        role="row"
+        aria-expanded={isExpanded}
         className={`cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02] ${
           group.status === "past" ? "opacity-50" : ""
-        }`}
+        } ${group.status === "overdue" ? "bg-error-50/30 dark:bg-error-500/[0.03]" : ""}`}
       >
         {/* Expand */}
         <td className="w-8 px-3 py-3">
-          <span className="text-gray-400 dark:text-gray-500">
-            {isExpanded
-              ? <ChevronUp className="h-4 w-4" />
-              : <ChevronDown className="h-4 w-4" />}
-          </span>
+          <ChevronIcon open={isExpanded} />
         </td>
 
         {/* ETA */}
@@ -197,16 +169,16 @@ function GroupRow({
           )}
         </td>
 
-        {/* PVP B2C */}
+        {/* PVP B2C — rango si hay variación */}
         <td className="whitespace-nowrap px-3 py-3 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
-          {group.rows[0].pvpB2C > 0 ? group.rows[0].pvpB2C.toLocaleString("es-PY") : "—"}
+          {pvpRange(group.rows)}
         </td>
 
-        {/* Margen B2C */}
+        {/* Margen B2C — rango si hay variación */}
         <td className="px-3 py-3">
-          {group.rows[0].marginB2C > 0 ? (
+          {margin.value > 0 ? (
             <span className="text-xs font-semibold text-success-600 dark:text-success-400">
-              {group.rows[0].marginB2C}%
+              {margin.label}
             </span>
           ) : (
             <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
@@ -216,23 +188,28 @@ function GroupRow({
 
       {/* Child rows */}
       {isExpanded && group.rows.map((row, ri) => (
-        <ChildRow key={`${group.key}-${ri}`} row={row} />
+        <ChildRow key={`${group.key}-${row.description}-${row.color}-${ri}`} row={row} />
       ))}
     </>
   );
 }
 
-// ─── Child Row (detail per category) ─────────────────────────────────────────
+// ─── Child Row (detail per line) ─────────────────────────────────────────────
 
 function ChildRow({ row }: { row: LogisticsArrival }) {
   return (
     <tr className="bg-gray-50/60 transition-colors hover:bg-gray-50 dark:bg-white/[0.01] dark:hover:bg-white/[0.03]">
       <td className="px-3 py-2.5" />
-      <td className="px-3 py-2.5" />
-      <td className="px-3 py-2.5" />
-      <td className="px-3 py-2.5 text-xs text-gray-400 dark:text-gray-500">
-        {row.season || "—"}
+      {/* Descripción del producto */}
+      <td colSpan={2} className="px-3 py-2.5">
+        <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+          {row.description || "Sin descripcion"}
+        </p>
+        <p className="mt-0.5 text-[10px] text-gray-400 dark:text-gray-500">
+          {row.season ? `Temp. ${row.season}` : ""}
+        </p>
       </td>
+      {/* Color */}
       <td className="px-3 py-2.5">
         {row.color ? (
           <span className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
@@ -243,6 +220,8 @@ function ChildRow({ row }: { row: LogisticsArrival }) {
           <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
         )}
       </td>
+      <td className="px-3 py-2.5" />
+      {/* Categoria */}
       <td className="px-3 py-2.5">
         {row.category ? (
           <Badge text={row.category} className="bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400" />
@@ -251,14 +230,17 @@ function ChildRow({ row }: { row: LogisticsArrival }) {
         )}
       </td>
       <td className="px-3 py-2.5" />
+      {/* Unidades */}
       <td className="px-3 py-2.5">
         <span className="text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
           {row.quantity.toLocaleString("es-PY")}
         </span>
       </td>
+      {/* PVP B2C */}
       <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums text-gray-600 dark:text-gray-400">
         {row.pvpB2C > 0 ? row.pvpB2C.toLocaleString("es-PY") : "—"}
       </td>
+      {/* Margen B2C */}
       <td className="px-3 py-2.5">
         {row.marginB2C > 0 ? (
           <span className="text-xs font-semibold text-success-600 dark:text-success-400">
@@ -278,30 +260,33 @@ export default function LogisticsPage() {
   const {
     groups,
     summary,
-    filters,
-    setBrand,
-    setCategory,
+    showPast,
     togglePast,
-    clearFilters,
-    hasFilters,
     isLoading,
     error,
-    availableBrands,
-    availableCategories,
+    hiddenPastCount,
   } = useLogistics();
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  function toggleGroup(key: string) {
+  const toggleGroup = useCallback((key: string) => {
     setExpanded(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
-  }
+  }, []);
 
-  if (isLoading) return <LogisticsSkeleton />;
+  const expandAll = useCallback(() => {
+    setExpanded(new Set(groups.map(g => g.key)));
+  }, [groups]);
+
+  const collapseAll = useCallback(() => {
+    setExpanded(new Set());
+  }, []);
+
+  if (isLoading) return <PageSkeleton />;
 
   if (error) {
     return (
@@ -316,63 +301,63 @@ export default function LogisticsPage() {
   const COLS = ["", "ETA", "Estado", "Marca", "Proveedor", "Categorias", "Origen", "Unidades", "PVP B2C", "Margen B2C"];
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-          Logistica / ETAs
-        </h1>
-        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-          Pedidos de importacion con fechas estimadas de arribo por marca
-        </p>
-      </div>
+    <div className="space-y-5 p-4 sm:p-6">
 
-      {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
-        <FilterSelect label="Marca" value={filters.brand} options={availableBrands} onChange={setBrand} />
-        <FilterSelect label="Categoria" value={filters.category} options={availableCategories} onChange={setCategory} />
-
-        <button
-          onClick={togglePast}
-          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-            filters.showPast
-              ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900"
-              : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
-          }`}
-        >
-          {filters.showPast ? "Ocultar pasados" : "Ver pasados"}
-        </button>
-
-        {hasFilters && (
+      {/* ═══ FILTER ROW ═══ */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
           <button
-            onClick={clearFilters}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            type="button"
+            onClick={() => !showPast || togglePast()}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors duration-[var(--duration-fast)] ${
+              !showPast
+                ? "bg-brand-500 font-semibold text-white"
+                : "bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+            }`}
           >
-            Limpiar filtros
+            Activos
           </button>
-        )}
+          <button
+            type="button"
+            onClick={() => showPast || togglePast()}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors duration-[var(--duration-fast)] ${
+              showPast
+                ? "bg-brand-500 font-semibold text-white"
+                : "bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+            }`}
+          >
+            Todos{!showPast && hiddenPastCount > 0 && (
+              <span className="ml-1 font-normal opacity-70">+{hiddenPastCount}</span>
+            )}
+          </button>
+        </div>
 
         <div className="ml-auto text-xs text-gray-400">
           {groups.length} orden{groups.length !== 1 ? "es" : ""}
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Ordenes activas">
+      {/* ═══ Summary cards ═══ */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <LogisticsStatCard label="Ordenes activas">
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{summary.activeOrders}</p>
-        </StatCard>
-        <StatCard label="Unidades en transito">
+        </LogisticsStatCard>
+        <LogisticsStatCard label="Unidades en transito">
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
             {summary.totalUnits.toLocaleString("es-PY")}
           </p>
-        </StatCard>
-        <StatCard label="Proxima llegada">
+        </LogisticsStatCard>
+        {summary.overdueCount > 0 && (
+          <LogisticsStatCard label="Atrasados">
+            <p className="text-2xl font-bold text-error-600 dark:text-error-400">{summary.overdueCount}</p>
+          </LogisticsStatCard>
+        )}
+        <LogisticsStatCard label="Proxima llegada">
           <p className="text-sm font-bold text-brand-600 dark:text-brand-400 leading-tight">
             {summary.nextDate}
           </p>
-        </StatCard>
-        <StatCard label="Por origen">
+        </LogisticsStatCard>
+        <LogisticsStatCard label="Por origen">
           <div className="space-y-0.5">
             {Object.entries(summary.byOrigin)
               .sort((a, b) => b[1] - a[1])
@@ -385,21 +370,34 @@ export default function LogisticsPage() {
                   </span>
                 </div>
               ))}
+            {Object.keys(summary.byOrigin).length > 3 && (
+              <p className="text-[10px] text-gray-400">+{Object.keys(summary.byOrigin).length - 3} mas</p>
+            )}
           </div>
-        </StatCard>
+        </LogisticsStatCard>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+      {/* ═══ Table ═══ */}
+      <Card padding="none" className="overflow-x-auto">
         {/* Toolbar */}
-        {expanded.size > 0 && (
-          <div className="flex items-center justify-end border-b border-gray-100 px-4 py-2 dark:border-gray-700">
-            <button
-              onClick={() => setExpanded(new Set())}
-              className="text-xs text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-            >
-              Colapsar todo
-            </button>
+        {groups.length > 0 && (
+          <div className="flex items-center justify-end gap-2 border-b border-gray-100 px-4 py-2 dark:border-gray-700">
+            {expanded.size < groups.length && (
+              <button
+                onClick={expandAll}
+                className="text-xs text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+              >
+                Expandir todo
+              </button>
+            )}
+            {expanded.size > 0 && (
+              <button
+                onClick={collapseAll}
+                className="text-xs text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+              >
+                Colapsar todo
+              </button>
+            )}
           </div>
         )}
 
@@ -409,6 +407,7 @@ export default function LogisticsPage() {
               {COLS.map(h => (
                 <th
                   key={h}
+                  scope="col"
                   className="whitespace-nowrap px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400"
                 >
                   {h}
@@ -435,7 +434,7 @@ export default function LogisticsPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
     </div>
   );
 }

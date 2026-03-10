@@ -1,11 +1,17 @@
 /**
  * features/action-queue/components/exportHtml.ts
  *
- * Generates an HTML file from the action queue for Outlook/Office 365.
- * Table-based layout with inline CSS only.
+ * Generates a styled HTML file for a single group (store or brand).
+ * Structured by operational sections — mirrors the dashboard UI.
+ * Designed for sharing via email/WhatsApp — self-contained, inline CSS only.
+ *
+ * Security: all dynamic text is HTML-escaped via esc().
  */
 import type { ActionItemFull } from "@/domain/actionQueue/waterfall";
-import type { RiskLevel, WaterfallLevel } from "@/domain/actionQueue/types";
+import type { RiskLevel } from "@/domain/actionQueue/types";
+import type { ActionSection, OperationalIntent } from "@/domain/actionQueue/grouping";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function esc(str: string): string {
   return str
@@ -16,108 +22,193 @@ function esc(str: string): string {
     .replace(/'/g, "&#39;");
 }
 
-const RISK_COLORS: Record<RiskLevel, string> = {
+const RISK_BG: Record<RiskLevel, string> = {
   critical:  "#FEE2E2",
   low:       "#FEF3C7",
   overstock: "#DBEAFE",
   balanced:  "#F3F4F6",
 };
 
-const RISK_TEXT: Record<RiskLevel, string> = {
+const RISK_COLOR: Record<RiskLevel, string> = {
+  critical:  "#DC2626",
+  low:       "#D97706",
+  overstock: "#2563EB",
+  balanced:  "#6B7280",
+};
+
+const RISK_LABEL: Record<RiskLevel, string> = {
   critical:  "Sin Stock",
   low:       "Stock Bajo",
   overstock: "Sobrestock",
-  balanced:  "Balanceado",
+  balanced:  "OK",
 };
 
-const LEVEL_TEXT: Record<WaterfallLevel, string> = {
-  store_to_store:   "Tienda↔Tienda",
-  depot_to_store:   "Deposito→Tienda",
-  central_to_depot: "Central→Deposito",
-  central_to_b2b:   "Central→B2B",
+const INTENT_COLORS: Record<OperationalIntent, { border: string; bg: string; text: string }> = {
+  receive_transfer: { border: "#A855F7", bg: "#FAF5FF", text: "#7E22CE" },
+  receive_depot:    { border: "#06B6D4", bg: "#ECFEFF", text: "#0E7490" },
+  resupply_depot:   { border: "#F97316", bg: "#FFF7ED", text: "#C2410C" },
+  redistribute:     { border: "#3B82F6", bg: "#EFF6FF", text: "#1D4ED8" },
+  ship_b2b:         { border: "#10B981", bg: "#ECFDF5", text: "#047857" },
 };
 
-function row(item: ActionItemFull): string {
-  const bg = item.paretoFlag ? "background:#FFFBEB;" : "";
-  return `<tr style="${bg}">
-    <td style="padding:6px 8px;border:1px solid #E5E7EB;">${item.rank}${item.paretoFlag ? " ★" : ""}</td>
-    <td style="padding:6px 8px;border:1px solid #E5E7EB;font-weight:bold;">${esc(item.store)}</td>
-    <td style="padding:6px 8px;border:1px solid #E5E7EB;">${esc(item.sku)}<br><span style="font-size:10px;color:#6B7280;">${esc(item.description)}</span></td>
-    <td style="padding:6px 8px;border:1px solid #E5E7EB;">${esc(item.brand)}</td>
-    <td style="padding:6px 8px;border:1px solid #E5E7EB;"><span style="background:${RISK_COLORS[item.risk]};padding:2px 6px;border-radius:4px;font-size:10px;">${RISK_TEXT[item.risk]}</span></td>
-    <td style="padding:6px 8px;border:1px solid #E5E7EB;font-size:10px;">${LEVEL_TEXT[item.waterfallLevel]}</td>
-    <td style="padding:6px 8px;border:1px solid #E5E7EB;font-weight:bold;">${item.suggestedUnits}</td>
-    <td style="padding:6px 8px;border:1px solid #E5E7EB;">${item.historicalAvg > 0 ? item.historicalAvg.toFixed(1) : "—"}</td>
-    <td style="padding:6px 8px;border:1px solid #E5E7EB;font-size:10px;">${esc(item.timeRestriction)}</td>
-    <td style="padding:6px 8px;border:1px solid #E5E7EB;font-size:11px;">${esc(item.recommendedAction)}</td>
+// ─── Row renderer ─────────────────────────────────────────────────────────────
+
+function actionRow(item: ActionItemFull, idx: number, showStore: boolean): string {
+  const stripe = idx % 2 === 0 ? "" : "background:#FAFAFA;";
+  const riskBg = RISK_BG[item.risk];
+  const riskColor = RISK_COLOR[item.risk];
+
+  const mosStyle = item.currentMOS < 1
+    ? "color:#DC2626;font-weight:700;"
+    : item.currentMOS < 2
+    ? "color:#D97706;font-weight:600;"
+    : item.currentMOS > 6
+    ? "color:#2563EB;"
+    : "";
+
+  const counterparts = item.counterpartStores.length > 1
+    ? item.counterpartStores.slice(1).map(c =>
+        `<br><span style="color:#9CA3AF;font-size:10px;">+ ${esc(c.store)} (${c.units} u.)</span>`
+      ).join("")
+    : "";
+
+  return `<tr style="${stripe}">
+    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;color:#9CA3AF;">${idx + 1}</td>
+    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;">
+      <span style="font-size:12px;font-weight:600;color:#111827;">${esc(item.skuComercial || item.sku)}</span>
+      ${item.skuComercial ? `<span style="font-size:10px;color:#9CA3AF;margin-left:4px;">${esc(item.sku)}</span>` : ""}
+      <br><span style="font-size:11px;color:#6B7280;">${esc(item.description)}</span>
+    </td>
+    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:12px;color:#374151;">${esc(item.talle)}</td>
+    ${showStore ? `<td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:12px;font-weight:500;color:#374151;">${esc(item.store)}</td>` : ""}
+    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;">
+      <span style="display:inline-block;background:${riskBg};color:${riskColor};padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;">${RISK_LABEL[item.risk]}</span>
+    </td>
+    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:14px;font-weight:700;color:#111827;text-align:center;">${item.suggestedUnits}</td>
+    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;color:#6B7280;">${item.historicalAvg > 0 ? item.historicalAvg.toFixed(1) : "—"}</td>
+    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;${mosStyle}">${item.currentMOS > 0 ? item.currentMOS.toFixed(1) : "—"}</td>
+    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;color:#374151;">${esc(item.recommendedAction)}${counterparts}</td>
   </tr>`;
 }
 
-function tableHeader(): string {
-  const cols = ["#", "Tienda", "SKU / Descripcion", "Marca", "Riesgo", "Nivel", "Unidades", "Prom/Mes", "Horario", "Accion Recomendada"];
-  const ths = cols.map(c => `<th style="padding:8px;border:1px solid #D1D5DB;background:#F9FAFB;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">${c}</th>`).join("");
-  return `<tr>${ths}</tr>`;
+// ─── Section renderer ─────────────────────────────────────────────────────────
+
+function sectionBlock(section: ActionSection, showStore: boolean): string {
+  const colors = INTENT_COLORS[section.intent];
+  const cols = ["#", "Producto", "Talle"];
+  if (showStore) cols.push("Tienda");
+  cols.push("Estado", "Uds.", "Prom 6m", "MOS", "Accion");
+
+  const headerCells = cols.map(c =>
+    `<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#6B7280;border-bottom:1px solid #E5E7EB;white-space:nowrap;">${c}</th>`
+  ).join("");
+
+  const criticalBadge = section.criticalCount > 0
+    ? `<span style="display:inline-block;background:#FEE2E2;color:#DC2626;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;margin-left:8px;">${section.criticalCount} sin stock</span>`
+    : "";
+
+  return `
+  <!-- Section: ${esc(section.label)} -->
+  <details style="margin:16px 28px 0;">
+    <summary style="border-left:4px solid ${colors.border};background:${colors.bg};padding:12px 16px;border-radius:0 8px 8px 0;cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;">
+      <span style="font-size:10px;color:${colors.text};transition:transform 0.2s;">&#9654;</span>
+      <span style="font-size:13px;font-weight:700;color:${colors.text};">${esc(section.label)}</span>
+      <span style="font-size:11px;color:#6B7280;">${section.items.length} ${section.items.length === 1 ? "accion" : "acciones"} · ${section.totalUnits.toLocaleString("es-PY")} u.</span>
+      ${criticalBadge}
+    </summary>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#FFFFFF;">
+      <thead><tr>${headerCells}</tr></thead>
+      <tbody>${section.items.map((item, idx) => actionRow(item, idx, showStore)).join("")}</tbody>
+    </table>
+  </details>`;
 }
 
-export function downloadActionQueueHtml(items: ActionItemFull[], mode: "b2c" | "b2b"): void {
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+export interface ExportGroupOptions {
+  groupLabel: string;
+  channel: string;
+  mode: "store" | "brand";
+  items: ActionItemFull[];
+  sections: ActionSection[];
+}
+
+export function downloadGroupHtml({ groupLabel, channel, mode, items, sections }: ExportGroupOptions): void {
   const now = new Date();
   const dateStr = now.toISOString().split("T")[0];
-  const timeStr = now.toLocaleTimeString("es-PY");
-  const paretoItems = items.filter(i => i.paretoFlag);
-  const otherItems  = items.filter(i => !i.paretoFlag);
-  const criticalCount  = items.filter(i => i.risk === "critical").length;
-  const lowCount       = items.filter(i => i.risk === "low").length;
-  const overstockCount = items.filter(i => i.risk === "overstock").length;
-  const storeToStore   = items.filter(i => i.waterfallLevel === "store_to_store").length;
+  const timeStr = now.toLocaleTimeString("es-PY", { hour: "2-digit", minute: "2-digit" });
+
+  const critical  = items.filter(i => i.risk === "critical").length;
+  const low       = items.filter(i => i.risk === "low").length;
+  const overstock = items.filter(i => i.risk === "overstock").length;
+  const totalUnits = items.reduce((sum, i) => sum + i.suggestedUnits, 0);
+
+  const modeLabel = mode === "store" ? "Tienda" : "Marca";
+  const safeName = groupLabel.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase();
+  const showStore = mode === "brand";
 
   const html = `<!DOCTYPE html>
 <html lang="es">
-<head><meta charset="UTF-8"><title>Cola de Acciones ${mode.toUpperCase()} — ${dateStr}</title></head>
-<body style="font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;background:#fff;">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${esc(groupLabel)} — Acciones ${channel.toUpperCase()}</title>
+  <style>
+    details summary::-webkit-details-marker { display: none; }
+    details summary::marker { display: none; content: ""; }
+    details[open] summary span:first-child { display:inline-block; transform: rotate(90deg); }
+  </style>
+</head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;padding:0;background:#F9FAFB;color:#111827;">
 
 <!-- Header -->
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#E8400A;color:white;">
-<tr><td style="padding:20px 24px;">
-  <h1 style="margin:0;font-size:20px;">Cola de Acciones — ${mode.toUpperCase()}</h1>
-  <p style="margin:4px 0 0;font-size:12px;opacity:0.85;">${items.length} acciones · Generado ${dateStr} ${timeStr}</p>
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#111827;">
+<tr><td style="padding:24px 28px;">
+  <table width="100%" cellpadding="0" cellspacing="0">
+  <tr>
+    <td>
+      <p style="margin:0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#9CA3AF;">${esc(modeLabel)} · ${esc(channel.toUpperCase())}</p>
+      <h1 style="margin:6px 0 0;font-size:22px;font-weight:700;color:#FFFFFF;">${esc(groupLabel)}</h1>
+    </td>
+    <td style="text-align:right;vertical-align:bottom;">
+      <p style="margin:0;font-size:11px;color:#6B7280;">${dateStr} · ${timeStr}</p>
+      <p style="margin:4px 0 0;font-size:13px;font-weight:600;color:#D1D5DB;">${items.length} acciones · ${totalUnits.toLocaleString("es-PY")} unidades</p>
+    </td>
+  </tr>
+  </table>
 </td></tr>
 </table>
 
-<!-- Summary -->
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#FFFBEB;border-bottom:2px solid #F59E0B;">
+<!-- Stats -->
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-bottom:1px solid #E5E7EB;">
 <tr>
-  <td style="padding:12px 24px;text-align:center;"><span style="font-size:20px;font-weight:bold;color:#92400E;">${paretoItems.length}</span><br><span style="font-size:10px;color:#92400E;">Pareto 80%</span></td>
-  <td style="padding:12px 24px;text-align:center;"><span style="font-size:20px;font-weight:bold;color:#DC2626;">${criticalCount}</span><br><span style="font-size:10px;color:#DC2626;">Sin Stock</span></td>
-  <td style="padding:12px 24px;text-align:center;"><span style="font-size:20px;font-weight:bold;color:#D97706;">${lowCount}</span><br><span style="font-size:10px;color:#D97706;">Stock Bajo</span></td>
-  <td style="padding:12px 24px;text-align:center;"><span style="font-size:20px;font-weight:bold;color:#2563EB;">${overstockCount}</span><br><span style="font-size:10px;color:#2563EB;">Sobrestock</span></td>
-  <td style="padding:12px 24px;text-align:center;"><span style="font-size:20px;font-weight:bold;color:#7C3AED;">${storeToStore}</span><br><span style="font-size:10px;color:#7C3AED;">Tienda↔Tienda</span></td>
+  <td style="padding:14px 20px;text-align:center;border-right:1px solid #F3F4F6;">
+    <p style="margin:0;font-size:20px;font-weight:700;color:#111827;">${sections.length}</p>
+    <p style="margin:2px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#6B7280;">Tareas</p>
+  </td>
+  <td style="padding:14px 20px;text-align:center;border-right:1px solid #F3F4F6;">
+    <p style="margin:0;font-size:20px;font-weight:700;color:#DC2626;">${critical}</p>
+    <p style="margin:2px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#DC2626;">Sin Stock</p>
+  </td>
+  <td style="padding:14px 20px;text-align:center;border-right:1px solid #F3F4F6;">
+    <p style="margin:0;font-size:20px;font-weight:700;color:#D97706;">${low}</p>
+    <p style="margin:2px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#D97706;">Stock Bajo</p>
+  </td>
+  <td style="padding:14px 20px;text-align:center;">
+    <p style="margin:0;font-size:20px;font-weight:700;color:#2563EB;">${overstock}</p>
+    <p style="margin:2px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#2563EB;">Sobrestock</p>
+  </td>
 </tr>
 </table>
 
-<!-- Pareto Section -->
-${paretoItems.length > 0 ? `
-<div style="padding:16px 24px 8px;">
-  <h2 style="font-size:14px;color:#92400E;margin:0;">&#128293; PRIORIDAD PARETO — Top ${paretoItems.length} acciones (80% del impacto)</h2>
-</div>
-<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 24px;width:calc(100% - 48px);">
-  ${tableHeader()}
-  ${paretoItems.map(row).join("")}
-</table>` : ""}
-
-<!-- Other Section -->
-${otherItems.length > 0 ? `
-<div style="padding:16px 24px 8px;">
-  <h2 style="font-size:14px;color:#374151;margin:0;">Acciones Complementarias (${otherItems.length})</h2>
-</div>
-<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 24px;width:calc(100% - 48px);">
-  ${tableHeader()}
-  ${otherItems.map(row).join("")}
-</table>` : ""}
+<!-- Sections -->
+${sections.map(s => sectionBlock(s, showStore)).join("")}
 
 <!-- Footer -->
-<div style="padding:20px 24px;border-top:1px solid #E5E7EB;margin-top:16px;font-size:10px;color:#9CA3AF;">
-  Generado automaticamente · ${dateStr} ${timeStr}<br>
-  Waterfall: Tienda↔Tienda → RETAILS→Tienda → STOCK→RETAILS · Pareto 20/80
+<div style="padding:20px 28px 24px;text-align:center;">
+  <p style="margin:0;font-size:10px;color:#9CA3AF;">
+    Generado automaticamente · Fenix Brands · Pareto 20/80 · Umbral Gs. 500K
+  </p>
 </div>
 
 </body></html>`;
@@ -126,7 +217,7 @@ ${otherItems.length > 0 ? `
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `cola-acciones-${mode}-${dateStr}.html`;
+  a.download = `acciones-${safeName}-${channel}-${dateStr}.html`;
   a.click();
   URL.revokeObjectURL(url);
 }

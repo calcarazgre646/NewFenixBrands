@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NewFenixBrands — Executive Dashboard V2 Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ═══════════════════════════════════════════════════════════
+     DESIGN TOKENS — Mapped from project's @theme
+     ═══════════════════════════════════════════════════════════ */
+  :root {
+    /* Brand */
+    --brand-25: #f2f7ff;
+    --brand-50: #ecf3ff;
+    --brand-100: #dde9ff;
+    --brand-200: #c2d6ff;
+    --brand-300: #9cb9ff;
+    --brand-400: #7592ff;
+    --brand-500: #465fff;
+    --brand-600: #3641f5;
+    --brand-700: #2a31d8;
+
+    /* Gray */
+    --gray-25: #fcfcfd;
+    --gray-50: #f9fafb;
+    --gray-100: #f2f4f7;
+    --gray-200: #e4e7ec;
+    --gray-300: #d0d5dd;
+    --gray-400: #98a2b3;
+    --gray-500: #667085;
+    --gray-600: #475467;
+    --gray-700: #344054;
+    --gray-800: #1d2939;
+    --gray-900: #101828;
+
+    /* Semantic */
+    --success-50: #ecfdf3;
+    --success-100: #d1fadf;
+    --success-200: #a6f4c5;
+    --success-400: #32d583;
+    --success-500: #12b76a;
+    --success-600: #039855;
+    --success-700: #027a48;
+
+    --error-50: #fef3f2;
+    --error-100: #fee4e2;
+    --error-400: #f97066;
+    --error-500: #f04438;
+    --error-600: #d92d20;
+    --error-700: #b42318;
+
+    --warning-50: #fffaeb;
+    --warning-100: #fef0c7;
+    --warning-400: #fdb022;
+    --warning-500: #f79009;
+    --warning-600: #dc6803;
+
+    /* Brand Colors for Marks */
+    --martel: #10B981;
+    --wrangler: #F59E0B;
+    --lee: #EF4444;
+
+    /* Spacing */
+    --page-x: 1.5rem;
+    --page-y: 1.5rem;
+    --card-pad: 1.25rem;
+    --section-gap: 1.5rem;
+
+    /* Radius */
+    --r-sm: 0.375rem;
+    --r-md: 0.5rem;
+    --r-lg: 0.75rem;
+    --r-xl: 1rem;
+    --r-2xl: 1.5rem;
+
+    /* Shadows */
+    --shadow-xs: 0px 1px 2px 0px rgba(16, 24, 40, 0.05);
+    --shadow-sm: 0px 1px 3px 0px rgba(16, 24, 40, 0.1), 0px 1px 2px 0px rgba(16, 24, 40, 0.06);
+    --shadow-md: 0px 4px 8px -2px rgba(16, 24, 40, 0.1), 0px 2px 4px -2px rgba(16, 24, 40, 0.06);
+    --shadow-lg: 0px 12px 16px -4px rgba(16, 24, 40, 0.08), 0px 4px 6px -2px rgba(16, 24, 40, 0.03);
+
+    /* Motion */
+    --fast: 150ms;
+    --normal: 250ms;
+    --slow: 400ms;
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     RESET & BASE
+     ═══════════════════════════════════════════════════════════ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--gray-50);
+    color: var(--gray-900);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* Simulated sidebar */
+  .app-shell {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  .sidebar-mock {
+    width: 260px;
+    background: white;
+    border-right: 1px solid var(--gray-200);
+    flex-shrink: 0;
+    padding: 1.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .sidebar-mock .logo {
+    font-weight: 800;
+    font-size: 18px;
+    color: var(--gray-900);
+    letter-spacing: -0.03em;
+    padding: 0 0.75rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .sidebar-mock .logo .logo-icon {
+    width: 28px;
+    height: 28px;
+    background: var(--brand-500);
+    border-radius: var(--r-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .sidebar-mock a {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--r-lg);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--gray-600);
+    text-decoration: none;
+    transition: all var(--fast) var(--ease);
+  }
+
+  .sidebar-mock a:hover { background: var(--gray-50); color: var(--gray-900); }
+  .sidebar-mock a.active {
+    background: var(--brand-50);
+    color: var(--brand-600);
+    font-weight: 600;
+  }
+
+  .sidebar-mock .nav-icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    opacity: 0.8;
+  }
+
+  .main-content {
+    flex: 1;
+    overflow-y: auto;
+    min-width: 0;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     HEADER BAR (simulated)
+     ═══════════════════════════════════════════════════════════ */
+  .header-bar {
+    height: 56px;
+    background: white;
+    border-bottom: 1px solid var(--gray-200);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 var(--page-x);
+    gap: 0.75rem;
+  }
+
+  .header-bar .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 9999px;
+    background: var(--brand-100);
+    color: var(--brand-600);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .header-bar .theme-toggle {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--gray-200);
+    background: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    color: var(--gray-500);
+    transition: all var(--fast) var(--ease);
+  }
+
+  .header-bar .theme-toggle:hover {
+    border-color: var(--gray-300);
+    color: var(--gray-700);
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     PAGE CONTAINER
+     ═══════════════════════════════════════════════════════════ */
+  .page {
+    padding: var(--page-y) var(--page-x);
+    max-width: 1400px;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     ANIMATIONS
+     ═══════════════════════════════════════════════════════════ */
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  @keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes expandWidth {
+    from { width: 0%; }
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .anim-fade-up {
+    animation: fadeSlideUp 0.5s var(--ease-out) forwards;
+    opacity: 0;
+  }
+
+  .anim-fade-in {
+    animation: fadeIn 0.4s var(--ease) forwards;
+    opacity: 0;
+  }
+
+  .anim-slide-left {
+    animation: slideInLeft 0.4s var(--ease-out) forwards;
+    opacity: 0;
+  }
+
+  .delay-0 { animation-delay: 0ms; }
+  .delay-1 { animation-delay: 80ms; }
+  .delay-2 { animation-delay: 160ms; }
+  .delay-3 { animation-delay: 240ms; }
+  .delay-4 { animation-delay: 320ms; }
+  .delay-5 { animation-delay: 400ms; }
+  .delay-6 { animation-delay: 480ms; }
+  .delay-7 { animation-delay: 560ms; }
+
+  /* ═══════════════════════════════════════════════════════════
+     CONTEXT FILTERS (Tier 0)
+     ═══════════════════════════════════════════════════════════ */
+  .context-filters {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .filter-group-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-400);
+    margin-right: 0.25rem;
+  }
+
+  /* Brand chips — Level 1 */
+  .brand-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1.5px solid var(--gray-200);
+    background: white;
+    color: var(--gray-600);
+    cursor: pointer;
+    transition: all var(--fast) var(--ease);
+    user-select: none;
+  }
+
+  .brand-chip:hover {
+    border-color: var(--gray-300);
+    background: var(--gray-25);
+  }
+
+  .brand-chip .chip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    flex-shrink: 0;
+  }
+
+  .brand-chip.active {
+    border-color: transparent;
+    color: white;
+    font-weight: 600;
+  }
+
+  .brand-chip.active[data-brand="all"] {
+    background: var(--brand-500);
+    border-color: var(--brand-500);
+  }
+  .brand-chip.active[data-brand="martel"] {
+    background: var(--martel);
+    border-color: var(--martel);
+  }
+  .brand-chip.active[data-brand="wrangler"] {
+    background: var(--wrangler);
+    border-color: var(--wrangler);
+  }
+  .brand-chip.active[data-brand="lee"] {
+    background: var(--lee);
+    border-color: var(--lee);
+  }
+
+  /* Channel toggle — Level 2 */
+  .channel-toggle {
+    display: inline-flex;
+    border-radius: var(--r-lg);
+    border: 1px solid var(--gray-200);
+    overflow: hidden;
+    background: white;
+  }
+
+  .channel-btn {
+    padding: 0.375rem 0.75rem;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--gray-500);
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: all var(--fast) var(--ease);
+  }
+
+  .channel-btn:hover { color: var(--gray-700); background: var(--gray-50); }
+
+  .channel-btn.active {
+    background: var(--brand-500);
+    color: white;
+    font-weight: 600;
+  }
+
+  /* Period dropdown — Level 3 */
+  .period-select {
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--gray-600);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--r-lg);
+    padding: 0.375rem 1.75rem 0.375rem 0.75rem;
+    background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2398a2b3' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 0.5rem center;
+    appearance: none;
+    cursor: pointer;
+    transition: border-color var(--fast) var(--ease);
+  }
+
+  .period-select:hover { border-color: var(--gray-300); }
+  .period-select:focus { outline: none; border-color: var(--brand-400); box-shadow: 0 0 0 3px rgba(70, 95, 255, 0.1); }
+
+  /* ═══════════════════════════════════════════════════════════
+     HERO CARD
+     ═══════════════════════════════════════════════════════════ */
+  .hero-card {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--r-2xl);
+    padding: 1.75rem 2rem;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Subtle gradient overlay for depth */
+  .hero-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 20% 0%, rgba(70, 95, 255, 0.03) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .hero-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 2rem;
+    margin-bottom: 1.25rem;
+    position: relative;
+  }
+
+  .hero-status-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--gray-500);
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .hero-status-label .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  .hero-status-label .status-dot.positive { background: var(--success-500); }
+  .hero-status-label .status-dot.negative { background: var(--error-500); }
+
+  .hero-number {
+    font-size: 52px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 0.375rem;
+  }
+
+  .hero-number.positive { color: var(--success-600); }
+  .hero-number.negative { color: var(--error-600); }
+
+  .hero-context {
+    font-size: 14px;
+    color: var(--gray-500);
+    font-weight: 400;
+  }
+
+  .hero-context strong {
+    color: var(--gray-700);
+    font-weight: 600;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.875rem;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+    flex-shrink: 0;
+    margin-top: 0.25rem;
+  }
+
+  .hero-badge.positive {
+    background: var(--success-50);
+    color: var(--success-700);
+    border: 1px solid var(--success-200);
+  }
+
+  .hero-badge.negative {
+    background: var(--error-50);
+    color: var(--error-700);
+    border: 1px solid var(--error-200);
+  }
+
+  /* Progress bar */
+  .progress-section {
+    position: relative;
+    margin-top: 1.5rem;
+  }
+
+  .progress-track {
+    height: 10px;
+    background: var(--gray-100);
+    border-radius: 9999px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .progress-forecast {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, var(--brand-300), var(--brand-400));
+    opacity: 0.35;
+    animation: expandWidth 1s var(--ease-out) 0.3s forwards;
+    width: 0%;
+  }
+
+  .progress-real {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, var(--brand-400), var(--brand-500));
+    box-shadow: 0 0 8px rgba(70, 95, 255, 0.25);
+    animation: expandWidth 0.8s var(--ease-out) 0.3s forwards;
+    width: 0%;
+  }
+
+  .progress-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.625rem;
+    font-size: 13px;
+  }
+
+  .progress-meta .left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    color: var(--gray-500);
+  }
+
+  .progress-meta .left .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+
+  .progress-meta .left .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    flex-shrink: 0;
+  }
+
+  .progress-meta .left strong {
+    font-weight: 600;
+    color: var(--gray-700);
+  }
+
+  .progress-meta .right {
+    color: var(--gray-400);
+    font-size: 12px;
+  }
+
+  .progress-meta .right strong {
+    color: var(--gray-600);
+    font-weight: 600;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     SCORECARDS
+     ═══════════════════════════════════════════════════════════ */
+  .scorecards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.875rem;
+  }
+
+  .scorecard {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--r-2xl);
+    padding: 1.125rem 1.25rem;
+    transition: all var(--fast) var(--ease);
+    position: relative;
+  }
+
+  .scorecard:hover {
+    box-shadow: var(--shadow-sm);
+    border-color: var(--gray-300);
+  }
+
+  /* Accent border for actionable cards */
+  .scorecard.accent-left {
+    border-left: 3px solid;
+    padding-left: calc(1.25rem - 2px);
+  }
+
+  .scorecard.accent-left.positive { border-left-color: var(--success-400); }
+  .scorecard.accent-left.negative { border-left-color: var(--error-400); }
+
+  .scorecard .sc-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-400);
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .scorecard .sc-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--gray-900);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+
+  .scorecard.accent-left.positive .sc-value { color: var(--success-700); }
+  .scorecard.accent-left.negative .sc-value { color: var(--error-700); }
+
+  .scorecard .sc-sub {
+    font-size: 12px;
+    color: var(--gray-400);
+    margin-top: 0.375rem;
+    line-height: 1.4;
+  }
+
+  .scorecard .sc-icon {
+    font-size: 14px;
+    color: var(--gray-300);
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     INSIGHT BAR
+     ═══════════════════════════════════════════════════════════ */
+  .insight-bar {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--r-2xl);
+    overflow: hidden;
+  }
+
+  .insight-bar .ib-header {
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--gray-100);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .insight-bar .ib-header .ib-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-400);
+  }
+
+  .insight-bar .ib-header .ib-tag {
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--brand-50);
+    color: var(--brand-600);
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+  }
+
+  .insight-items {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .insight-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.25rem;
+    font-size: 13px;
+    color: var(--gray-600);
+    border-left: 3px solid transparent;
+    transition: background var(--fast) var(--ease);
+  }
+
+  .insight-item:hover { background: var(--gray-25); }
+  .insight-item + .insight-item { border-top: 1px solid var(--gray-50); }
+
+  .insight-item .ii-arrow {
+    font-size: 14px;
+    font-weight: 700;
+    flex-shrink: 0;
+    width: 20px;
+    text-align: center;
+  }
+
+  .insight-item .ii-arrow.up { color: var(--success-500); }
+  .insight-item .ii-arrow.down { color: var(--error-500); }
+  .insight-item .ii-arrow.flat { color: var(--gray-400); }
+
+  .insight-item .ii-brand-tag {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--r-sm);
+    flex-shrink: 0;
+  }
+
+  .insight-item .ii-brand-tag.martel { background: #ecfdf3; color: #027a48; }
+  .insight-item .ii-brand-tag.wrangler { background: #fffaeb; color: #b54708; }
+  .insight-item .ii-brand-tag.lee { background: #fef3f2; color: #b42318; }
+
+  .insight-item .ii-text { flex: 1; }
+  .insight-item .ii-text strong { font-weight: 600; color: var(--gray-800); }
+
+  .insight-item .ii-impact {
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+
+  .insight-item .ii-impact.positive { color: var(--success-600); }
+  .insight-item .ii-impact.negative { color: var(--error-600); }
+
+  /* ═══════════════════════════════════════════════════════════
+     SECTION DIVIDER
+     ═══════════════════════════════════════════════════════════ */
+  .section-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .section-divider .sd-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--gray-400);
+    white-space: nowrap;
+  }
+
+  .section-divider .sd-line {
+    flex: 1;
+    height: 1px;
+    background: var(--gray-200);
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     TEMPORAL ANALYSIS — Chart + Table side-by-side
+     ═══════════════════════════════════════════════════════════ */
+  .temporal-grid {
+    display: grid;
+    grid-template-columns: 55fr 45fr;
+    gap: 0.875rem;
+    align-items: start;
+  }
+
+  /* Chart Card */
+  .chart-card {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--r-2xl);
+    padding: 1.25rem 1.5rem;
+    min-height: 380px;
+  }
+
+  .chart-card .cc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
+  .chart-card .cc-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--gray-900);
+  }
+
+  .chart-card .cc-legend {
+    display: flex;
+    gap: 1rem;
+    font-size: 12px;
+    color: var(--gray-500);
+  }
+
+  .chart-card .cc-legend .lg-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+
+  .chart-card .cc-legend .lg-line {
+    width: 16px;
+    height: 2px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .chart-card .cc-legend .lg-line.solid { background: var(--brand-500); }
+  .chart-card .cc-legend .lg-line.dotted {
+    background: repeating-linear-gradient(
+      90deg, var(--brand-400) 0 3px, transparent 3px 6px
+    );
+  }
+  .chart-card .cc-legend .lg-line.dashed {
+    background: repeating-linear-gradient(
+      90deg, var(--warning-400) 0 6px, transparent 6px 10px
+    );
+  }
+
+  /* SVG Chart placeholder */
+  .chart-placeholder {
+    width: 100%;
+    height: 280px;
+    position: relative;
+  }
+
+  .chart-svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     MONTHLY TABLE
+     ═══════════════════════════════════════════════════════════ */
+  .table-card {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--r-2xl);
+    overflow: hidden;
+  }
+
+  .table-card .tc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--gray-100);
+  }
+
+  .table-card .tc-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--gray-900);
+  }
+
+  /* View toggle */
+  .view-toggle {
+    display: inline-flex;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .view-toggle .vt-btn {
+    padding: 0.3rem 0.625rem;
+    color: var(--gray-500);
+    background: white;
+    border: none;
+    cursor: pointer;
+    transition: all var(--fast) var(--ease);
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+  }
+
+  .view-toggle .vt-btn:hover { background: var(--gray-50); color: var(--gray-700); }
+  .view-toggle .vt-btn.active { background: var(--brand-500); color: white; font-weight: 600; }
+
+  /* Table */
+  .perf-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .perf-table thead th {
+    padding: 0.5rem 0.875rem;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-400);
+    border-bottom: 1px solid var(--gray-100);
+    white-space: nowrap;
+  }
+
+  .perf-table thead th.right { text-align: right; }
+
+  .perf-table tbody td {
+    padding: 0.5rem 0.875rem;
+    font-variant-numeric: tabular-nums;
+    border-bottom: 1px solid var(--gray-50);
+    white-space: nowrap;
+  }
+
+  .perf-table tbody td.right { text-align: right; }
+
+  .perf-table tbody tr {
+    transition: background var(--fast) var(--ease);
+  }
+
+  .perf-table tbody tr:hover { background: var(--gray-25); }
+
+  .perf-table tbody tr.real td { color: var(--gray-700); }
+  .perf-table tbody tr.future td { color: var(--gray-300); }
+
+  .perf-table tbody tr.current-month {
+    border-left: 3px solid var(--warning-400);
+  }
+
+  .perf-table tbody .month-name {
+    font-weight: 600;
+    color: var(--gray-800);
+  }
+
+  .perf-table tbody .month-name.faded { color: var(--gray-300); font-weight: 500; }
+
+  .perf-table .current-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 9px;
+    font-weight: 600;
+    background: var(--warning-100);
+    color: var(--warning-600);
+    padding: 0.1rem 0.375rem;
+    border-radius: 9999px;
+    margin-left: 0.375rem;
+    vertical-align: middle;
+  }
+
+  .current-badge .pulse-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 9999px;
+    background: var(--warning-500);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  .diff-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .diff-badge.positive { background: var(--success-50); color: var(--success-700); }
+  .diff-badge.negative { background: var(--error-50); color: var(--error-700); }
+
+  .perf-table tfoot td {
+    padding: 0.625rem 0.875rem;
+    font-weight: 700;
+    color: var(--gray-900);
+    border-top: 2px solid var(--gray-200);
+    background: var(--gray-25);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .perf-table tfoot td.right { text-align: right; }
+
+  /* ═══════════════════════════════════════════════════════════
+     QUICK LINKS (compact row)
+     ═══════════════════════════════════════════════════════════ */
+  .quick-row {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex-wrap: wrap;
+  }
+
+  .quick-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.875rem;
+    border-radius: var(--r-lg);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--gray-600);
+    text-decoration: none;
+    transition: all var(--fast) var(--ease);
+    border: 1px solid var(--gray-200);
+    background: white;
+  }
+
+  .quick-link:hover {
+    background: var(--brand-50);
+    color: var(--brand-600);
+    border-color: var(--brand-200);
+  }
+
+  .quick-link .ql-icon { font-size: 14px; }
+
+  /* ═══════════════════════════════════════════════════════════
+     PARTIAL MONTH WARNING
+     ═══════════════════════════════════════════════════════════ */
+  .partial-warning {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 12px;
+    color: var(--warning-600);
+    font-weight: 500;
+  }
+
+  .partial-warning .pw-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: var(--warning-500);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     RESPONSIVE
+     ═══════════════════════════════════════════════════════════ */
+  @media (max-width: 1024px) {
+    .sidebar-mock { display: none; }
+    .temporal-grid { grid-template-columns: 1fr; }
+    .scorecards { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 640px) {
+    .hero-number { font-size: 38px; }
+    .hero-top { flex-direction: column; gap: 1rem; }
+    .context-filters { flex-direction: column; align-items: stretch; }
+    .filter-group { flex-wrap: wrap; }
+    .scorecards { grid-template-columns: 1fr 1fr; gap: 0.625rem; }
+    .scorecard .sc-value { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- Sidebar -->
+  <nav class="sidebar-mock">
+    <div class="logo">
+      <span class="logo-icon">F</span>
+      FenixBrands
+    </div>
+    <a href="#" class="active">
+      <span class="nav-icon">&#9670;</span> Ejecutivo
+    </a>
+    <a href="#">
+      <span class="nav-icon">&#9633;</span> KPIs
+    </a>
+    <a href="#">
+      <span class="nav-icon">&#9650;</span> Ventas
+    </a>
+    <a href="#">
+      <span class="nav-icon">&#9632;</span> Acciones
+    </a>
+    <a href="#">
+      <span class="nav-icon">&#8677;</span> Logistica
+    </a>
+    <a href="#">
+      <span class="nav-icon">&#9711;</span> Calendario
+    </a>
+  </nav>
+
+  <div class="main-content">
+    <!-- Header -->
+    <header class="header-bar">
+      <button class="theme-toggle" title="Cambiar tema">&#9789;</button>
+      <div class="avatar">CR</div>
+    </header>
+
+    <!-- Page -->
+    <div class="page">
+
+      <!-- ════════════════════════════════════════════════════
+           TIER 1: COMMAND CENTER
+           ════════════════════════════════════════════════════ -->
+
+      <!-- Context Filters -->
+      <div class="context-filters anim-fade-in delay-0">
+        <div class="filter-group">
+          <span class="filter-group-label">Marca</span>
+          <button class="brand-chip active" data-brand="all">
+            <span class="chip-dot" style="background: var(--brand-500)"></span>
+            Todas
+          </button>
+          <button class="brand-chip" data-brand="martel">
+            <span class="chip-dot" style="background: var(--martel)"></span>
+            Martel
+          </button>
+          <button class="brand-chip" data-brand="wrangler">
+            <span class="chip-dot" style="background: var(--wrangler)"></span>
+            Wrangler
+          </button>
+          <button class="brand-chip" data-brand="lee">
+            <span class="chip-dot" style="background: var(--lee)"></span>
+            Lee
+          </button>
+        </div>
+
+        <div class="filter-group" style="gap: 0.75rem;">
+          <div class="channel-toggle">
+            <button class="channel-btn active">Total</button>
+            <button class="channel-btn">B2C</button>
+            <button class="channel-btn">B2B</button>
+          </div>
+
+          <select class="period-select">
+            <option selected>YTD (Ene — Mar)</option>
+            <option>Ultimo mes cerrado</option>
+            <option>Mes actual</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Hero Card -->
+      <div class="hero-card anim-fade-up delay-1">
+        <div class="hero-top">
+          <div>
+            <div class="hero-status-label">
+              <span class="status-dot positive"></span>
+              Adelantado al ritmo lineal
+            </div>
+            <div class="hero-number positive">+3.8%</div>
+            <div class="hero-context">
+              <strong>₲ 2.640M</strong> por encima del pace ideal &middot; YTD: <strong>₲ 44.849M Gs.</strong>
+            </div>
+          </div>
+          <div class="hero-badge positive">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M7 17l5-5 5 5M7 7l5 5 5-5"/></svg>
+            Pronostico supera objetivo
+          </div>
+        </div>
+
+        <!-- Integrated Progress Bar -->
+        <div class="progress-section">
+          <div class="progress-track">
+            <div class="progress-forecast" style="--target-width: 88.7%;"
+                 data-width="88.7"></div>
+            <div class="progress-real" style="--target-width: 64.2%;"
+                 data-width="64.2"></div>
+          </div>
+          <div class="progress-meta">
+            <div class="left">
+              <span class="legend-item">
+                <span class="legend-dot" style="background: var(--brand-500)"></span>
+                Real: <strong>64.2%</strong>
+              </span>
+              <span class="legend-item">
+                <span class="legend-dot" style="background: var(--brand-300); opacity: 0.5"></span>
+                Pronostico: <strong>103.8%</strong>
+              </span>
+            </div>
+            <div class="right">
+              ₲ 44.849M de <strong>₲ 69.892M</strong> &middot; 8 meses restantes
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scorecards -->
+      <div class="scorecards">
+        <div class="scorecard accent-left positive anim-fade-up delay-2">
+          <div class="sc-label">
+            Pronostico Cierre
+            <span class="sc-icon" title="Extrapolacion lineal del ritmo actual">&#9432;</span>
+          </div>
+          <div class="sc-value">₲ 72.553M</div>
+          <div class="sc-sub">+3.8% sobre el objetivo</div>
+        </div>
+
+        <div class="scorecard accent-left positive anim-fade-up delay-3">
+          <div class="sc-label">
+            Brecha vs Objetivo
+            <span class="sc-icon" title="Diferencia entre pronostico y target">&#9432;</span>
+          </div>
+          <div class="sc-value">+₲ 2.661M</div>
+          <div class="sc-sub">Superado</div>
+        </div>
+
+        <div class="scorecard anim-fade-up delay-4">
+          <div class="sc-label">
+            Run-Rate Requerido
+            <span class="sc-icon" title="Gs. necesarios por mes para alcanzar target">&#9432;</span>
+          </div>
+          <div class="sc-value">₲ 3.130M/m</div>
+          <div class="sc-sub">Para cerrar en 8 meses</div>
+        </div>
+
+        <div class="scorecard anim-fade-up delay-5">
+          <div class="sc-label">
+            YoY vs 2025
+            <span class="sc-icon" title="Comparacion con mismo periodo ano anterior">&#9432;</span>
+          </div>
+          <div class="sc-value">+12.4%</div>
+          <div class="sc-sub">₲ 4.951M mas que PY</div>
+        </div>
+      </div>
+
+      <!-- Insights -->
+      <div class="insight-bar anim-fade-up delay-5">
+        <div class="ib-header">
+          <span class="ib-title">Diagnostico automatico</span>
+          <span class="ib-tag">3 insights</span>
+          <span class="partial-warning" style="margin-left: auto;">
+            <span class="pw-dot"></span>
+            Incluye datos parciales de Marzo
+          </span>
+        </div>
+        <div class="insight-items">
+          <div class="insight-item anim-slide-left delay-5">
+            <span class="ii-arrow up">&#9650;</span>
+            <span class="ii-brand-tag wrangler">Wrangler</span>
+            <span class="ii-text">Cumple al <strong>108%</strong> del ritmo. Lidera la performance del portafolio.</span>
+            <span class="ii-impact positive">+₲ 1.247M</span>
+          </div>
+          <div class="insight-item anim-slide-left delay-6">
+            <span class="ii-arrow down">&#9660;</span>
+            <span class="ii-brand-tag martel">Martel</span>
+            <span class="ii-text">B2C <strong>-15%</strong> bajo presupuesto este mes. Principal contribuyente a la brecha negativa.</span>
+            <span class="ii-impact negative">-₲ 4.823M</span>
+          </div>
+          <div class="insight-item anim-slide-left delay-7">
+            <span class="ii-arrow flat">&mdash;</span>
+            <span class="ii-brand-tag lee">Lee</span>
+            <span class="ii-text">Estable al <strong>99%</strong> del pace. Sin desviacion significativa.</span>
+            <span class="ii-impact" style="color: var(--gray-400)">-₲ 61M</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════
+           TIER 2: TEMPORAL ANALYSIS
+           ════════════════════════════════════════════════════ -->
+
+      <div class="section-divider">
+        <span class="sd-label">Evolucion Anual 2026</span>
+        <span class="sd-line"></span>
+      </div>
+
+      <div class="temporal-grid">
+        <!-- Chart -->
+        <div class="chart-card">
+          <div class="cc-header">
+            <span class="cc-title">Acumulado mensual</span>
+            <div class="cc-legend">
+              <span class="lg-item"><span class="lg-line solid"></span> Real</span>
+              <span class="lg-item"><span class="lg-line dotted"></span> Pronostico</span>
+              <span class="lg-item"><span class="lg-line dashed"></span> Objetivo</span>
+            </div>
+          </div>
+          <div class="chart-placeholder">
+            <svg class="chart-svg" viewBox="0 0 560 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Grid lines -->
+              <line x1="40" y1="20" x2="540" y2="20" stroke="#f2f4f7" stroke-width="1"/>
+              <line x1="40" y1="68" x2="540" y2="68" stroke="#f2f4f7" stroke-width="1"/>
+              <line x1="40" y1="116" x2="540" y2="116" stroke="#f2f4f7" stroke-width="1"/>
+              <line x1="40" y1="164" x2="540" y2="164" stroke="#f2f4f7" stroke-width="1"/>
+              <line x1="40" y1="212" x2="540" y2="212" stroke="#f2f4f7" stroke-width="1"/>
+
+              <!-- Y-axis labels -->
+              <text x="35" y="24" text-anchor="end" font-size="10" fill="#98a2b3" font-family="Outfit">₲ 70B</text>
+              <text x="35" y="72" text-anchor="end" font-size="10" fill="#98a2b3" font-family="Outfit">₲ 56B</text>
+              <text x="35" y="120" text-anchor="end" font-size="10" fill="#98a2b3" font-family="Outfit">₲ 42B</text>
+              <text x="35" y="168" text-anchor="end" font-size="10" fill="#98a2b3" font-family="Outfit">₲ 28B</text>
+              <text x="35" y="216" text-anchor="end" font-size="10" fill="#98a2b3" font-family="Outfit">₲ 14B</text>
+
+              <!-- X-axis labels -->
+              <text x="82" y="240" text-anchor="middle" font-size="10" fill="#98a2b3" font-family="Outfit">Ene</text>
+              <text x="124" y="240" text-anchor="middle" font-size="10" fill="#98a2b3" font-family="Outfit">Feb</text>
+              <text x="165" y="240" text-anchor="middle" font-size="10" fill="#98a2b3" font-family="Outfit" font-weight="600" fill="#dc6803">Mar</text>
+              <text x="207" y="240" text-anchor="middle" font-size="10" fill="#d0d5dd" font-family="Outfit">Abr</text>
+              <text x="248" y="240" text-anchor="middle" font-size="10" fill="#d0d5dd" font-family="Outfit">May</text>
+              <text x="290" y="240" text-anchor="middle" font-size="10" fill="#d0d5dd" font-family="Outfit">Jun</text>
+              <text x="332" y="240" text-anchor="middle" font-size="10" fill="#d0d5dd" font-family="Outfit">Jul</text>
+              <text x="373" y="240" text-anchor="middle" font-size="10" fill="#d0d5dd" font-family="Outfit">Ago</text>
+              <text x="415" y="240" text-anchor="middle" font-size="10" fill="#d0d5dd" font-family="Outfit">Sep</text>
+              <text x="456" y="240" text-anchor="middle" font-size="10" fill="#d0d5dd" font-family="Outfit">Oct</text>
+              <text x="498" y="240" text-anchor="middle" font-size="10" fill="#d0d5dd" font-family="Outfit">Nov</text>
+              <text x="540" y="240" text-anchor="middle" font-size="10" fill="#d0d5dd" font-family="Outfit">Dic</text>
+
+              <!-- Target line (dashed amber) -->
+              <path d="M82,206 L124,192 L165,178 L207,163 L248,148 L290,132 L332,116 L373,100 L415,83 L456,66 L498,48 L540,29"
+                    stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="8 4" fill="none" opacity="0.7"/>
+
+              <!-- Real area fill -->
+              <path d="M82,204 L124,189 L165,175 M165,175 L165,212 L124,212 L82,212 Z"
+                    fill="url(#realGrad)" opacity="0.2"/>
+
+              <!-- Real line (solid blue) -->
+              <path d="M82,204 L124,189 L165,175"
+                    stroke="#465fff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+              <!-- Real dots -->
+              <circle cx="82" cy="204" r="3.5" fill="white" stroke="#465fff" stroke-width="2"/>
+              <circle cx="124" cy="189" r="3.5" fill="white" stroke="#465fff" stroke-width="2"/>
+              <circle cx="165" cy="175" r="4" fill="white" stroke="#465fff" stroke-width="2.5"/>
+
+              <!-- Forecast line (dotted blue) -->
+              <path d="M165,175 L207,158 L248,141 L290,124 L332,107 L373,90 L415,73 L456,56 L498,39 L540,22"
+                    stroke="#465fff" stroke-width="1.5" stroke-dasharray="4 4" fill="none" opacity="0.5"/>
+
+              <!-- "Hoy" annotation -->
+              <line x1="165" y1="20" x2="165" y2="220" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.5"/>
+              <rect x="148" y="5" width="34" height="16" rx="4" fill="#FEF0C7"/>
+              <text x="165" y="15" text-anchor="middle" font-size="9" fill="#92400E" font-family="Outfit" font-weight="600">Hoy</text>
+
+              <!-- Gradient definition -->
+              <defs>
+                <linearGradient id="realGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#465fff" stop-opacity="0.3"/>
+                  <stop offset="100%" stop-color="#465fff" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-card">
+          <div class="tc-header">
+            <span class="tc-title">Performance mensual</span>
+            <div class="view-toggle">
+              <button class="vt-btn active">Total</button>
+              <button class="vt-btn">B2B</button>
+              <button class="vt-btn">B2C</button>
+              <button class="vt-btn">Martel</button>
+              <button class="vt-btn">Wrangler</button>
+              <button class="vt-btn">Lee</button>
+            </div>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="perf-table">
+              <thead>
+                <tr>
+                  <th>Mes</th>
+                  <th class="right">Real</th>
+                  <th class="right">Presup.</th>
+                  <th class="right">vs Presup.</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="real">
+                  <td><span class="month-name">Enero</span></td>
+                  <td class="right">14.892M</td>
+                  <td class="right" style="color: var(--gray-400)">15.200M</td>
+                  <td class="right"><span class="diff-badge negative">-308M</span></td>
+                </tr>
+                <tr class="real">
+                  <td><span class="month-name">Febrero</span></td>
+                  <td class="right">15.431M</td>
+                  <td class="right" style="color: var(--gray-400)">14.800M</td>
+                  <td class="right"><span class="diff-badge positive">+631M</span></td>
+                </tr>
+                <tr class="real current-month">
+                  <td>
+                    <span class="month-name">Marzo</span>
+                    <span class="current-badge"><span class="pulse-dot"></span> en curso</span>
+                  </td>
+                  <td class="right">14.526M</td>
+                  <td class="right" style="color: var(--gray-400)">15.100M</td>
+                  <td class="right"><span class="diff-badge negative">-574M</span></td>
+                </tr>
+                <tr class="future">
+                  <td><span class="month-name faded">Abril</span></td>
+                  <td class="right">&mdash;</td>
+                  <td class="right" style="color: var(--gray-300)">14.950M</td>
+                  <td class="right">&mdash;</td>
+                </tr>
+                <tr class="future">
+                  <td><span class="month-name faded">Mayo</span></td>
+                  <td class="right">&mdash;</td>
+                  <td class="right" style="color: var(--gray-300)">15.300M</td>
+                  <td class="right">&mdash;</td>
+                </tr>
+                <tr class="future">
+                  <td><span class="month-name faded">Junio</span></td>
+                  <td class="right">&mdash;</td>
+                  <td class="right" style="color: var(--gray-300)">14.700M</td>
+                  <td class="right">&mdash;</td>
+                </tr>
+                <tr class="future">
+                  <td><span class="month-name faded">Julio</span></td>
+                  <td class="right">&mdash;</td>
+                  <td class="right" style="color: var(--gray-300)">15.050M</td>
+                  <td class="right">&mdash;</td>
+                </tr>
+                <tr class="future">
+                  <td><span class="month-name faded">Agosto</span></td>
+                  <td class="right">&mdash;</td>
+                  <td class="right" style="color: var(--gray-300)">15.400M</td>
+                  <td class="right">&mdash;</td>
+                </tr>
+                <tr class="future">
+                  <td><span class="month-name faded">Septiembre</span></td>
+                  <td class="right">&mdash;</td>
+                  <td class="right" style="color: var(--gray-300)">14.600M</td>
+                  <td class="right">&mdash;</td>
+                </tr>
+                <tr class="future">
+                  <td><span class="month-name faded">Octubre</span></td>
+                  <td class="right">&mdash;</td>
+                  <td class="right" style="color: var(--gray-300)">15.150M</td>
+                  <td class="right">&mdash;</td>
+                </tr>
+                <tr class="future">
+                  <td><span class="month-name faded">Noviembre</span></td>
+                  <td class="right">&mdash;</td>
+                  <td class="right" style="color: var(--gray-300)">15.500M</td>
+                  <td class="right">&mdash;</td>
+                </tr>
+                <tr class="future">
+                  <td><span class="month-name faded">Diciembre</span></td>
+                  <td class="right">&mdash;</td>
+                  <td class="right" style="color: var(--gray-300)">14.142M</td>
+                  <td class="right">&mdash;</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Total</td>
+                  <td class="right">44.849M</td>
+                  <td class="right" style="color: var(--gray-500)">69.892M</td>
+                  <td class="right"><span class="diff-badge negative" style="font-size: 11px;">-25.043M</span></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Links (compact) -->
+      <div class="section-divider">
+        <span class="sd-label">Modulos</span>
+        <span class="sd-line"></span>
+      </div>
+
+      <div class="quick-row">
+        <a href="#" class="quick-link"><span class="ql-icon">&#128202;</span> KPIs</a>
+        <a href="#" class="quick-link"><span class="ql-icon">&#128200;</span> Ventas</a>
+        <a href="#" class="quick-link"><span class="ql-icon">&#128230;</span> Acciones</a>
+        <a href="#" class="quick-link"><span class="ql-icon">&#128674;</span> Logistica</a>
+        <a href="#" class="quick-link"><span class="ql-icon">&#128197;</span> Calendario</a>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     INTERACTIVITY (filter switching demo)
+     ═══════════════════════════════════════════════════════════ -->
+<script>
+  // Brand chip toggle
+  document.querySelectorAll('.brand-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.brand-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+    });
+  });
+
+  // Channel toggle
+  document.querySelectorAll('.channel-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.channel-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // View toggle (table)
+  document.querySelectorAll('.vt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.vt-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // Animate progress bars on load
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      document.querySelectorAll('.progress-real, .progress-forecast').forEach(bar => {
+        const target = bar.dataset.width + '%';
+        bar.style.width = target;
+      });
+    }, 400);
+  });
+</script>
+
+</body>
+</html>

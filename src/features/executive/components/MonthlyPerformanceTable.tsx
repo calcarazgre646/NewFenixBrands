@@ -1,51 +1,17 @@
 /**
  * features/executive/components/MonthlyPerformanceTable.tsx
  *
- * Tabla colapsable de performance mensual: Real vs Presupuesto vs Ano Anterior.
- * Selector de 6 vistas: Total / B2B / B2C / Martel / Wrangler / Lee.
+ * Tabla de performance mensual con 3 métricas:
+ *   - Ventas Netas (Gs.) + vs Presupuesto + vs Año Anterior
+ *   - Margen Bruto (%)   + vs Presupuesto + vs Año Anterior
+ *   - Unidades            + vs Presupuesto + vs Año Anterior
  *
- * REGLA: Sin logica de negocio. Filtrado via getRowsForView (datos WIDE cacheados).
- * Cambio de vista = re-render instantaneo, sin API call.
+ * V3: Columnas agrupadas con sub-headers. Datos recibidos ya filtrados.
  */
-import { useState, useMemo } from "react";
-import { ChevronDownIcon, ChevronUpIcon } from "@/icons";
+import { useMemo } from "react";
+import { formatPYG, formatDiff, formatPct, formatNumber } from "@/utils/format";
 import type { MonthlyRow } from "@/domain/executive/calcs";
-
-// ─── View definitions ────────────────────────────────────────────────────────
-
-type ViewKey = "all" | "b2b" | "b2c" | "martel" | "wrangler" | "lee";
-
-interface ViewOption {
-  key: ViewKey;
-  label: string;
-  brand: string;    // filter key for getRowsForView
-  channel: string;  // filter key for getRowsForView
-  color: string;
-}
-
-const VIEW_OPTIONS: ViewOption[] = [
-  { key: "all",      label: "Total Fenix", brand: "total",    channel: "total", color: "#465FFF" },
-  { key: "b2b",      label: "B2B",         brand: "total",    channel: "b2b",   color: "#8B5CF6" },
-  { key: "b2c",      label: "B2C",         brand: "total",    channel: "b2c",   color: "#06B6D4" },
-  { key: "martel",   label: "Martel",      brand: "martel",   channel: "total", color: "#10B981" },
-  { key: "wrangler", label: "Wrangler",    brand: "wrangler", channel: "total", color: "#F59E0B" },
-  { key: "lee",      label: "Lee",         brand: "lee",      channel: "total", color: "#EF4444" },
-];
-
-// ─── Format helpers ──────────────────────────────────────────────────────────
-
-function fmt(value: number): string {
-  return `${Math.round(value).toLocaleString("es-PY")} Gs.`;
-}
-
-function fmtDiff(value: number): string {
-  const abs = Math.abs(value);
-  const sign = value >= 0 ? "+" : "-";
-  if (abs >= 1_000_000_000) return `${sign}${(abs / 1_000_000_000).toFixed(1)}B`;
-  if (abs >= 1_000_000)     return `${sign}${(abs / 1_000_000).toFixed(0)}M`;
-  if (abs >= 1_000)         return `${sign}${(abs / 1_000).toFixed(0)}K`;
-  return `${sign}${abs.toFixed(0)}`;
-}
+import { MONTH_SHORT } from "@/domain/period/helpers";
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -53,203 +19,262 @@ function DiffBadge({ value }: { value: number }) {
   const positive = value >= 0;
   return (
     <span
-      className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+      className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
         positive
-          ? "bg-success-100 dark:bg-success-500/15 text-success-700 dark:text-success-400"
-          : "bg-error-100 dark:bg-error-500/15 text-error-700 dark:text-error-400"
+          ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-400"
+          : "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-400"
       }`}
     >
-      {fmtDiff(value)}
+      {formatDiff(value)}
     </span>
   );
 }
+
+/** Diff badge for percentage points (pp) */
+function PpBadge({ value }: { value: number }) {
+  if (value === 0) return <span className="text-[10px] text-gray-300 dark:text-gray-600">—</span>;
+  const positive = value >= 0;
+  return (
+    <span
+      className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+        positive
+          ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-400"
+          : "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-400"
+      }`}
+    >
+      {positive ? "+" : ""}{value.toFixed(1)}pp
+    </span>
+  );
+}
+
+function UnitsDiffBadge({ value }: { value: number }) {
+  if (value === 0) return <span className="text-[10px] text-gray-300 dark:text-gray-600">—</span>;
+  const positive = value >= 0;
+  return (
+    <span
+      className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+        positive
+          ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-400"
+          : "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-400"
+      }`}
+    >
+      {positive ? "+" : ""}{formatNumber(value)}
+    </span>
+  );
+}
+
+const DASH = <span className="text-[10px] text-gray-300 dark:text-gray-600">&mdash;</span>;
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
 interface MonthlyPerformanceTableProps {
   rows: MonthlyRow[];
-  getRowsForView: (brand: string, channel: string) => MonthlyRow[];
+  highlightMonth?: number | null;
+  lastDataDay?: number | null;
+  calendarMonth?: number;
+  isPartialMonth?: boolean;
 }
 
-export function MonthlyPerformanceTable({ rows, getRowsForView }: MonthlyPerformanceTableProps) {
-  const [open, setOpen] = useState(false);
-  const [activeView, setActiveView] = useState<ViewKey>("all");
-
-  const activeOption = VIEW_OPTIONS.find((v) => v.key === activeView)!;
-
-  const displayRows = useMemo(() => {
-    if (activeView === "all") return rows;
-    return getRowsForView(activeOption.brand, activeOption.channel);
-  }, [activeView, rows, getRowsForView, activeOption.brand, activeOption.channel]);
-
+export function MonthlyPerformanceTable({ rows, highlightMonth, lastDataDay, calendarMonth, isPartialMonth }: MonthlyPerformanceTableProps) {
   const totals = useMemo(() => {
-    const totalReal     = displayRows.reduce((s, r) => s + r.real, 0);
-    const totalBudget   = displayRows.reduce((s, r) => s + r.budget, 0);
-    const totalLastYear = displayRows.reduce((s, r) => s + r.lastYear, 0);
-    return { totalReal, totalBudget, totalLastYear };
-  }, [displayRows]);
+    const withData = rows.filter((r) => r.hasRealData);
+    const totalReal      = withData.reduce((s, r) => s + r.real, 0);
+    const totalBudget    = rows.reduce((s, r) => s + r.budget, 0);
+    const totalLastYear  = rows.reduce((s, r) => s + r.lastYear, 0);
+    const totalCost      = withData.reduce((s, r) => s + (r.real - r.real * r.marginPct / 100), 0);
+    const totalMarginPct = totalReal > 0 ? ((totalReal - totalCost) / totalReal) * 100 : 0;
+    // Budget margin: weighted average
+    const budgetMonths   = rows.filter((r) => r.budget > 0);
+    const totalBudgetGm  = budgetMonths.reduce((s, r) => s + r.budget * r.marginBudgetPct / 100, 0);
+    const totalBudgetMarginPct = totalBudget > 0 ? (totalBudgetGm / totalBudget) * 100 : 0;
+    // PY margin
+    const pyMonths       = rows.filter((r) => r.lastYear > 0 && r.marginPYPct > 0);
+    const totalPYGm      = pyMonths.reduce((s, r) => s + r.lastYear * r.marginPYPct / 100, 0);
+    const totalPYLY      = pyMonths.reduce((s, r) => s + r.lastYear, 0);
+    const totalPYMarginPct = totalPYLY > 0 ? (totalPYGm / totalPYLY) * 100 : 0;
+    // Units
+    const totalUnits       = withData.reduce((s, r) => s + r.units, 0);
+    const totalUnitsBudget = rows.reduce((s, r) => s + r.unitsBudget, 0);
+    const totalUnitsPY     = rows.reduce((s, r) => s + r.unitsPY, 0);
+
+    return {
+      totalReal, totalBudget, totalLastYear,
+      totalMarginPct, totalBudgetMarginPct, totalPYMarginPct,
+      totalUnits, totalUnitsBudget, totalUnitsPY,
+    };
+  }, [rows]);
+
+  const thBase = "px-3 py-2 text-right text-[9px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 whitespace-nowrap";
+  const tdBase = "px-3 py-2 text-right";
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 overflow-hidden">
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
       {/* Header */}
-      <div className="flex flex-col gap-3 border-b border-gray-100 px-6 py-4 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="group flex items-start gap-3 text-left"
-        >
-          <div className="mt-0.5">
-            {open ? (
-              <ChevronUpIcon className="h-5 w-5 text-gray-400 transition-colors group-hover:text-gray-600 dark:group-hover:text-gray-300" />
-            ) : (
-              <ChevronDownIcon className="h-5 w-5 text-gray-400 transition-colors group-hover:text-gray-600 dark:group-hover:text-gray-300" />
-            )}
-          </div>
-          <div>
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-              Performance Mensual
-            </h2>
-            <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
-              Real vs Presupuesto vs Ano Anterior &middot; Vista:{" "}
-              <strong>{activeOption.label}</strong>
-            </p>
-          </div>
-        </button>
-
-        {/* View selector */}
-        <div className="flex flex-wrap shrink-0 overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-gray-700">
-          {VIEW_OPTIONS.map((v) => (
-            <button
-              key={v.key}
-              type="button"
-              onClick={() => setActiveView(v.key)}
-              style={activeView === v.key ? { backgroundColor: v.color, color: "#fff" } : {}}
-              className={`px-3 py-1.5 transition-colors ${
-                activeView === v.key
-                  ? "font-semibold"
-                  : "bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
-              }`}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
+      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3 dark:border-gray-700">
+        <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+          Performance mensual
+        </span>
+        {isPartialMonth && lastDataDay != null && calendarMonth != null && (
+          <span className="text-[11px] text-gray-400 dark:text-gray-500">
+            Datos hasta {lastDataDay} {MONTH_SHORT[calendarMonth]}
+          </span>
+        )}
       </div>
 
-      {/* Table body — only when open */}
-      {open && (
-        <div className="border-t border-gray-100 dark:border-gray-700">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 dark:border-gray-700">
-                  {["MES", "REAL", "PRESUPUESTO", "VS PRESUPUESTO", "ANO ANTERIOR", "VS ANO ANT."].map(
-                    (h) => (
-                      <th
-                        key={h}
-                        className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500"
-                      >
-                        {h}
-                      </th>
-                    ),
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
-                {displayRows.map((row) => (
-                  <tr
-                    key={row.month}
-                    className={`transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02] ${
-                      row.hasRealData
-                        ? "bg-white dark:bg-gray-800"
-                        : "bg-gray-50/50 dark:bg-gray-800/50"
-                    }`}
-                  >
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`font-semibold ${
-                            row.hasRealData
-                              ? "text-gray-900 dark:text-white"
-                              : "text-gray-400 dark:text-gray-500"
-                          }`}
-                        >
-                          {row.monthLabel}
-                        </span>
-                        {row.isCurrentMonth && row.hasRealData && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-warning-100 px-1.5 py-0.5 text-[10px] font-medium text-warning-700 dark:bg-warning-500/15 dark:text-warning-400">
-                            <span className="inline-block h-1 w-1 animate-pulse rounded-full bg-warning-500" />
-                            en curso
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 tabular-nums text-gray-700 dark:text-gray-300">
-                      {row.hasRealData ? (
-                        fmt(row.real)
-                      ) : (
-                        <span className="text-gray-300 dark:text-gray-600">&mdash;</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5 tabular-nums text-gray-600 dark:text-gray-400">
-                      {row.budget > 0 ? (
-                        fmt(row.budget)
-                      ) : (
-                        <span className="text-gray-300 dark:text-gray-600">&mdash;</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      {row.hasRealData && row.budget > 0 ? (
-                        <DiffBadge value={row.vsBudget} />
-                      ) : (
-                        <span className="text-xs text-gray-300 dark:text-gray-600">&mdash;</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5 tabular-nums italic text-gray-500 dark:text-gray-500">
-                      {row.lastYear > 0 ? (
-                        fmt(row.lastYear)
-                      ) : (
-                        <span className="text-gray-300 dark:text-gray-600">&mdash;</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      {row.hasRealData && row.lastYear > 0 ? (
-                        <DiffBadge value={row.vsLastYear} />
-                      ) : (
-                        <span className="text-xs text-gray-300 dark:text-gray-600">&mdash;</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12px]">
+          <thead>
+            {/* Group headers */}
+            <tr className="border-b border-gray-100 dark:border-gray-700">
+              <th rowSpan={2} className={`${thBase} text-left sticky left-0 bg-white dark:bg-gray-800 z-10`}>
+                Mes
+              </th>
+              <th colSpan={3} className="px-3 py-1.5 text-center text-[9px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700 border-l border-gray-100 dark:border-gray-700">
+                Ventas Netas
+              </th>
+              <th colSpan={3} className="px-3 py-1.5 text-center text-[9px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700 border-l border-gray-100 dark:border-gray-700">
+                Margen Bruto
+              </th>
+              <th colSpan={3} className="px-3 py-1.5 text-center text-[9px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700 border-l border-gray-100 dark:border-gray-700">
+                Unidades
+              </th>
+            </tr>
+            {/* Sub-headers */}
+            <tr className="border-b border-gray-200 dark:border-gray-600">
+              {/* Ventas */}
+              <th className={`${thBase} border-l border-gray-100 dark:border-gray-700`}>Real</th>
+              <th className={thBase}>vs Presup.</th>
+              <th className={thBase}>vs Año Ant.</th>
+              {/* Margen */}
+              <th className={`${thBase} border-l border-gray-100 dark:border-gray-700`}>Real</th>
+              <th className={thBase}>vs Presup.</th>
+              <th className={thBase}>vs Año Ant.</th>
+              {/* Unidades */}
+              <th className={`${thBase} border-l border-gray-100 dark:border-gray-700`}>Real</th>
+              <th className={thBase}>vs Presup.</th>
+              <th className={thBase}>vs Año Ant.</th>
+            </tr>
+          </thead>
 
-              {/* Totals */}
-              <tfoot>
-                <tr className="border-t-2 border-gray-200 bg-gray-50 dark:border-gray-600 dark:bg-gray-700/30">
-                  <td className="px-5 py-3.5 text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white">
-                    Total
-                  </td>
-                  <td className="px-5 py-3.5 tabular-nums font-bold text-gray-900 dark:text-white">
-                    {fmt(totals.totalReal)}
-                  </td>
-                  <td className="px-5 py-3.5 tabular-nums font-semibold text-gray-600 dark:text-gray-400">
-                    {fmt(totals.totalBudget)}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <DiffBadge value={totals.totalReal - totals.totalBudget} />
-                  </td>
-                  <td className="px-5 py-3.5 tabular-nums font-semibold italic text-gray-500 dark:text-gray-500">
-                    {fmt(totals.totalLastYear)}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <DiffBadge value={totals.totalReal - totals.totalLastYear} />
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      )}
+          <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
+            {rows.map((row) => (
+              <tr
+                key={row.month}
+                className={`transition-colors duration-[var(--duration-fast)] hover:bg-gray-25 dark:hover:bg-white/[0.02] ${
+                  highlightMonth === row.month
+                    ? "bg-brand-50/60 dark:bg-brand-500/10"
+                    : row.hasRealData
+                      ? "bg-white dark:bg-gray-800"
+                      : "bg-gray-50/40 dark:bg-gray-800/50"
+                } ${row.isCurrentMonth ? "border-l-[3px] border-l-warning-400" : ""}`}
+              >
+                {/* Mes */}
+                <td className="px-3 py-2 sticky left-0 bg-inherit z-10">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`font-semibold text-[12px] ${row.hasRealData ? "text-gray-800 dark:text-white" : "text-gray-300 dark:text-gray-600"}`}>
+                      {row.monthLabel}
+                    </span>
+                    {row.isCurrentMonth && row.hasRealData && (
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-warning-100 px-1 py-0.5 text-[8px] font-semibold text-warning-600 dark:bg-warning-500/15 dark:text-warning-400">
+                        <span className="inline-block h-1 w-1 animate-pulse rounded-full bg-warning-500" />
+                        en curso
+                      </span>
+                    )}
+                  </div>
+                </td>
+
+                {/* ── Ventas Netas ─── */}
+                <td className={`${tdBase} border-l border-gray-50 dark:border-gray-700/50 whitespace-nowrap tabular-nums text-gray-700 dark:text-gray-300`}>
+                  {row.hasRealData ? formatPYG(row.real) : DASH}
+                </td>
+                <td className={tdBase}>
+                  {row.hasRealData && row.budget > 0 ? <DiffBadge value={row.vsBudget} /> : DASH}
+                </td>
+                <td className={tdBase}>
+                  {row.hasRealData && row.lastYear > 0 ? <DiffBadge value={row.vsLastYear} /> : DASH}
+                </td>
+
+                {/* ── Margen Bruto ─── */}
+                <td className={`${tdBase} border-l border-gray-50 dark:border-gray-700/50 whitespace-nowrap tabular-nums text-gray-700 dark:text-gray-300`}>
+                  {row.hasRealData ? formatPct(row.marginPct) : DASH}
+                </td>
+                <td className={tdBase}>
+                  {row.hasRealData && row.marginBudgetPct > 0
+                    ? <PpBadge value={row.marginPct - row.marginBudgetPct} />
+                    : DASH}
+                </td>
+                <td className={tdBase}>
+                  {row.hasRealData && row.marginPYPct > 0
+                    ? <PpBadge value={row.marginPct - row.marginPYPct} />
+                    : DASH}
+                </td>
+
+                {/* ── Unidades ─── */}
+                <td className={`${tdBase} border-l border-gray-50 dark:border-gray-700/50 whitespace-nowrap tabular-nums text-gray-700 dark:text-gray-300`}>
+                  {row.hasRealData && row.units > 0 ? formatNumber(row.units) : DASH}
+                </td>
+                <td className={tdBase}>
+                  {row.hasRealData && row.units > 0 && row.unitsBudget > 0
+                    ? <UnitsDiffBadge value={row.units - row.unitsBudget} />
+                    : DASH}
+                </td>
+                <td className={tdBase}>
+                  {row.hasRealData && row.units > 0 && row.unitsPY > 0
+                    ? <UnitsDiffBadge value={row.units - row.unitsPY} />
+                    : DASH}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+
+          <tfoot>
+            <tr className="border-t-2 border-gray-200 bg-gray-25 dark:border-gray-600 dark:bg-gray-700/30">
+              <td className="px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest text-gray-900 dark:text-white sticky left-0 bg-inherit z-10">
+                Total
+              </td>
+              {/* Ventas totals */}
+              <td className={`${tdBase} border-l border-gray-100 dark:border-gray-700 whitespace-nowrap tabular-nums font-bold text-gray-900 dark:text-white`}>
+                {formatPYG(totals.totalReal)}
+              </td>
+              <td className={tdBase}>
+                <DiffBadge value={totals.totalReal - totals.totalBudget} />
+              </td>
+              <td className={tdBase}>
+                <DiffBadge value={totals.totalReal - totals.totalLastYear} />
+              </td>
+              {/* Margen totals */}
+              <td className={`${tdBase} border-l border-gray-100 dark:border-gray-700 whitespace-nowrap tabular-nums font-bold text-gray-900 dark:text-white`}>
+                {formatPct(totals.totalMarginPct)}
+              </td>
+              <td className={tdBase}>
+                {totals.totalBudgetMarginPct > 0
+                  ? <PpBadge value={totals.totalMarginPct - totals.totalBudgetMarginPct} />
+                  : DASH}
+              </td>
+              <td className={tdBase}>
+                {totals.totalPYMarginPct > 0
+                  ? <PpBadge value={totals.totalMarginPct - totals.totalPYMarginPct} />
+                  : DASH}
+              </td>
+              {/* Unidades totals */}
+              <td className={`${tdBase} border-l border-gray-100 dark:border-gray-700 whitespace-nowrap tabular-nums font-bold text-gray-900 dark:text-white`}>
+                {formatNumber(totals.totalUnits)}
+              </td>
+              <td className={tdBase}>
+                {totals.totalUnitsBudget > 0
+                  ? <UnitsDiffBadge value={totals.totalUnits - totals.totalUnitsBudget} />
+                  : DASH}
+              </td>
+              <td className={tdBase}>
+                {totals.totalUnitsPY > 0
+                  ? <UnitsDiffBadge value={totals.totalUnits - totals.totalUnitsPY} />
+                  : DASH}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </div>
   );
 }

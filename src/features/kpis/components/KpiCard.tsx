@@ -8,6 +8,8 @@
  * El componente solo sabe cómo mostrarlo.
  */
 import { formatKpiValue, formatChange } from "@/utils/format";
+import { Card } from "@/components/ui/card/Card";
+import { Skeleton } from "@/components/ui/skeleton/Skeleton";
 import type { KpiCardData } from "../hooks/useKpiDashboard";
 
 interface KpiCardProps extends KpiCardData {
@@ -32,7 +34,7 @@ export function KpiCard({
   const yoyIcon  = getYoyIcon(yoyPct);
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+    <Card variant="elevated">
       {/* Header */}
       <div className="mb-3">
         <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -78,7 +80,7 @@ export function KpiCard({
           <span className="text-xs text-gray-400 dark:text-gray-600">{periodLabel}</span>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -102,10 +104,10 @@ function getYoyIcon(yoyPct: number | null): string {
 
 function KpiCardSkeleton({ label }: { label: string }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+    <Card variant="elevated">
       <div className="mb-3 text-sm font-medium text-gray-400 dark:text-gray-600">{label}</div>
-      <div className="mb-3 h-8 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-      <div className="h-4 w-28 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-    </div>
+      <Skeleton variant="text" height="2rem" width="10rem" className="mb-3" />
+      <Skeleton variant="text" height="1rem" width="7rem" />
+    </Card>
   );
 }

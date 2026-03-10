@@ -1,32 +1,35 @@
 /**
  * features/executive/ExecutivePage.tsx
  *
- * Vista ejecutiva "Road to Annual Target".
+ * Vista ejecutiva "Road to Annual Target" — V2 Redesign.
  *
- * REGLA: Sin logica de negocio. Solo layout + composicion de componentes.
- * Toda la data y calculos vienen de useExecutiveData.
+ * Estructura:
+ *   TIER 1 (Command Center — above the fold):
+ *     - Context Filters (marca/canal/periodo)
+ *     - Monthly Sales Bar (barras mensuales + línea presupuesto)
+ *     - 4 Scorecards (2 accionables + 2 contextuales)
+ *     - Insight Bar (diagnóstico automático por marca)
+ *   TIER 2 (Temporal Analysis — below fold):
+ *     - Chart + Tabla side-by-side
+ *     - Quick Links compactos
+ *
+ * REGLA: Sin lógica de negocio. Solo layout + composición.
+ * Toda la data viene de useExecutiveData.
  */
 import { useMemo } from "react";
 import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
-import { Link } from "react-router";
 import { useExecutiveData } from "./hooks/useExecutiveData";
+import { InsightBar } from "./components/InsightBar";
+import { ExecutiveFilters } from "./components/ExecutiveFilters";
 import { MonthlyPerformanceTable } from "./components/MonthlyPerformanceTable";
-import { MONTH_SHORT } from "@/domain/period/helpers";
+import { MONTH_SHORT, MONTH_FULL } from "@/domain/period/helpers";
+import { formatPYGSuffix, formatCompact, formatChange } from "@/utils/format";
+import { StatCard } from "@/components/ui/stat-card/StatCard";
+import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
+import { Card } from "@/components/ui/card/Card";
+import { DataFreshnessTag } from "./components/DataFreshnessTag";
 
-// ─── Format helpers ──────────────────────────────────────────────────────────
-
-function fmtFull(value: number): string {
-  return `${Math.round(value).toLocaleString("es-PY")} Gs.`;
-}
-
-function fmtShort(value: number): string {
-  if (value >= 1_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(1)} T`;
-  if (value >= 1_000_000_000)     return `${(value / 1_000_000_000).toFixed(1)} MM`;
-  if (value >= 1_000_000)         return `${(value / 1_000_000).toFixed(1)} M`;
-  if (value >= 1_000)             return `${(value / 1_000).toFixed(0)} K`;
-  return String(Math.round(value));
-}
 
 // ─── Chart config ────────────────────────────────────────────────────────────
 
@@ -34,30 +37,80 @@ function buildChartOptions(
   labels: string[],
   currentMonthLabel: string,
   isPartialMonth: boolean,
+  isDaily = false,
+  lastDataDay: number | null = null,
 ): ApexOptions {
+  if (isDaily) {
+    // Mismo estilo que el chart anual pero con eje X de días
+    return {
+      chart: {
+        type: "area",
+        fontFamily: "Outfit, sans-serif",
+        background: "transparent",
+        toolbar: { show: false },
+        animations: { enabled: true, dynamicAnimation: { enabled: true, speed: 400 } },
+      },
+      colors: ["#465fff", "#F59E0B", "#94A3B8"],
+      dataLabels: { enabled: false },
+      stroke: { curve: "smooth", width: [2.5, 1.5, 1.5], dashArray: [0, 8, 5] },
+      fill: {
+        type: "gradient",
+        gradient: { type: "vertical", opacityFrom: [0.2, 0, 0], opacityTo: 0 },
+      },
+      markers: { size: [3, 0, 0], hover: { size: 5 }, strokeWidth: 2, strokeColors: "#fff" },
+      xaxis: {
+        categories: labels,
+        axisBorder: { show: false },
+        axisTicks: { show: false },
+        title: { text: "Día", style: { fontSize: "11px", fontWeight: 500, color: "#98a2b3" } },
+        labels: {
+          style: { fontSize: "10px", colors: "#98a2b3", fontWeight: 500 },
+          formatter: (val: string) => { const d = Number(val); return d === 1 || d % 5 === 0 ? val : ""; },
+        },
+      },
+      yaxis: {
+        title: { text: "Gs.", style: { fontSize: "11px", fontWeight: 500, color: "#98a2b3" } },
+        labels: {
+          style: { fontSize: "10px", colors: ["#98a2b3"] },
+          formatter: (val: number) => formatCompact(val),
+        },
+      },
+      grid: { xaxis: { lines: { show: false } }, yaxis: { lines: { show: true } }, borderColor: "#f2f4f7" },
+      legend: {
+        show: true, position: "top", horizontalAlign: "left",
+        fontSize: "12px", fontWeight: 500,
+        markers: { size: 5, shape: "circle" }, itemMargin: { horizontal: 12 },
+      },
+      tooltip: {
+        shared: true, intersect: false,
+        y: { formatter: (val: number | null) => (val != null ? formatPYGSuffix(val) : "\u2014") },
+      },
+    };
+  }
+
   return {
     chart: {
       type: "area",
       fontFamily: "Outfit, sans-serif",
       background: "transparent",
       toolbar: { show: false },
-      animations: { enabled: false },
+      animations: { enabled: true, dynamicAnimation: { enabled: true, speed: 400 } },
     },
-    colors: ["#3B82F6", "#10B981", "#F59E0B"],
+    colors: ["#465fff", "#F59E0B", "#94A3B8"],
     annotations: isPartialMonth
       ? {
           xaxis: [
             {
               x: currentMonthLabel,
               borderColor: "#F59E0B",
-              borderWidth: 2,
-              strokeDashArray: 4,
+              borderWidth: 1.5,
+              strokeDashArray: 3,
               label: {
-                text: "Hoy",
+                text: lastDataDay ? `${lastDataDay} ${currentMonthLabel}` : "Hoy",
                 style: {
-                  background: "#FEF3C7",
+                  background: "#FEF0C7",
                   color: "#92400E",
-                  fontSize: "11px",
+                  fontSize: "10px",
                   fontWeight: 600,
                   padding: { left: 6, right: 6, top: 2, bottom: 2 },
                 },
@@ -70,30 +123,32 @@ function buildChartOptions(
     dataLabels: { enabled: false },
     stroke: {
       curve: "smooth",
-      width: [2.5, 2, 2],
-      dashArray: [0, 0, 6],
+      width: [2.5, 1.5, 1.5],
+      dashArray: [0, 8, 5],
     },
     fill: {
       type: "gradient",
-      gradient: { type: "vertical", opacityFrom: [0.25, 0.18, 0], opacityTo: 0 },
+      gradient: { type: "vertical", opacityFrom: [0.2, 0, 0], opacityTo: 0 },
     },
-    markers: { size: 0, hover: { size: 4 } },
+    markers: { size: [3, 0, 0], hover: { size: 5 }, strokeWidth: 2, strokeColors: "#fff" },
     xaxis: {
       categories: labels,
       axisBorder: { show: false },
       axisTicks: { show: false },
-      labels: { style: { fontSize: "12px", colors: "#6B7280" } },
+      title: { text: "Mes", style: { fontSize: "11px", fontWeight: 500, color: "#98a2b3" } },
+      labels: { style: { fontSize: "11px", colors: "#98a2b3", fontWeight: 500 } },
     },
     yaxis: {
+      title: { text: "Gs.", style: { fontSize: "11px", fontWeight: 500, color: "#98a2b3" } },
       labels: {
-        style: { fontSize: "11px", colors: ["#6B7280"] },
-        formatter: (val: number) => fmtShort(val),
+        style: { fontSize: "10px", colors: ["#98a2b3"] },
+        formatter: (val: number) => formatCompact(val),
       },
     },
     grid: {
       xaxis: { lines: { show: false } },
       yaxis: { lines: { show: true } },
-      borderColor: "#F3F4F6",
+      borderColor: "#f2f4f7",
     },
     legend: {
       show: true,
@@ -101,150 +156,80 @@ function buildChartOptions(
       horizontalAlign: "left",
       fontSize: "12px",
       fontWeight: 500,
-      markers: { size: 6 },
+      markers: { size: 5, shape: "circle" },
       itemMargin: { horizontal: 12 },
     },
     tooltip: {
       shared: true,
       intersect: false,
-      y: { formatter: (val: number | null) => (val != null ? fmtFull(val) : "\u2014") },
+      y: { formatter: (val: number | null) => (val != null ? formatPYGSuffix(val) : "\u2014") },
     },
   };
-}
-
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
-function SectionHeader({ label, description }: { label: string; description?: string }) {
-  return (
-    <div className="flex items-center gap-4">
-      <div className="flex flex-col">
-        <span className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
-          {label}
-        </span>
-        {description && (
-          <span className="mt-0.5 text-xs text-gray-400 dark:text-gray-600">{description}</span>
-        )}
-      </div>
-      <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
-    </div>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  sub,
-  highlight,
-  positive,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  highlight?: boolean;
-  positive?: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-2xl border p-5 ${
-        highlight
-          ? positive
-            ? "border-success-200 bg-success-50 dark:border-success-500/20 dark:bg-success-500/10"
-            : "border-error-200 bg-error-50 dark:border-error-500/20 dark:bg-error-500/10"
-          : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
-      }`}
-    >
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-        {label}
-      </p>
-      <p
-        className={`break-words text-xl font-bold leading-tight ${
-          highlight
-            ? positive
-              ? "text-success-700 dark:text-success-400"
-              : "text-error-700 dark:text-error-400"
-            : "text-gray-900 dark:text-white"
-        }`}
-      >
-        {value}
-      </p>
-      {sub && <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">{sub}</p>}
-    </div>
-  );
-}
-
-function QuickLink({
-  to,
-  icon,
-  title,
-  description,
-}: {
-  to: string;
-  icon: string;
-  title: string;
-  description: string;
-}) {
-  return (
-    <Link
-      to={to}
-      className="group rounded-2xl border border-gray-200 bg-white p-5 transition-all hover:border-brand-400 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-brand-500"
-    >
-      <div className="mb-3 flex items-start justify-between">
-        <span className="text-2xl">{icon}</span>
-        <span className="text-xs font-semibold text-brand-600 opacity-0 transition-opacity group-hover:opacity-100 dark:text-brand-400">
-          Ver &rarr;
-        </span>
-      </div>
-      <p className="mb-1 text-sm font-bold text-gray-900 dark:text-white">{title}</p>
-      <p className="text-xs leading-relaxed text-gray-400 dark:text-gray-500">{description}</p>
-    </Link>
-  );
-}
-
-// ─── Loading skeleton ────────────────────────────────────────────────────────
-
-function ExecutiveSkeleton() {
-  return (
-    <div className="animate-pulse space-y-6 p-4 sm:p-6">
-      <div className="h-16 rounded-2xl bg-gray-100 dark:bg-gray-800" />
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-28 rounded-2xl bg-gray-100 dark:bg-gray-800" />
-        ))}
-      </div>
-      <div className="h-12 rounded-2xl bg-gray-100 dark:bg-gray-800" />
-      <div className="h-80 rounded-2xl bg-gray-100 dark:bg-gray-800" />
-    </div>
-  );
 }
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function ExecutivePage() {
+
   const {
     metrics,
     chartPoints,
+    dailyChartPoints,
     monthlyRows,
+    insights,
+    channelInsights,
+    periodLabel,
     calendarMonth,
     isPartialMonth,
+    isYtdView,
     isLoading,
+    isInventoryLoading,
     error,
-    getRowsForView,
+    lastDataDay,
   } = useExecutiveData();
 
-  // Chart series
+  // Series del chart principal — cambia según período
   const { labels, series } = useMemo(() => {
-    const lbl = chartPoints.map((p) => p.label);
-    const s = [
-      { name: "Acumulado Real",       data: chartPoints.map((p) => p.cumReal) },
-      { name: "Pronostico Acumulado", data: chartPoints.map((p) => p.cumForecast) },
-      { name: "Objetivo Acumulado",   data: chartPoints.map((p) => p.cumTarget) },
-    ];
-    return { labels: lbl, series: s };
-  }, [chartPoints]);
+    if (dailyChartPoints) {
+      return {
+        labels: dailyChartPoints.map((p) => p.label),
+        series: [
+          { name: "Real",          data: dailyChartPoints.map((p) => p.real) },
+          { name: "Presupuesto",   data: dailyChartPoints.map((p) => p.budgetDaily) },
+          { name: "Año Anterior",  data: dailyChartPoints.map((p) => p.priorYear) },
+        ],
+      };
+    }
+    return {
+      labels: chartPoints.map((p) => p.label),
+      series: [
+        { name: "Acumulado Real",       data: chartPoints.map((p) => p.cumReal) },
+        { name: "Objetivo Acumulado",   data: chartPoints.map((p) => p.cumTarget) },
+        { name: "Año Anterior",         data: chartPoints.map((p) => p.cumPriorYear) },
+      ],
+    };
+  }, [chartPoints, dailyChartPoints]);
+
 
   const currentMonthLabel = MONTH_SHORT[calendarMonth] ?? "";
 
-  if (isLoading) return <ExecutiveSkeleton />;
+  // Descripción exacta del período con fechas — ANTES de early returns (regla de hooks)
+  // periodLabel viene de resolvePeriod y ya es correcto para cada filtro:
+  //   ytd → "Ene–Mar 2026", lastClosedMonth → "Febrero 2026", currentMonth → "Marzo 2026 ⚠"
+  // Solo refinamos con día exacto cuando el período incluye el mes en curso con datos parciales.
+  const periodDateRange = useMemo(() => {
+    const yr = new Date().getFullYear();
+    if (isYtdView && lastDataDay) {
+      return `1 Ene – ${lastDataDay} ${MONTH_SHORT[calendarMonth]} ${yr}`;
+    }
+    if (isYtdView) {
+      return `1 Ene – ${new Date().getDate()} ${MONTH_SHORT[calendarMonth]} ${yr}`;
+    }
+    // currentMonth y lastClosedMonth: usar periodLabel de resolvePeriod
+    return periodLabel;
+  }, [isYtdView, lastDataDay, calendarMonth, periodLabel]);
+
+  if (isLoading) return <PageSkeleton />;
 
   if (error || !metrics) {
     return (
@@ -259,162 +244,288 @@ export default function ExecutivePage() {
   }
 
   const {
+    periodTarget,
     annualTarget,
     ytd,
     forecastYearEnd,
     gapToTarget,
-    requiredMonthlyRunRate,
-    realProgressPct,
-    forecastProgressPct,
-    monthsRemaining,
-    linearPaceGap,
+    yoyPct,
+    yoyDelta,
+    gmroi,
+    inventoryTurnover,
   } = metrics;
 
-  const isAheadOfForecast = gapToTarget <= 0;
-  const isAheadOfPace = linearPaceGap <= 0;
-  const realBarPct = Math.min(realProgressPct, 100);
-  const forecastBarPct = Math.max(0, Math.min(forecastProgressPct, 100) - realBarPct);
+  const isAheadOfPeriod = gapToTarget <= 0;
+  const forecastBeatsAnnual = forecastYearEnd >= annualTarget;
+  const isMonthView = !isYtdView;
+  const isClosedMonth = isMonthView && forecastYearEnd === ytd;
+  const metaLabel = isMonthView ? "Meta del Mes" : "Meta Anual";
+  const viewMonth = isClosedMonth ? calendarMonth - 1 : calendarMonth;
+  const viewMonthName = MONTH_FULL[viewMonth] ?? "";
+  const vsMetaLabel = isMonthView ? `vs. Meta de ${viewMonthName}` : "vs. Meta Actual YTD";
 
   return (
-    <div className="space-y-10 p-4 sm:p-6">
-      {/* ── SECTION 1: Executive Summary ─────────────────────────────────── */}
-      <section className="space-y-6">
-        <SectionHeader label="Resumen Ejecutivo" description="Progreso anual al objetivo" />
+    <div className="space-y-6 p-4 sm:p-6">
 
-        {/* Header Banner */}
-        <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-6 py-4 dark:border-gray-700 dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="mb-0.5 text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
-              Executive Dashboard
+      {/* ═══ TIER 1: COMMAND CENTER ═══════════════════════════════════════ */}
+
+      {/* Context Filters (in-page, hierarchical) */}
+      <div className="exec-anim-1">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <DataFreshnessTag
+            lastDataDay={lastDataDay}
+            calendarMonth={calendarMonth}
+            isPartialMonth={isPartialMonth}
+          />
+          <ExecutiveFilters />
+        </div>
+      </div>
+
+      {/* Top 3-column grid: 2 metric cards + 1 tall card */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.2fr]">
+        {/* Ventas Netas */}
+        <div className="exec-anim-2">
+          <Card padding="lg" className="flex h-full flex-col">
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Ventas Netas
             </p>
-            <h1 className="text-xl font-bold leading-tight text-gray-900 dark:text-white">
-              Road to {fmtFull(annualTarget)}
-            </h1>
-          </div>
-          <span
-            className={`inline-flex items-center gap-1.5 self-start whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold sm:self-auto ${
-              isAheadOfPace
-                ? "bg-success-100 text-success-700 dark:bg-success-500/15 dark:text-success-400"
-                : "bg-warning-100 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400"
-            }`}
-          >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                isAheadOfPace ? "bg-success-500" : "bg-warning-500"
-              }`}
-            />
-            {isAheadOfPace
-              ? `Adelantado al ritmo lineal por ${fmtFull(Math.abs(linearPaceGap))}`
-              : `Atrasado al ritmo lineal por ${fmtFull(Math.abs(linearPaceGap))}`}
-          </span>
+            <div className="mt-auto">
+              <p className="mt-1 text-xl font-bold tabular-nums text-gray-900 dark:text-white">
+                {formatPYGSuffix(ytd)}
+              </p>
+              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                {periodDateRange}
+              </p>
+            </div>
+          </Card>
         </div>
 
-        {/* 4 Metric Cards */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <MetricCard label="Objetivo Anual" value={fmtFull(annualTarget)} />
-          <MetricCard
-            label="Pronostico Cierre"
-            value={fmtFull(forecastYearEnd)}
-            sub={`YTD: ${fmtFull(ytd)}`}
-          />
-          <MetricCard
-            label="Brecha vs Objetivo"
-            value={
-              isAheadOfForecast
-                ? `Superado por ${fmtFull(Math.abs(gapToTarget))}`
-                : `Brecha: ${fmtFull(gapToTarget)}`
+        {/* Brecha vs Período + vs Año Anterior (2 mini-cards stacked) */}
+        <div className="exec-anim-2 flex flex-col gap-2">
+          <Card padding="sm" className="relative flex-1 px-4 py-3">
+            <span className={`absolute right-4 top-1/2 -translate-y-1/2 inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${
+              isAheadOfPeriod
+                ? "bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-400"
+                : "bg-error-50 text-error-600 dark:bg-error-500/10 dark:text-error-400"
+            }`}>
+              {periodTarget > 0
+                ? `${isAheadOfPeriod ? "+" : ""}${(((ytd - periodTarget) / periodTarget) * 100).toFixed(1)}%`
+                : "—"}
+            </span>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              {vsMetaLabel}
+            </p>
+            <p className={`mt-1 text-lg font-bold tabular-nums ${
+              isAheadOfPeriod
+                ? "text-success-600 dark:text-success-400"
+                : "text-error-600 dark:text-error-400"
+            }`}>
+              {isAheadOfPeriod ? "+" : "−"}{formatPYGSuffix(Math.abs(gapToTarget))}
+            </p>
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              {periodDateRange}
+            </p>
+          </Card>
+          <Card padding="sm" className="relative flex-1 px-4 py-3">
+            <span className={`absolute right-4 top-1/2 -translate-y-1/2 inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${
+              yoyPct >= 0
+                ? "bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-400"
+                : "bg-error-50 text-error-600 dark:bg-error-500/10 dark:text-error-400"
+            }`}>
+              {formatChange(yoyPct)}
+            </span>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              {isMonthView ? `vs. ${viewMonthName} ${new Date().getFullYear() - 1}` : `vs Mismo Período ${new Date().getFullYear() - 1}`}
+            </p>
+            <p className={`mt-1 text-lg font-bold tabular-nums ${
+              yoyDelta >= 0
+                ? "text-success-600 dark:text-success-400"
+                : "text-error-600 dark:text-error-400"
+            }`}>
+              {yoyDelta >= 0 ? "+" : "−"}{formatPYGSuffix(Math.abs(yoyDelta))}
+            </p>
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              {periodDateRange}
+            </p>
+          </Card>
+        </div>
+
+        {/* Cumplimiento vs Objetivo — gauge card (tall, spans 2 rows on lg) */}
+        <div className="exec-anim-2 sm:col-span-2 lg:col-span-1 lg:row-span-2">
+          <div className="h-full rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-white/[0.03]">
+            <div className="h-full px-5 pb-5 pt-5 sm:px-6 sm:pt-6">
+              <h3 className="text-base font-semibold text-gray-800 dark:text-white/90">
+                {metaLabel}
+              </h3>
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                {periodDateRange}
+              </p>
+              {(() => {
+                const ytdPct = annualTarget > 0 ? (ytd / annualTarget) * 100 : 0;
+                const ytdPctRounded = Math.round(ytdPct * 10) / 10;
+                const remaining = annualTarget - ytd;
+                return (
+                  <>
+                    <div className="relative mt-30">
+                      <Chart
+                        key={`gauge-${ytdPctRounded}`}
+                        options={{
+                          colors: [forecastBeatsAnnual ? "#039855" : "#465FFF"],
+                          chart: {
+                            fontFamily: "Outfit, sans-serif",
+                            type: "radialBar",
+                            sparkline: { enabled: true },
+                          },
+                          plotOptions: {
+                            radialBar: {
+                              startAngle: -85,
+                              endAngle: 85,
+                              hollow: { size: "80%" },
+                              track: {
+                                background: "#E4E7EC",
+                                strokeWidth: "100%",
+                                margin: 5,
+                              },
+                              dataLabels: {
+                                name: { show: false },
+                                value: {
+                                  fontSize: "36px",
+                                  fontWeight: "600",
+                                  offsetY: -40,
+                                  color: undefined,
+                                  formatter: () => `${ytdPctRounded.toFixed(1)}%`,
+                                },
+                              },
+                            },
+                          },
+                          fill: { type: "solid" },
+                          stroke: { lineCap: "round" },
+                          labels: ["Cumplimiento"],
+                        }}
+                        series={[Math.min(ytdPctRounded, 100)]}
+                        type="radialBar"
+                        height={400}
+                      />
+                      <span
+                        className={`absolute left-1/2 top-full -translate-x-1/2 -translate-y-[95%] rounded-full px-3 py-1 text-xs font-medium ${
+                          forecastBeatsAnnual
+                            ? "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500"
+                            : "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400"
+                        }`}
+                      >
+                        {forecastBeatsAnnual
+                          ? (isClosedMonth ? "Meta superada" : "Proyección supera meta")
+                          : `Faltan ₲ ${formatCompact(remaining)}`}
+                      </span>
+                    </div>
+                    <p className="mx-auto mt-28 max-w-[280px] text-center text-sm text-gray-500 dark:text-gray-400">
+                      {formatPYGSuffix(ytd)} vendidos de una {isMonthView ? "meta mensual" : "meta anual"} de {formatPYGSuffix(annualTarget)}
+                    </p>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+
+        {/* Chart principal (inside grid, spans first 2 columns) */}
+        <div className="exec-anim-3 sm:col-span-2 lg:col-span-2">
+          <Card padding="lg">
+            <div role="img" aria-label={dailyChartPoints ? "Gráfico diario del mes" : "Gráfico acumulado anual"}>
+              <Chart
+                key={dailyChartPoints ? "daily" : "cumulative"}
+                options={buildChartOptions(labels, currentMonthLabel, isPartialMonth, !!dailyChartPoints, lastDataDay)}
+                series={series}
+                type="area"
+                height={280}
+              />
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Insight Bar */}
+      {insights.length > 0 && (
+        <div className="exec-anim-8">
+          <InsightBar insights={insights} altInsights={channelInsights} />
+        </div>
+      )}
+
+      {/* ═══ TIER 2: Scorecards + Full-width Table ═══════════════════════ */}
+
+      {/* 4 KPI Scorecards — orden definido por cliente */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {/* 1. Pronóstico */}
+        <div className="exec-anim-4">
+          <StatCard
+            label={isClosedMonth ? "Cierre del Mes" : isMonthView ? "Pronóstico Mes" : "Pronóstico Anual"}
+            value={formatPYGSuffix(forecastYearEnd)}
+            sub={forecastBeatsAnnual
+              ? `+${((forecastYearEnd / annualTarget - 1) * 100).toFixed(1)}% sobre ${isMonthView ? "meta mensual" : "meta anual"}`
+              : `${((forecastYearEnd / annualTarget - 1) * 100).toFixed(1)}% bajo ${isMonthView ? "meta mensual" : "meta anual"}`
             }
-            highlight
-            positive={isAheadOfForecast}
-          />
-          <MetricCard
-            label="Run-Rate Mensual Requerido"
-            value={fmtFull(requiredMonthlyRunRate)}
-            sub={`Para alcanzar el objetivo en ${monthsRemaining} meses`}
+            variant={forecastBeatsAnnual ? "accent-positive" : "accent-negative"}
           />
         </div>
-
-        {/* Progress Bar */}
-        <div className="space-y-2 rounded-2xl border border-gray-200 bg-white px-6 py-4 dark:border-gray-700 dark:bg-gray-800">
-          <div className="relative h-4 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
-            <div
-              className="absolute left-0 top-0 h-full rounded-full bg-emerald-400/60 transition-all duration-700 dark:bg-emerald-500/50"
-              style={{ width: `${realBarPct + forecastBarPct}%` }}
-            />
-            <div
-              className="absolute left-0 top-0 h-full rounded-full bg-blue-500 transition-all duration-700"
-              style={{ width: `${realBarPct}%` }}
-            />
-          </div>
-          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-            <span>
-              <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-blue-500 align-middle" />
-              Progreso Real:{" "}
-              <strong className="text-gray-700 dark:text-gray-300">
-                {realProgressPct.toFixed(1)}%
-              </strong>
-              <span className="ml-1 text-gray-400">({fmtFull(ytd)})</span>
-            </span>
-            <span>
-              <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-emerald-400 align-middle" />
-              Pronostico:{" "}
-              <strong className="text-gray-700 dark:text-gray-300">
-                {forecastProgressPct.toFixed(1)}%
-              </strong>
-              <span className="ml-1 text-gray-400">| {monthsRemaining} meses restantes</span>
-            </span>
-          </div>
+        {/* 2. Ritmo vs Presupuesto — siempre visible */}
+        <div className="exec-anim-5">
+          {(() => {
+            const ritmoPct = annualTarget > 0 ? (forecastYearEnd / annualTarget) * 100 : 0;
+            const onTrack = ritmoPct >= 100;
+            return (
+              <StatCard
+                label="Ritmo vs Presupuesto"
+                value={annualTarget > 0 ? `${ritmoPct.toFixed(1)}%` : "\u2014"}
+                sub={onTrack
+                  ? `+${(ritmoPct - 100).toFixed(1)}pp sobre ${isMonthView ? "meta mensual" : "meta anual"}`
+                  : `${(ritmoPct - 100).toFixed(1)}pp bajo ${isMonthView ? "meta mensual" : "meta anual"}`
+                }
+                variant={onTrack ? "accent-positive" : "accent-negative"}
+              />
+            );
+          })()}
         </div>
-
-        {/* Cumulative Chart */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-          {isPartialMonth && (
-            <p className="mb-3 flex items-center gap-1.5 text-xs text-warning-600 dark:text-warning-400">
-              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-warning-500" />
-              El acumulado real incluye datos parciales del mes en curso
-            </p>
+        {/* 3. Rotación Inventario */}
+        <div className="exec-anim-6">
+          {isInventoryLoading ? (
+            <div className="rounded-2xl border border-gray-200 p-5 dark:border-gray-700">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">Rotación Inventario</p>
+              <div className="mt-3 h-6 w-16 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+              <div className="mt-2 h-3 w-24 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+            </div>
+          ) : (
+            <StatCard
+              label="Rotación Inventario"
+              value={`${inventoryTurnover.toFixed(1)}x`}
+              sub={inventoryTurnover >= 4 ? "Rotación saludable" : inventoryTurnover >= 2 ? "Rotación moderada" : "Rotación baja"}
+              variant={inventoryTurnover >= 4 ? "accent-positive" : undefined}
+            />
           )}
-          <Chart
-            options={buildChartOptions(labels, currentMonthLabel, isPartialMonth)}
-            series={series}
-            type="area"
-            height={320}
-          />
         </div>
-
-        {/* Monthly Performance Table */}
-        {monthlyRows.length > 0 && (
-          <MonthlyPerformanceTable rows={monthlyRows} getRowsForView={getRowsForView} />
-        )}
-      </section>
-
-      {/* ── SECTION 2: Quick Access ──────────────────────────────────────── */}
-      <section className="space-y-4">
-        <SectionHeader
-          label="Modulos Comerciales"
-          description="Navega a cada herramienta del POD"
-        />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <QuickLink
-            to="/ventas"
-            icon="&#128200;"
-            title="Analisis de Ventas"
-            description="Performance vs presupuesto y ano anterior. Margen por marca, mix de canal y top SKUs."
-          />
-          <QuickLink
-            to="/acciones"
-            icon="&#128230;"
-            title="Cola de Acciones"
-            description="Movimientos de stock priorizados por impacto financiero. B2C y B2B, por tienda y SKU."
-          />
-          <QuickLink
-            to="/logistica"
-            icon="&#128674;"
-            title="Logistica / ETAs"
-            description="Pedidos de importacion con fechas estimadas de arribo y alertas de stock por marca."
-          />
+        {/* 4. GMROI */}
+        <div className="exec-anim-7">
+          {isInventoryLoading ? (
+            <div className="rounded-2xl border border-gray-200 p-5 dark:border-gray-700">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">GMROI</p>
+              <div className="mt-3 h-6 w-16 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+              <div className="mt-2 h-3 w-24 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+            </div>
+          ) : (
+            <StatCard
+              label="GMROI"
+              value={`${gmroi.toFixed(2)}`}
+              sub={gmroi >= 2 ? "Retorno saludable" : gmroi >= 1 ? "Retorno moderado" : "Retorno bajo"}
+              variant={gmroi >= 2 ? "accent-positive" : gmroi < 1 ? "accent-negative" : undefined}
+            />
+          )}
         </div>
-      </section>
+      </div>
+
+      {/* Tabla de performance mensual — full width */}
+      {monthlyRows.length > 0 && (
+        <MonthlyPerformanceTable rows={monthlyRows} highlightMonth={isMonthView ? viewMonth : null} lastDataDay={lastDataDay} calendarMonth={calendarMonth} isPartialMonth={isPartialMonth} />
+      )}
+
     </div>
   );
 }

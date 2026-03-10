@@ -73,6 +73,55 @@ export function formatDays(value: number): string {
 }
 
 /**
+ * Formato compacto sin símbolo para gráficos y labels cortos:
+ *   1_000_000_000_000 → "1,0 T"
+ *   1_000_000_000     → "1,0 MM"
+ *   6_263_380         → "6,3 M"
+ *   1_000             → "1 K"
+ *   500               → "500"
+ */
+export function formatCompact(value: number): string {
+  if (!isFinite(value)) return "—";
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+  if (abs >= 1_000_000_000_000) return `${sign}${(abs / 1_000_000_000_000).toFixed(1)} T`;
+  if (abs >= 1_000_000_000)     return `${sign}${(abs / 1_000_000_000).toFixed(1)} MM`;
+  if (abs >= 1_000_000)         return `${sign}${(abs / 1_000_000).toFixed(1)} M`;
+  if (abs >= 1_000)             return `${sign}${(abs / 1_000).toFixed(0)} K`;
+  return String(Math.round(value));
+}
+
+/** Diferencia compacta con signo: 1_234_567 → "+1M", -5_678_901_234 → "-5.7B" */
+export function formatDiff(value: number): string {
+  if (!isFinite(value)) return "—";
+  const abs = Math.abs(value);
+  const sign = value >= 0 ? "+" : "-";
+  if (abs >= 1_000_000_000) return `${sign}${(abs / 1_000_000_000).toFixed(1)}B`;
+  if (abs >= 1_000_000)     return `${sign}${(abs / 1_000_000).toFixed(0)}M`;
+  if (abs >= 1_000)         return `${sign}${(abs / 1_000).toFixed(0)}K`;
+  return `${sign}${abs.toFixed(0)}`;
+}
+
+/**
+ * Formato currency compacto con prefijo "₲" para páginas de ventas:
+ *   1_000_000_000 → "₲ 1,0 MM"
+ *   6_263_380     → "₲ 6 M"
+ *   50_000        → "₲ 50.000"
+ */
+export function formatPYGShort(value: number): string {
+  if (!isFinite(value)) return "—";
+  if (value >= 1_000_000_000) return `₲ ${(value / 1_000_000_000).toFixed(1)} MM`;
+  if (value >= 1_000_000)     return `₲ ${(value / 1_000_000).toFixed(0)} M`;
+  return `₲ ${Math.round(value).toLocaleString("es-PY")}`;
+}
+
+/** Formato completo con prefijo "₲": 6263380 → "₲ 6.263.380" */
+export function formatPYGSuffix(value: number): string {
+  if (!isFinite(value)) return "—";
+  return `₲ ${Math.round(value).toLocaleString("es-PY")}`;
+}
+
+/**
  * Formatea un valor de KPI según su unidad.
  * Centraliza el formateo para que KpiCard y KpiDetailModal usen lo mismo.
  */

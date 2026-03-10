@@ -4,8 +4,8 @@
  * Barra de filtros global que aparece en el header.
  * Controla: Marca, Canal, Período.
  *
- * La tienda se selecciona dentro de cada página (SalesPage)
- * porque es contextual al canal elegido.
+ * En la home ejecutiva (brandOnly=true) solo muestra Marca,
+ * porque Canal y Período ya están en ExecutiveFilters in-page.
  *
  * REGLA: Este componente NO tiene estado propio.
  * Lee y escribe en FilterContext. Todos los hooks se actualizan automáticamente.
@@ -13,11 +13,11 @@
 import { useFilters } from "@/context/FilterContext";
 import type { BrandFilter, ChannelFilter, PeriodFilter } from "@/domain/filters/types";
 
-const BRANDS: { value: BrandFilter; label: string }[] = [
-  { value: "total",    label: "Todas las marcas" },
-  { value: "martel",   label: "Martel" },
-  { value: "wrangler", label: "Wrangler" },
-  { value: "lee",      label: "Lee" },
+const BRANDS: { value: BrandFilter; label: string; initial: string; bg: string }[] = [
+  { value: "total",    label: "Todas las marcas", initial: "T", bg: "bg-brand-500" },
+  { value: "martel",   label: "Martel",           initial: "M", bg: "bg-success-500" },
+  { value: "wrangler", label: "Wrangler",         initial: "W", bg: "bg-warning-500" },
+  { value: "lee",      label: "Lee",              initial: "L", bg: "bg-error-500" },
 ];
 
 const CHANNELS: { value: ChannelFilter; label: string }[] = [
@@ -35,9 +35,11 @@ const PERIODS: { value: PeriodFilter; label: string }[] = [
 interface FilterBarProps {
   filters: ReturnType<typeof useFilters>["filters"];
   compact?: boolean;
+  /** Solo mostrar marca (ocultar canal y período). Usado en la home ejecutiva. */
+  brandOnly?: boolean;
 }
 
-export default function FilterBar({ compact = false }: FilterBarProps) {
+export default function FilterBar({ compact = false, brandOnly = false }: FilterBarProps) {
   const { filters, setBrand, setChannel, setPeriod } = useFilters();
 
   const pillBase =
@@ -51,21 +53,23 @@ export default function FilterBar({ compact = false }: FilterBarProps) {
     return (
       <div className="flex items-center gap-2 flex-wrap">
         {/* Canal */}
-        <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-          {CHANNELS.map(({ value, label }) => (
-            <button
-              key={value}
-              onClick={() => setChannel(value)}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                filters.channel === value
-                  ? "bg-brand-500 text-white"
-                  : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {!brandOnly && (
+          <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {CHANNELS.map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => setChannel(value)}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  filters.channel === value
+                    ? "bg-brand-500 text-white"
+                    : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Marca */}
         <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -73,7 +77,7 @@ export default function FilterBar({ compact = false }: FilterBarProps) {
             <button
               key={value}
               onClick={() => setBrand(value)}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
                 filters.brand === value
                   ? "bg-brand-500 text-white"
                   : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -85,17 +89,19 @@ export default function FilterBar({ compact = false }: FilterBarProps) {
         </div>
 
         {/* Período */}
-        <div className="flex gap-1">
-          {PERIODS.map(({ value, label }) => (
-            <button
-              key={value}
-              onClick={() => setPeriod(value)}
-              className={`${pillBase} ${filters.period === value ? pillActive : pillInactive}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {!brandOnly && (
+          <div className="flex gap-1">
+            {PERIODS.map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => setPeriod(value)}
+                className={`${pillBase} ${filters.period === value ? pillActive : pillInactive}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -103,20 +109,22 @@ export default function FilterBar({ compact = false }: FilterBarProps) {
   // Versión expandida para mobile
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <p className="text-xs text-gray-400 mb-1.5">Canal</p>
-        <div className="flex gap-1 flex-wrap">
-          {CHANNELS.map(({ value, label }) => (
-            <button
-              key={value}
-              onClick={() => setChannel(value)}
-              className={`${pillBase} ${filters.channel === value ? pillActive : pillInactive}`}
-            >
-              {label}
-            </button>
-          ))}
+      {!brandOnly && (
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">Canal</p>
+          <div className="flex gap-1 flex-wrap">
+            {CHANNELS.map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => setChannel(value)}
+                className={`${pillBase} ${filters.channel === value ? pillActive : pillInactive}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       <div>
         <p className="text-xs text-gray-400 mb-1.5">Marca</p>
         <div className="flex gap-1 flex-wrap">
@@ -131,20 +139,22 @@ export default function FilterBar({ compact = false }: FilterBarProps) {
           ))}
         </div>
       </div>
-      <div>
-        <p className="text-xs text-gray-400 mb-1.5">Período</p>
-        <div className="flex gap-1 flex-wrap">
-          {PERIODS.map(({ value, label }) => (
-            <button
-              key={value}
-              onClick={() => setPeriod(value)}
-              className={`${pillBase} ${filters.period === value ? pillActive : pillInactive}`}
-            >
-              {label}
-            </button>
-          ))}
+      {!brandOnly && (
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">Período</p>
+          <div className="flex gap-1 flex-wrap">
+            {PERIODS.map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => setPeriod(value)}
+                className={`${pillBase} ${filters.period === value ? pillActive : pillInactive}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

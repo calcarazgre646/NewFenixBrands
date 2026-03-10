@@ -90,6 +90,41 @@ export function calcYoY(current: number, prior: number): number {
 export const calcLfL = calcYoY;
 
 /**
+ * Clasifica la salud del margen bruto según umbrales definidos por el cliente.
+ *
+ * Umbrales por canal (Rodrigo, 10/03/2026):
+ *   B2C / Fénix (total): Verde ≥ 55%, Amarillo 50–54.99%, Rojo < 50%
+ *   B2B:                  Verde ≥ 50%, Amarillo 40–49.99%, Rojo < 40%
+ *
+ * @param marginPct  Margen bruto en escala 0-100
+ * @param channel    Canal: "b2b" | "b2c" | "total" (total usa umbrales B2C/Fénix)
+ */
+export type MarginHealth = "healthy" | "moderate" | "low";
+
+export function classifyMarginHealth(
+  marginPct: number,
+  channel: "b2b" | "b2c" | "total" = "total",
+): MarginHealth {
+  if (channel === "b2b") {
+    if (marginPct >= 50) return "healthy";
+    if (marginPct >= 40) return "moderate";
+    return "low";
+  }
+  // B2C y Total (Fénix)
+  if (marginPct >= 55) return "healthy";
+  if (marginPct >= 50) return "moderate";
+  return "low";
+}
+
+/** Returns the gauge zone boundaries for a channel: [redEnd, yellowEnd] */
+export function marginHealthThresholds(
+  channel: "b2b" | "b2c" | "total" = "total",
+): { red: number; yellow: number } {
+  if (channel === "b2b") return { red: 40, yellow: 50 };
+  return { red: 50, yellow: 55 };
+}
+
+/**
  * Dependencia de Ofertas = descuentos / bruto × 100
  * Qué % del bruto se entregó como descuento.
  */

@@ -8,18 +8,22 @@
  * usando TanStack Query's queryClient.getQueryCache() — no hay polling manual.
  */
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { useSidebar } from "@/context/SidebarContext";
 import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
 import NotificationDropdown from "@/components/header/NotificationDropdown";
 import UserDropdown from "@/components/header/UserDropdown";
 import { useFilters } from "@/context/FilterContext";
 import FilterBar from "@/components/filters/FilterBar";
+import GlobalSearch from "@/components/search/GlobalSearch";
 
 const AppHeader: React.FC = () => {
   const [isMenuOpen, setMenuOpen] = useState(false);
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
   const { filters } = useFilters();
+  const { pathname } = useLocation();
+  const hideFilters = pathname === "/calendario";
+  const hasInPageFilters = pathname === "/" || pathname === "/ventas" || pathname === "/acciones" || pathname === "/logistica";
 
   const handleToggle = () => {
     if (window.innerWidth >= 1024) toggleSidebar();
@@ -28,6 +32,11 @@ const AppHeader: React.FC = () => {
 
   return (
     <header className="sticky top-0 flex flex-col w-full bg-white border-gray-200 z-99999 dark:border-gray-800 dark:bg-gray-900 lg:border-b">
+      {/* Skip to content for keyboard navigation */}
+      <a href="#main-content" className="skip-to-content">
+        Ir al contenido principal
+      </a>
+
       {/* Fila principal */}
       <div className="flex items-center justify-between w-full gap-2 px-3 py-3 border-b border-gray-200 dark:border-gray-800 sm:gap-4 lg:px-6 lg:py-4 lg:border-b-0">
         {/* Toggle sidebar */}
@@ -53,20 +62,30 @@ const AppHeader: React.FC = () => {
           <img className="hidden dark:block h-7 w-auto" src="/blanco.png" alt="FenixBrands" />
         </Link>
 
-        {/* Filtros globales — solo desktop, visible en todas las páginas */}
-        <div className="hidden lg:flex lg:items-center lg:gap-3 lg:flex-1">
-          <FilterBar filters={filters} compact />
-        </div>
+        {/* Filtros globales — solo desktop, oculto en calendario */}
+        {!hideFilters && (
+          <div className="hidden lg:flex lg:items-center lg:gap-3 lg:flex-1">
+            <FilterBar filters={filters} compact brandOnly={hasInPageFilters} />
+          </div>
+        )}
+        {hideFilters && <div className="hidden lg:flex lg:flex-1" />}
 
         {/* Menú móvil toggle */}
         <button
           onClick={() => setMenuOpen(!isMenuOpen)}
+          aria-label="Menu de opciones"
+          aria-expanded={isMenuOpen}
           className="flex items-center justify-center w-10 h-10 text-gray-700 rounded-lg hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 lg:hidden"
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
             <path fillRule="evenodd" clipRule="evenodd" d="M5.99902 10.4951C6.82745 10.4951 7.49902 11.1667 7.49902 11.9951V12.0051C7.49902 12.8335 6.82745 13.5051 5.99902 13.5051C5.1706 13.5051 4.49902 12.8335 4.49902 12.0051V11.9951C4.49902 11.1667 5.1706 10.4951 5.99902 10.4951ZM17.999 10.4951C18.8275 10.4951 19.499 11.1667 19.499 11.9951V12.0051C19.499 12.8335 18.8275 13.5051 17.999 13.5051C17.1706 13.5051 16.499 12.8335 16.499 12.0051V11.9951C16.499 11.1667 17.1706 10.4951 17.999 10.4951ZM13.499 11.9951C13.499 11.1667 12.8275 10.4951 11.999 10.4951C11.1706 10.4951 10.499 11.1667 10.499 11.9951V12.0051C10.499 12.8335 11.1706 13.5051 11.999 13.5051C12.8275 13.5051 13.499 12.8335 13.499 12.0051V11.9951Z" fill="currentColor" />
           </svg>
         </button>
+
+        {/* Buscador global — desktop */}
+        <div className="hidden lg:block">
+          <GlobalSearch />
+        </div>
 
         {/* Acciones derecha — desktop */}
         <div className="hidden lg:flex items-center gap-2">
@@ -79,7 +98,8 @@ const AppHeader: React.FC = () => {
       {/* Menú móvil expandido */}
       {isMenuOpen && (
         <div className="flex flex-col gap-3 px-4 py-3 border-t border-gray-200 dark:border-gray-800 lg:hidden">
-          <FilterBar filters={filters} compact={false} />
+          <GlobalSearch />
+          {!hideFilters && <FilterBar filters={filters} compact={false} brandOnly={hasInPageFilters} />}
           <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
             <ThemeToggleButton />
             <NotificationDropdown />

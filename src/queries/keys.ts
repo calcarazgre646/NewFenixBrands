@@ -42,6 +42,8 @@ export const salesKeys = {
     ["sales", "priorYearWide", year] as const,
   priorYearMTDWide: (calYear: number, calMonth: number, calDay: number) =>
     ["sales", "priorYearMTDWide", calYear, calMonth, calDay] as const,
+  dailyWide: (year: number) =>
+    ["sales", "dailyWide", year] as const,
 };
 
 // ─── Inventario ───────────────────────────────────────────────────────────────
@@ -96,3 +98,9 @@ export const salesHistoryKeys = {
   byStore: (skus: string[], months: number) =>
     ["salesHistory", "byStore", skus.sort().join(","), months] as const,
 };
+
+// ─── Cache durations ──────────────────────────────────────────────────────────
+// 30 min staleTime: dato cambia ~cada 6h, 30 min es conservador.
+// 60 min gcTime: mantener en memoria tras unmount.
+export const STALE_30MIN = 30 * 60 * 1000;
+export const GC_60MIN    = 60 * 60 * 1000;

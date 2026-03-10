@@ -1,0 +1,223 @@
+/**
+ * domain/actionQueue/grouping.ts
+ *
+ * Agrupación de acciones para vista por Tienda o por Marca.
+ * Función pura — no React, no side effects.
+ *
+ * Dos niveles de agrupación:
+ *   1. Por tienda o por marca (ActionGroup)
+ *   2. Dentro de cada grupo, por intención operativa (ActionSection)
+ *
+ * Las secciones representan tareas concretas que alguien puede ejecutar:
+ *   - "Recibir transferencias de otras tiendas"
+ *   - "Recibir reposición desde depósito"
+ *   - "Redistribuir excedentes"
+ *   - "Abastecer RETAILS desde STOCK"
+ *   - "Envío directo B2B"
+ */
+import type { ActionItemFull } from "./waterfall";
+import type { StoreCluster } from "./types";
+import { getStoreCluster, getTimeRestriction, getStoreAssortment } from "./clusters";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+export type GroupByMode = "store" | "brand";
+
+/**
+ * Operational intent — what the person needs to DO.
+ * Derived from actionType + risk to create meaningful work orders.
+ */
+export type OperationalIntent =
+  | "receive_transfer"    // Deficit store receiving from other stores
+  | "receive_depot"       // Deficit store receiving from RETAILS depot
+  | "resupply_depot"      // RETAILS needs resupply from STOCK central
+  | "redistribute"        // Surplus store sending excess to others or liquidating
+  | "ship_b2b";           // Direct shipment from STOCK to B2B client
+
+/** A work-order section within a group */
+export interface ActionSection {
+  intent: OperationalIntent;
+  label: string;
+  description: string;
+  items: ActionItemFull[];
+  totalUnits: number;
+  criticalCount: number;
+}
+
+export interface ActionGroup {
+  key: string;
+  label: string;
+  cluster: StoreCluster | null;
+  timeRestriction: string | null;
+  assortmentCapacity: number | null;
+  /** All items in this group (flat, for stats and export) */
+  items: ActionItemFull[];
+  /** Items split into operational work-order sections */
+  sections: ActionSection[];
+  totalActions: number;
+  criticalCount: number;
+  lowCount: number;
+  overstockCount: number;
+  paretoCount: number;
+  totalImpact: number;
+  uniqueSkus: number;
+  totalUnits: number;
+}
+
+// ─── Intent classification ──────────────────────────────────────────────────
+
+const INTENT_ORDER: OperationalIntent[] = [
+  "receive_transfer",
+  "receive_depot",
+  "resupply_depot",
+  "redistribute",
+  "ship_b2b",
+];
+
+const INTENT_META: Record<OperationalIntent, { label: string; description: string }> = {
+  receive_transfer: {
+    label: "Recibir de otras tiendas",
+    description: "Transferencias laterales desde tiendas con excedente",
+  },
+  receive_depot: {
+    label: "Recibir desde deposito",
+    description: "Reposicion desde RETAILS",
+  },
+  resupply_depot: {
+    label: "Abastecer RETAILS desde STOCK",
+    description: "Mover stock desde STOCK a RETAILS para cubrir deficit",
+  },
+  redistribute: {
+    label: "Redistribuir excedentes",
+    description: "Enviar sobrestock a tiendas con deficit o liquidar",
+  },
+  ship_b2b: {
+    label: "Envio directo B2B",
+    description: "Despacho desde STOCK central a cliente mayorista",
+  },
+};
+
+function classifyIntent(item: ActionItemFull): OperationalIntent {
+  if (item.actionType === "central_to_b2b") return "ship_b2b";
+  if (item.actionType === "resupply_depot") return "resupply_depot";
+  if (item.actionType === "restock_from_depot") return "receive_depot";
+  if (item.risk === "overstock") return "redistribute";
+  return "receive_transfer";
+}
+
+// ─── Section builder ─────────────────────────────────────────────────────────
+
+export function splitIntoSections(items: ActionItemFull[]): ActionSection[] {
+  const byIntent = new Map<OperationalIntent, ActionItemFull[]>();
+
+  for (const item of items) {
+    const intent = classifyIntent(item);
+    const list = byIntent.get(intent);
+    if (list) {
+      list.push(item);
+    } else {
+      byIntent.set(intent, [item]);
+    }
+  }
+
+  const sections: ActionSection[] = [];
+  for (const intent of INTENT_ORDER) {
+    const sectionItems = byIntent.get(intent);
+    if (!sectionItems || sectionItems.length === 0) continue;
+
+    const meta = INTENT_META[intent];
+    let critical = 0;
+    let totalUnits = 0;
+    for (const item of sectionItems) {
+      if (item.risk === "critical") critical++;
+      totalUnits += item.suggestedUnits;
+    }
+
+    sections.push({
+      intent,
+      label: meta.label,
+      description: meta.description,
+      items: sectionItems,
+      totalUnits,
+      criticalCount: critical,
+    });
+  }
+
+  return sections;
+}
+
+// ─── Top-level grouping ─────────────────────────────────────────────────────
+
+/**
+ * Groups actions by store or brand, then splits each group into
+ * operational sections (work orders). Sorted by totalImpact descending.
+ */
+export function groupActions(
+  items: ActionItemFull[],
+  mode: GroupByMode,
+): ActionGroup[] {
+  if (items.length === 0) return [];
+
+  const map = new Map<string, ActionItemFull[]>();
+  for (const item of items) {
+    const key = mode === "store" ? item.store : item.brand;
+    const existing = map.get(key);
+    if (existing) {
+      existing.push(item);
+    } else {
+      map.set(key, [item]);
+    }
+  }
+
+  const groups: ActionGroup[] = [];
+  for (const [key, groupItems] of map) {
+    groups.push(buildGroup(key, groupItems, mode));
+  }
+
+  groups.sort((a, b) => b.totalImpact - a.totalImpact);
+  return groups;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function buildGroup(
+  key: string,
+  items: ActionItemFull[],
+  mode: GroupByMode,
+): ActionGroup {
+  let critical = 0;
+  let low = 0;
+  let overstock = 0;
+  let pareto = 0;
+  let totalImpact = 0;
+  let totalUnits = 0;
+  const skuSet = new Set<string>();
+
+  for (const item of items) {
+    if (item.risk === "critical") critical++;
+    else if (item.risk === "low") low++;
+    else if (item.risk === "overstock") overstock++;
+    if (item.paretoFlag) pareto++;
+    totalImpact += item.impactScore;
+    totalUnits += item.suggestedUnits;
+    skuSet.add(item.sku);
+  }
+
+  return {
+    key,
+    label: key,
+    cluster: mode === "store" ? getStoreCluster(key) : null,
+    timeRestriction: mode === "store" ? getTimeRestriction(key) : null,
+    assortmentCapacity: mode === "store" ? getStoreAssortment(key) : null,
+    items,
+    sections: splitIntoSections(items),
+    totalActions: items.length,
+    criticalCount: critical,
+    lowCount: low,
+    overstockCount: overstock,
+    paretoCount: pareto,
+    totalImpact,
+    uniqueSkus: skuSet.size,
+    totalUnits,
+  };
+}

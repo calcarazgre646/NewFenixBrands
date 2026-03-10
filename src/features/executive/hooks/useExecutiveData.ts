@@ -15,73 +15,96 @@
 import { useMemo, useCallback } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { useFilters } from "@/context/FilterContext";
-import { fetchMonthlySalesWide } from "@/queries/sales.queries";
-import type { MonthlySalesRow } from "@/queries/sales.queries";
+import { fetchMonthlySalesWide, fetchDailySalesWide } from "@/queries/sales.queries";
+import type { MonthlySalesRow, DailySalesRow } from "@/queries/sales.queries";
 import { fetchBudget } from "@/queries/budget.queries";
 import type { BudgetRow } from "@/queries/budget.queries";
 import { fetchStoreGoals } from "@/queries/stores.queries";
-import { salesKeys, budgetKeys, storeKeys } from "@/queries/keys";
-import { getCalendarMonth, getCalendarYear } from "@/domain/period/helpers";
-import { brandIdToCanonical } from "@/api/normalize";
+import { fetchInventoryValue } from "@/queries/inventory.queries";
+import { salesKeys, budgetKeys, storeKeys, inventoryKeys, STALE_30MIN, GC_60MIN } from "@/queries/keys";
+import { filterSalesRows } from "@/queries/filters";
+import { getCalendarMonth, getCalendarYear, currentMonthProrata, daysInMonth } from "@/domain/period/helpers";
+import { resolvePeriod } from "@/domain/period/resolve";
+import { brandIdToCanonical, classifyStore } from "@/api/normalize";
+import type { StoreGoal } from "@/queries/stores.queries";
 import {
   calcAnnualTarget,
   calcForecast,
   calcRequiredMonthlyRunRate,
-  calcLinearPaceGap,
   dayOfYear,
   buildCumulativeSeries,
   buildMonthlyRows,
+  buildDailySeries,
 } from "@/domain/executive/calcs";
-import type { ChartPoint, MonthlyRow } from "@/domain/executive/calcs";
-
-// ─── Cache ──────────────────────────────────────────────────────────────────
-const STALE_30MIN = 30 * 60 * 1000;
-const GC_60MIN    = 60 * 60 * 1000;
+import { calcGrossMargin, calcGMROI, calcInventoryTurnover } from "@/domain/kpis/calculations";
+import type { ChartPoint, MonthlyRow, DailyChartPoint } from "@/domain/executive/calcs";
+import {
+  generateBrandInsights,
+  generateChannelInsights,
+  aggregateSalesByBrand,
+  aggregateSalesByChannel,
+  aggregateBudgetByBrand,
+  aggregateBudgetByChannel,
+} from "@/domain/executive/insights";
+import type { BrandInsight } from "@/domain/executive/insights";
 
 // ─── Tipos públicos ─────────────────────────────────────────────────────────
 
 export interface ExecutiveMetrics {
+  /** Meta del período prorrateada al último día con datos (comparación justa). */
+  periodTarget: number;
+  /** Meta anual completa (12 meses budget o store goals). Para proyecciones anuales. */
   annualTarget: number;
   ytd: number;
   forecastYearEnd: number;
-  gapToTarget: number;                 // negativo = adelantado
+  /** periodTarget - ytd. Positivo = faltante, negativo = adelantado. */
+  gapToTarget: number;
   requiredMonthlyRunRate: number;
-  linearPaceGap: number;               // negativo = adelantado
+  /** periodTarget - ytd (budget-aligned, no lineal). Positivo = atrasado. */
+  linearPaceGap: number;
+  /** ytd / periodTarget * 100 — progreso real vs meta del período. */
   realProgressPct: number;
+  /** forecastYearEnd / annualTarget * 100 — proyección vs meta anual. */
   forecastProgressPct: number;
   monthsRemaining: number;
+  /** YoY: (ytd - priorYtd) / priorYtd * 100. 0 si no hay datos PY. */
+  yoyPct: number;
+  yoyDelta: number;
+  /** Margen Bruto % del período: (neto - costo) / neto * 100. */
+  grossMarginPct: number;
+  /** Diferencia en puntos porcentuales vs mismo período año anterior. */
+  grossMarginYoY: number;
+  /** GMROI anualizado: (grossMargin / inventoryValue) × (12/months). */
+  gmroi: number;
+  /** Rotación de inventario anualizada: (COGS / inventoryValue) × (12/months). */
+  inventoryTurnover: number;
 }
 
 export interface ExecutiveData {
   metrics: ExecutiveMetrics | null;
   chartPoints: ChartPoint[];
+  /** Puntos diarios para vista de mes individual (null cuando period=ytd). */
+  dailyChartPoints: DailyChartPoint[] | null;
   monthlyRows: MonthlyRow[];
+  insights: BrandInsight[];
+  /** Channel insights para rotación (solo cuando brand="total"). */
+  channelInsights: BrandInsight[];
+  periodLabel: string;
   calendarMonth: number;
   isPartialMonth: boolean;
+  /** true cuando el periodo es YTD (vista anual). false para vistas de mes individual. */
+  isYtdView: boolean;
   isLoading: boolean;
+  /** true mientras la query de inventario (GMROI/Rotación) está cargando. */
+  isInventoryLoading: boolean;
   error: string | null;
+  /** Último día con datos reales en el mes actual (null si no aplica). */
+  lastDataDay: number | null;
   /** Re-filter cached wide data for a specific brand/channel view (instant, no API call). */
   getRowsForView: (brand: string, channel: string) => MonthlyRow[];
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-/** Filtra filas de ventas mensuales por brand/channel/store (local, sin API). */
-function filterSalesRows(
-  rows: MonthlySalesRow[],
-  brand: string,
-  channel: string,
-  store: string | null,
-): MonthlySalesRow[] {
-  const canonical = brand !== "total" ? brandIdToCanonical(brand) : null;
-  const ch = channel !== "total" ? channel.toUpperCase() : null;
-  return rows.filter((r) => {
-    if (canonical && r.brand !== canonical) return false;
-    if (ch && r.channel !== ch) return false;
-    if (store && r.store !== store) return false;
-    return true;
-  });
-}
 
 /** Agrega filas de ventas por mes → Map<month, neto>. */
 function aggregateByMonth(rows: MonthlySalesRow[]): Map<number, number> {
@@ -92,21 +115,97 @@ function aggregateByMonth(rows: MonthlySalesRow[]): Map<number, number> {
   return map;
 }
 
+/** Agrega costo por mes → Map<month, cogs>. */
+function aggregateCostByMonth(rows: MonthlySalesRow[]): Map<number, number> {
+  const map = new Map<number, number>();
+  for (const r of rows) {
+    map.set(r.month, (map.get(r.month) ?? 0) + r.cogs);
+  }
+  return map;
+}
+
+/** Filtra metas de tienda por canal y/o tienda. Las metas NO tienen marca, solo tienda. */
+function filterGoals(
+  goals: StoreGoal[],
+  channel: string,
+  store: string | null,
+): StoreGoal[] {
+  const ch = channel !== "total" ? channel.toLowerCase() : null;
+  return goals.filter((g) => {
+    if (store && g.storeName !== store) return false;
+    if (ch) {
+      const storeChannel = classifyStore(g.storeName);
+      if (storeChannel === "excluded") return false;
+      if (storeChannel !== ch) return false;
+    }
+    return true;
+  });
+}
+
+/** Filtra budget rows por brand/channel. Reutilizado por varias agregaciones. */
+function filterBudgetRows(rows: BudgetRow[], brand: string, channel: string): BudgetRow[] {
+  const canonical = brand !== "total" ? brandIdToCanonical(brand) : null;
+  const ch = channel !== "total" ? channel.toUpperCase() : null;
+  return rows.filter((r) => {
+    if (ch && r.area !== ch) return false;
+    if (canonical && r.brand !== canonical) return false;
+    return true;
+  });
+}
+
 /** Agrega filas de presupuesto por mes, filtradas por brand/channel/store. */
 function aggregateBudgetByMonth(
   rows: BudgetRow[],
   brand: string,
   channel: string,
 ): Map<number, number> {
-  const canonical = brand !== "total" ? brandIdToCanonical(brand) : null;
-  const ch = channel !== "total" ? channel.toUpperCase() : null;
+  const map = new Map<number, number>();
+  for (const r of filterBudgetRows(rows, brand, channel)) {
+    map.set(r.month, (map.get(r.month) ?? 0) + r.revenue);
+  }
+  return map;
+}
 
+/** Agrega GM% presupuesto por mes — promedio ponderado por revenue. */
+function aggregateBudgetGmPctByMonth(
+  rows: BudgetRow[],
+  brand: string,
+  channel: string,
+): Map<number, number> {
+  const filtered = filterBudgetRows(rows, brand, channel);
+  // Agrupar revenue y grossMargin por mes para calcular GM% ponderado
+  const revMap = new Map<number, number>();
+  const gmMap = new Map<number, number>();
+  for (const r of filtered) {
+    revMap.set(r.month, (revMap.get(r.month) ?? 0) + r.revenue);
+    gmMap.set(r.month, (gmMap.get(r.month) ?? 0) + r.grossMargin);
+  }
+  const result = new Map<number, number>();
+  for (const [m, rev] of revMap) {
+    const gm = gmMap.get(m) ?? 0;
+    result.set(m, rev > 0 ? (gm / rev) * 100 : 0);
+  }
+  return result;
+}
+
+/** Agrega unidades de presupuesto por mes. */
+function aggregateBudgetUnitsByMonth(
+  rows: BudgetRow[],
+  brand: string,
+  channel: string,
+): Map<number, number> {
+  const map = new Map<number, number>();
+  for (const r of filterBudgetRows(rows, brand, channel)) {
+    map.set(r.month, (map.get(r.month) ?? 0) + r.units);
+  }
+  return map;
+}
+
+/** Agrega unidades de ventas diarias por mes → Map<month, units>. */
+function aggregateUnitsByMonthFromDaily(rows: DailySalesRow[]): Map<number, number> {
   const map = new Map<number, number>();
   for (const r of rows) {
-    // Budget_2026 tiene Area = "B2C" | "B2B" y Brand = "Lee" | "Wrangler" | "Martel"
-    if (ch && r.area !== ch) continue;
-    if (canonical && r.brand !== canonical) continue;
-    map.set(r.month, (map.get(r.month) ?? 0) + r.revenue);
+    map.set(r.month, (map.get(r.month) ?? 0) + r.units);
   }
   return map;
 }
@@ -118,6 +217,7 @@ export function useExecutiveData(): ExecutiveData {
   const calMonth = getCalendarMonth();
   const calYear  = getCalendarYear();
   const year     = filters.year;
+  const prorata  = currentMonthProrata(year);
 
   // ── Queries WIDE (cacheadas, sin filtros de usuario en BD) ──────────────
   const [salesQ, prevSalesQ] = useQueries({
@@ -151,6 +251,30 @@ export function useExecutiveData(): ExecutiveData {
     gcTime: GC_60MIN,
   });
 
+  // Inventario (para GMROI y Rotación — shared cache con KPI dashboard)
+  const inventoryQ = useQuery({
+    queryKey: inventoryKeys.value(),
+    queryFn: () => fetchInventoryValue(),
+    staleTime: STALE_30MIN,
+    gcTime: GC_60MIN,
+  });
+
+  // Ventas diarias del año anterior (para YoY día-a-día preciso)
+  const dailyPYQ = useQuery({
+    queryKey: salesKeys.dailyWide(year - 1),
+    queryFn: () => fetchDailySalesWide(year - 1),
+    staleTime: STALE_30MIN,
+    gcTime: GC_60MIN,
+  });
+
+  // Ventas diarias del año actual (para detectar último día con datos reales)
+  const dailyCYQ = useQuery({
+    queryKey: salesKeys.dailyWide(year),
+    queryFn: () => fetchDailySalesWide(year),
+    staleTime: STALE_30MIN,
+    gcTime: GC_60MIN,
+  });
+
   // ── Filtrado local ─────────────────────────────────────────────────────
   const filteredSales = useMemo(
     () => filterSalesRows(salesQ.data ?? [], filters.brand, filters.channel, filters.store),
@@ -162,22 +286,71 @@ export function useExecutiveData(): ExecutiveData {
     [prevSalesQ.data, filters.brand, filters.channel, filters.store],
   );
 
+  // Filtrado local de ventas diarias PY (sin store — la vista no tiene esa dimensión)
+  const filteredDailyPY = useMemo((): DailySalesRow[] => {
+    const rows = dailyPYQ.data ?? [];
+    const canonical = filters.brand !== "total" ? brandIdToCanonical(filters.brand) : null;
+    const ch = filters.channel !== "total" ? filters.channel.toUpperCase() : null;
+    return rows.filter(r => {
+      if (canonical && r.brand !== canonical) return false;
+      if (ch && r.channel !== ch) return false;
+      return true;
+    });
+  }, [dailyPYQ.data, filters.brand, filters.channel]);
+
+  // ── Detectar último día con datos reales en el mes actual ─────────────
+  // Usa datos WIDE (sin filtros de usuario) para que el día no varíe por marca/canal.
+  const lastDataDay = useMemo((): number | null => {
+    if (!prorata) return null; // no es el año actual → no aplica
+    const allDaily = dailyCYQ.data ?? [];
+    const daysInCurrentMonth = allDaily
+      .filter(r => r.month === calMonth)
+      .map(r => r.day);
+    if (daysInCurrentMonth.length === 0) return null; // sin datos diarios aún
+    return Math.max(...daysInCurrentMonth);
+  }, [dailyCYQ.data, calMonth, prorata]);
+
+  // Prorata corregido: usa el último día con datos reales en vez del día del calendario.
+  // Evita dividir N días de ventas por un factor de M días (M > N → forecast subestimado).
+  const correctedProrata = useMemo(() => {
+    if (!prorata) return null;
+    const effectiveDay = lastDataDay ?? new Date().getDate();
+    const dim = daysInMonth(year, prorata.month);
+    return { month: prorata.month, factor: effectiveDay / dim };
+  }, [prorata, lastDataDay, year]);
+
   // ── Agregación por mes ─────────────────────────────────────────────────
   const monthlyReal   = useMemo(() => aggregateByMonth(filteredSales), [filteredSales]);
   const monthlyPY     = useMemo(() => aggregateByMonth(filteredPrevSales), [filteredPrevSales]);
+  const monthlyCost   = useMemo(() => aggregateCostByMonth(filteredSales), [filteredSales]);
+  const monthlyPYCost = useMemo(() => aggregateCostByMonth(filteredPrevSales), [filteredPrevSales]);
   const monthlyBudget = useMemo(
     () => aggregateBudgetByMonth(budgetQ.data ?? [], filters.brand, filters.channel),
     [budgetQ.data, filters.brand, filters.channel],
   );
+  const monthlyBudgetGmPct = useMemo(
+    () => aggregateBudgetGmPctByMonth(budgetQ.data ?? [], filters.brand, filters.channel),
+    [budgetQ.data, filters.brand, filters.channel],
+  );
+  const monthlyBudgetUnits = useMemo(
+    () => aggregateBudgetUnitsByMonth(budgetQ.data ?? [], filters.brand, filters.channel),
+    [budgetQ.data, filters.brand, filters.channel],
+  );
 
-  // ── Período y detección de mes parcial ─────────────────────────────────
-  const monthsWithData = useMemo(() => {
-    const all = salesQ.data ?? [];
-    return [...new Set(all.map((r) => r.month))].sort((a, b) => a - b);
-  }, [salesQ.data]);
+  // ── Período resuelto (respeta filtro de periodo global) ────────────────
+  const { activeMonths, closedMonths, periodLabel, isPartial: isPartialMonth } = useMemo(() => {
+    const allRows = salesQ.data ?? [];
+    const monthsInDB = [...new Set(allRows.map((r) => r.month))].sort((a, b) => a - b);
+    const resolved = resolvePeriod(filters.period, monthsInDB, year);
+    return {
+      activeMonths: resolved.activeMonths,
+      closedMonths: resolved.closedMonths,
+      periodLabel: resolved.label,
+      isPartial: resolved.isPartial,
+    };
+  }, [salesQ.data, filters.period, year]);
 
-  const isCurrentYear  = year === calYear;
-  const isPartialMonth = isCurrentYear && monthsWithData.includes(calMonth);
+  const isCurrentYear = year === calYear;
 
   // Último mes con datos reales (para gráfico y YTD)
   const lastRealMonth = useMemo(() => {
@@ -185,35 +358,158 @@ export function useExecutiveData(): ExecutiveData {
     return realMonths.length > 0 ? realMonths[realMonths.length - 1] : 0;
   }, [monthlyReal]);
 
-  // ── Cálculos ejecutivos ────────────────────────────────────────────────
+  // ── Cálculos ejecutivos (period-aware) ─────────────────────────────────
   const metrics = useMemo((): ExecutiveMetrics | null => {
     if (salesQ.isLoading || budgetQ.isLoading || goalsQ.isLoading) return null;
 
-    const annualTarget = calcAnnualTarget(goalsQ.data ?? []);
+    const isYtd = filters.period === "ytd";
+    const isCurrentMonth = filters.period === "currentMonth";
+    const isBrandFiltered = filters.brand !== "total";
+    const filteredGoals = filterGoals(goalsQ.data ?? [], filters.channel, filters.store);
 
-    // YTD: solo meses cerrados (< calendarMonth) para evitar parcialidad
-    const closedMonthLimit = isCurrentYear ? calMonth - 1 : 12;
-    let ytd = 0;
-    for (const [m, neto] of monthlyReal) {
-      if (m <= closedMonthLimit) ytd += neto;
+    // ── 1. Objetivo anual ──────────────────────────────────────────────
+    // Sin filtros (total/total): meta fija 70MM Gs (definida por el cliente).
+    // Con filtro de marca o canal: usar budget de BD o store goals.
+    const isUnfiltered = !isBrandFiltered && filters.channel === "total";
+    let fullYearTarget: number;
+    if (isUnfiltered) {
+      fullYearTarget = 70_000_000_000;
+    } else if (isBrandFiltered) {
+      let budgetTotal = 0;
+      for (const [, v] of monthlyBudget) budgetTotal += v;
+      fullYearTarget = budgetTotal > 0 ? budgetTotal : calcAnnualTarget(filteredGoals);
+    } else {
+      // Canal filtrado, marca total → usar store goals filtradas por canal
+      fullYearTarget = calcAnnualTarget(filteredGoals);
     }
 
-    // Temporal: días
+    // ── 2. Objetivo del período — budget prorrateado al último día con datos ──
+    // Compara períodos equivalentes: si tenemos datos hasta el día 7 de marzo,
+    // el target es budget(ene) + budget(feb) + budget(mar) × 7/31.
+    // Para lastClosedMonth: budget completo del mes (no hay prorrateo).
+    let periodBudget = 0;   // budget COMPLETO de los meses activos (sin prorrateo)
+    let periodTarget = 0;   // budget PRORRATEADO al último día con datos
+    for (const [m, rev] of monthlyBudget) {
+      if (!activeMonths.includes(m)) continue;
+      periodBudget += rev;
+      if (correctedProrata && m === correctedProrata.month) {
+        periodTarget += rev * correctedProrata.factor;
+      } else {
+        periodTarget += rev;
+      }
+    }
+
+    // annualTarget = meta anual completa (para proyecciones a fin de año)
+    const annualTarget = isYtd ? fullYearTarget : periodBudget;
+
+    // ── 3. Ventas reales del periodo ───────────────────────────────────
+    let ytd = 0;
+    for (const [m, neto] of monthlyReal) {
+      if (activeMonths.includes(m)) ytd += neto;
+    }
+
+    // ── 4. Temporal + Forecast (adaptado al periodo) ───────────────────
     const now = new Date();
-    const daysElapsed = dayOfYear(now);
     const daysInYear = (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)) ? 366 : 365;
+
+    // Usar el último día con datos reales (no el calendario) para calcular días transcurridos.
+    // Evita dividir N días de ventas por un denominador de M días (M > N → forecast subestimado).
+    const effectiveDate = lastDataDay != null && isCurrentYear
+      ? new Date(year, calMonth - 1, lastDataDay)
+      : now;
+    const daysElapsed = dayOfYear(effectiveDate);
     const daysRemaining = Math.max(0, daysInYear - daysElapsed);
 
-    const forecastYearEnd = calcForecast(ytd, daysElapsed, daysInYear);
-    const gapToTarget = annualTarget - forecastYearEnd;
-    const requiredMonthlyRunRate = calcRequiredMonthlyRunRate(annualTarget, ytd, daysRemaining);
-    const linearPaceGap = calcLinearPaceGap(annualTarget, ytd, daysElapsed, daysInYear);
+    let forecastYearEnd: number;
+    let linearPaceGap: number;
+    let requiredMonthlyRunRate: number;
+    let monthsRemainingCalc: number;
 
-    const realProgressPct = annualTarget > 0 ? (ytd / annualTarget) * 100 : 0;
+    if (isYtd) {
+      // YTD: proyectar a fin de año
+      forecastYearEnd = calcForecast(ytd, daysElapsed, daysInYear);
+      requiredMonthlyRunRate = calcRequiredMonthlyRunRate(fullYearTarget, ytd, daysRemaining);
+      monthsRemainingCalc = Math.max(1, Math.round(daysRemaining / (365 / 12)));
+    } else if (isCurrentMonth && correctedProrata && correctedProrata.factor > 0) {
+      // Mes actual: proyectar a fin del mes usando factor corregido
+      forecastYearEnd = ytd / correctedProrata.factor;
+      requiredMonthlyRunRate = 0;
+      monthsRemainingCalc = 0;
+    } else {
+      // Mes pasado (cerrado): no hay proyección
+      forecastYearEnd = ytd;
+      requiredMonthlyRunRate = 0;
+      monthsRemainingCalc = 0;
+    }
+
+    // Brecha vs objetivo del período (budget-aligned, no lineal)
+    // periodTarget ya está prorrateado al último día con datos reales.
+    linearPaceGap = periodTarget - ytd;
+    const gapToTarget = periodTarget - ytd;
+
+    // Progreso real = ventas vs meta del período (comparación justa)
+    const realProgressPct = periodTarget > 0 ? (ytd / periodTarget) * 100 : 0;
+    // Pronóstico = proyección anual vs meta anual (forward-looking)
     const forecastProgressPct = annualTarget > 0 ? (forecastYearEnd / annualTarget) * 100 : 0;
-    const monthsRemainingCalc = Math.max(1, Math.round(daysRemaining / (365 / 12)));
+
+    // ── 5. YoY día-a-día preciso ────────────────────────────────────────
+    // Meses cerrados: usar datos mensuales (completos, simétricos).
+    // Mes parcial: usar datos diarios con corte en el último día con datos reales CY.
+    // REGLA: CY y PY deben cubrir exactamente el mismo rango de días para ser simétricos.
+    let priorYtd = 0;
+    for (const [m, neto] of monthlyPY) {
+      if (closedMonths.includes(m)) priorYtd += neto;
+    }
+    // Sumar el mes parcial día a día (ej: datos CY hasta día 7 → PY días 1-7)
+    if (correctedProrata && activeMonths.includes(correctedProrata.month)) {
+      const cutoffDay = lastDataDay ?? now.getDate();
+      for (const r of filteredDailyPY) {
+        if (r.month === correctedProrata.month && r.day <= cutoffDay) {
+          priorYtd += r.neto;
+        }
+      }
+    }
+    const yoyDelta = ytd - priorYtd;
+    const yoyPct = priorYtd > 0 ? (yoyDelta / priorYtd) * 100 : 0;
+
+    // ── 6. Margen Bruto % ─────────────────────────────────────────────
+    // GM% ponderado por revenue: sum(neto - costo) / sum(neto) * 100
+    let ytdCost = 0;
+    for (const [m, cost] of monthlyCost) {
+      if (activeMonths.includes(m)) ytdCost += cost;
+    }
+    const grossMarginPct = calcGrossMargin(ytd, ytdCost);
+
+    // PY GM% simétrico (mismos meses cerrados + mes parcial día a día)
+    let priorCost = 0;
+    for (const [m, cost] of monthlyPYCost) {
+      if (closedMonths.includes(m)) priorCost += cost;
+    }
+    if (correctedProrata && activeMonths.includes(correctedProrata.month)) {
+      const cutoffDay = lastDataDay ?? now.getDate();
+      for (const r of filteredDailyPY) {
+        if (r.month === correctedProrata.month && r.day <= cutoffDay) {
+          priorCost += r.costo;
+        }
+      }
+    }
+    const prevGrossMarginPct = calcGrossMargin(priorYtd, priorCost);
+    const grossMarginYoY = grossMarginPct - prevGrossMarginPct;
+
+    // ── 7. GMROI & Rotación (inventario) ──────────────────────────────────
+    // Valor del inventario filtrado por marca (si aplica).
+    let invValue = inventoryQ.data?.totalValue ?? 0;
+    if (filters.brand !== "total" && inventoryQ.data) {
+      const canonical = brandIdToCanonical(filters.brand);
+      const brandInv = inventoryQ.data.byBrand.find((b) => b.brand === canonical);
+      invValue = brandInv?.value ?? 0;
+    }
+    const months = activeMonths.length;
+    const gmroi = calcGMROI(ytd - ytdCost, invValue, months);
+    const inventoryTurnover = calcInventoryTurnover(ytdCost, invValue, months);
 
     return {
+      periodTarget,
       annualTarget,
       ytd,
       forecastYearEnd,
@@ -223,30 +519,142 @@ export function useExecutiveData(): ExecutiveData {
       realProgressPct,
       forecastProgressPct,
       monthsRemaining: monthsRemainingCalc,
+      yoyPct,
+      yoyDelta,
+      grossMarginPct,
+      grossMarginYoY,
+      gmroi,
+      inventoryTurnover,
     };
-  }, [salesQ.isLoading, budgetQ.isLoading, goalsQ.isLoading, goalsQ.data,
-      monthlyReal, calMonth, isCurrentYear, year]);
+  }, [salesQ.isLoading, budgetQ.isLoading, goalsQ.isLoading, goalsQ.data, inventoryQ.data,
+      monthlyReal, monthlyBudget, monthlyPY, monthlyCost, monthlyPYCost,
+      activeMonths, closedMonths,
+      isCurrentYear, calMonth, year, filters.brand, filters.channel, filters.store,
+      filters.period, correctedProrata, lastDataDay, filteredDailyPY]);
 
-  // ── Series del gráfico ─────────────────────────────────────────────────
+  // ── Series del gráfico (siempre muestra 12 meses para contexto anual) ──
   const chartPoints = useMemo((): ChartPoint[] => {
     if (!metrics) return [];
     // Monthly run rate = promedio de los meses cerrados con datos
-    const closedLimit = isCurrentYear ? calMonth - 1 : 12;
     let closedSum = 0;
     let closedCount = 0;
     for (const [m, neto] of monthlyReal) {
-      if (m <= closedLimit) { closedSum += neto; closedCount++; }
+      if (closedMonths.includes(m)) { closedSum += neto; closedCount++; }
     }
     const monthlyRunRate = closedCount > 0 ? closedSum / closedCount : 0;
 
-    return buildCumulativeSeries(monthlyReal, monthlyBudget, lastRealMonth, monthlyRunRate);
-  }, [metrics, monthlyReal, monthlyBudget, lastRealMonth, calMonth, isCurrentYear]);
+    // PY del mes parcial: suma día a día exacta (no prorrateo)
+    let partialMonthPY: number | undefined;
+    if (correctedProrata) {
+      const cutoffDay = lastDataDay ?? new Date().getDate();
+      let sum = 0;
+      for (const r of filteredDailyPY) {
+        if (r.month === correctedProrata.month && r.day <= cutoffDay) sum += r.neto;
+      }
+      partialMonthPY = sum;
+    }
+
+    return buildCumulativeSeries(monthlyReal, monthlyBudget, lastRealMonth, monthlyRunRate, correctedProrata, monthlyPY, partialMonthPY);
+  }, [metrics, monthlyReal, monthlyBudget, lastRealMonth, closedMonths, correctedProrata, monthlyPY, lastDataDay, filteredDailyPY]);
+
+  // ── Filtrado de datos diarios CY (para gráfico diario) ────────────────
+  const filteredDailyCY = useMemo((): DailySalesRow[] => {
+    const rows = dailyCYQ.data ?? [];
+    const canonical = filters.brand !== "total" ? brandIdToCanonical(filters.brand) : null;
+    const ch = filters.channel !== "total" ? filters.channel.toUpperCase() : null;
+    return rows.filter(r => {
+      if (canonical && r.brand !== canonical) return false;
+      if (ch && r.channel !== ch) return false;
+      return true;
+    });
+  }, [dailyCYQ.data, filters.brand, filters.channel]);
+
+  // ── Unidades por mes (desde datos diarios, que sí tienen campo units) ──
+  const monthlyUnits = useMemo(
+    () => aggregateUnitsByMonthFromDaily(filteredDailyCY),
+    [filteredDailyCY],
+  );
+  const monthlyPYUnits = useMemo(
+    () => aggregateUnitsByMonthFromDaily(filteredDailyPY),
+    [filteredDailyPY],
+  );
+
+  // ── Series diarias (vista de mes individual) ────────────────────────────
+  const dailyChartPoints = useMemo((): DailyChartPoint[] | null => {
+    if (filters.period === "ytd" || activeMonths.length === 0) return null;
+    const targetMonth = activeMonths[0]; // lastClosedMonth o currentMonth → 1 solo mes
+    const dim = daysInMonth(year, targetMonth);
+    const budget = monthlyBudget.get(targetMonth) ?? 0;
+    const isCurrentPartial = correctedProrata && targetMonth === correctedProrata.month;
+    const cutoff = isCurrentPartial ? lastDataDay : null;
+    return buildDailySeries(filteredDailyCY, filteredDailyPY, targetMonth, budget, dim, cutoff);
+  }, [filters.period, activeMonths, year, monthlyBudget, correctedProrata, lastDataDay, filteredDailyCY, filteredDailyPY]);
 
   // ── Filas de tabla mensual ─────────────────────────────────────────────
   const monthlyRows = useMemo(
-    () => buildMonthlyRows(monthlyReal, monthlyBudget, monthlyPY, calMonth),
-    [monthlyReal, monthlyBudget, monthlyPY, calMonth],
+    () => buildMonthlyRows({
+      monthlyReal, monthlyBudget, monthlyPY,
+      monthlyCost, monthlyPYCost, monthlyBudgetGmPct,
+      monthlyUnits, monthlyBudgetUnits, monthlyPYUnits,
+      calendarMonth: calMonth, partialProrata: correctedProrata,
+    }),
+    [monthlyReal, monthlyBudget, monthlyPY, monthlyCost, monthlyPYCost,
+     monthlyBudgetGmPct, monthlyUnits, monthlyBudgetUnits, monthlyPYUnits,
+     calMonth, correctedProrata],
   );
+
+  // ── Insights automáticos ──────────────────────────────────────────────
+  // Modo 1 (brand="total"): compara marcas entre sí vs presupuesto.
+  // Modo 2 (brand específica): compara canales (B2B vs B2C) para esa marca.
+  const insights = useMemo((): BrandInsight[] => {
+    if (!metrics || !salesQ.data || !budgetQ.data) return [];
+
+    if (filters.brand === "total") {
+      // Modo 1: comparar marcas
+      const salesAgg = aggregateSalesByBrand(
+        filterSalesRows(salesQ.data, "total", filters.channel, filters.store),
+        activeMonths,
+      );
+      const budgetAgg = aggregateBudgetByBrand(
+        budgetQ.data ?? [],
+        activeMonths,
+        filters.channel,
+        correctedProrata,
+      );
+      return generateBrandInsights(salesAgg, budgetAgg, 3);
+    } else {
+      // Modo 2: comparar canales para la marca seleccionada
+      const salesAgg = aggregateSalesByChannel(
+        filterSalesRows(salesQ.data, filters.brand, "total", filters.store),
+        activeMonths,
+      );
+      const budgetAgg = aggregateBudgetByChannel(
+        budgetQ.data ?? [],
+        activeMonths,
+        brandIdToCanonical(filters.brand) ?? undefined,
+        correctedProrata,
+      );
+      return generateChannelInsights(salesAgg, budgetAgg, 3);
+    }
+  }, [metrics, salesQ.data, budgetQ.data, filters.brand, filters.channel, filters.store, activeMonths, correctedProrata]);
+
+  // Channel insights (solo para brand="total" — se usa en rotación con brand insights)
+  const channelInsights = useMemo((): BrandInsight[] => {
+    if (!metrics || !salesQ.data || !budgetQ.data) return [];
+    if (filters.brand !== "total") return [];
+    if (filters.channel !== "total") return []; // con filtro de canal, rotación no aplica
+    const salesAgg = aggregateSalesByChannel(
+      filterSalesRows(salesQ.data, "total", "total", filters.store),
+      activeMonths,
+    );
+    const budgetAgg = aggregateBudgetByChannel(
+      budgetQ.data ?? [],
+      activeMonths,
+      undefined,
+      correctedProrata,
+    );
+    return generateChannelInsights(salesAgg, budgetAgg, 3);
+  }, [metrics, salesQ.data, budgetQ.data, filters.store, activeMonths, correctedProrata, filters.brand]);
 
   // ── getRowsForView: re-filtra datos wide cacheados para una vista ──────
   const getRowsForView = useCallback(
@@ -256,24 +664,40 @@ export function useExecutiveData(): ExecutiveData {
       const cyMap   = aggregateByMonth(cyRows);
       const pyMap   = aggregateByMonth(pyRows);
       const budMap  = aggregateBudgetByMonth(budgetQ.data ?? [], viewBrand, viewChannel);
-      return buildMonthlyRows(cyMap, budMap, pyMap, calMonth);
+      // Simplified view — margin and units use empty maps (not shown in InsightBar)
+      const empty = new Map<number, number>();
+      return buildMonthlyRows({
+        monthlyReal: cyMap, monthlyBudget: budMap, monthlyPY: pyMap,
+        monthlyCost: aggregateCostByMonth(cyRows), monthlyPYCost: aggregateCostByMonth(pyRows),
+        monthlyBudgetGmPct: aggregateBudgetGmPctByMonth(budgetQ.data ?? [], viewBrand, viewChannel),
+        monthlyUnits: empty, monthlyBudgetUnits: empty, monthlyPYUnits: empty,
+        calendarMonth: calMonth, partialProrata: correctedProrata,
+      });
     },
-    [salesQ.data, prevSalesQ.data, budgetQ.data, calMonth],
+    [salesQ.data, prevSalesQ.data, budgetQ.data, calMonth, correctedProrata],
   );
 
   // ── Estado consolidado ─────────────────────────────────────────────────
-  const isLoading = salesQ.isLoading || prevSalesQ.isLoading || budgetQ.isLoading || goalsQ.isLoading;
+  const isLoading = salesQ.isLoading || prevSalesQ.isLoading || budgetQ.isLoading || goalsQ.isLoading || dailyPYQ.isLoading || dailyCYQ.isLoading;
+  const isInventoryLoading = inventoryQ.isLoading;
   const error = salesQ.error?.message ?? prevSalesQ.error?.message
-    ?? budgetQ.error?.message ?? goalsQ.error?.message ?? null;
+    ?? budgetQ.error?.message ?? goalsQ.error?.message ?? dailyPYQ.error?.message ?? dailyCYQ.error?.message ?? null;
 
   return {
     metrics,
     chartPoints,
+    dailyChartPoints,
     monthlyRows,
+    insights,
+    channelInsights,
+    periodLabel,
     calendarMonth: calMonth,
     isPartialMonth,
+    isYtdView: filters.period === "ytd",
     isLoading,
+    isInventoryLoading,
     error,
+    lastDataDay,
     getRowsForView,
   };
 }

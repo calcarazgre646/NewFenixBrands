@@ -50,19 +50,21 @@ export function useCalendar() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [categories, setCategories] = useState<Record<string, DbCategory>>({});
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // ── Fetch + Realtime ─────────────────────────────────────────────────────
 
   useEffect(() => {
-    authClient.from("calendar_categories").select("*").then(({ data }) => {
+    authClient.from("calendar_categories").select("*").then(({ data, error: catErr }) => {
+      if (catErr) { setError("Error cargando categorías"); return; }
       if (!data) return;
       const map: Record<string, DbCategory> = {};
       (data as DbCategory[]).forEach((c) => { map[c.id] = c; });
       setCategories(map);
     });
 
-    authClient.from("calendar_events").select("*").then(({ data, error }) => {
-      if (error) { console.error("Error cargando eventos:", error); return; }
+    authClient.from("calendar_events").select("*").then(({ data, error: evErr }) => {
+      if (evErr) { setError("Error cargando eventos"); return; }
       setEvents((data as DbEvent[]).map(toFC));
     });
 
@@ -107,10 +109,11 @@ export function useCalendar() {
     setSaving(true);
     try {
       const newId = crypto.randomUUID();
-      await authClient.from("calendar_events").insert({
+      const { error: insErr } = await authClient.from("calendar_events").insert({
         id: newId, title: input.title,
         start_date: input.startDate, end_date: input.endDate || null, category: input.category,
       });
+      if (insErr) { setError("Error al crear evento"); return; }
       setEvents((prev) => [...prev, {
         id: newId, title: input.title, start: input.startDate,
         end: input.endDate || undefined, allDay: true,
@@ -124,10 +127,11 @@ export function useCalendar() {
   }) => {
     setSaving(true);
     try {
-      await authClient.from("calendar_events").update({
+      const { error: updErr } = await authClient.from("calendar_events").update({
         title: input.title, start_date: input.startDate,
         end_date: input.endDate || null, category: input.category,
       }).eq("id", id);
+      if (updErr) { setError("Error al actualizar evento"); return; }
       setEvents((prev) => prev.map((ev) => ev.id === id
         ? { ...ev, title: input.title, start: input.startDate, end: input.endDate || undefined, extendedProps: { calendar: input.category } }
         : ev));
@@ -137,33 +141,40 @@ export function useCalendar() {
   const deleteEvent = useCallback(async (id: string) => {
     setSaving(true);
     try {
-      await authClient.from("calendar_events").delete().eq("id", id);
+      const { error: delErr } = await authClient.from("calendar_events").delete().eq("id", id);
+      if (delErr) { setError("Error al eliminar evento"); return; }
       setEvents((prev) => prev.filter((ev) => ev.id !== id));
     } finally { setSaving(false); }
   }, []);
 
   const moveEvent = useCallback(async (id: string, start: string, end: string | null) => {
-    await authClient.from("calendar_events").update({ start_date: start, end_date: end }).eq("id", id);
+    const { error: moveErr } = await authClient.from("calendar_events").update({ start_date: start, end_date: end }).eq("id", id);
+    if (moveErr) { setError("Error al mover evento"); return; }
     setEvents((prev) => prev.map((ev) => ev.id === id ? { ...ev, start, end: end ?? undefined } : ev));
   }, []);
 
   // ── CRUD Categories ──────────────────────────────────────────────────────
 
   const updateCategoryColor = useCallback(async (id: string, color: string) => {
-    setCategories((prev) => ({ ...prev, [id]: { ...prev[id], color } }));
-    await authClient.from("calendar_categories").update({ color }).eq("id", id);
-  }, []);
+    const prev = categories;
+    setCategories((p) => ({ ...p, [id]: { ...p[id], color } }));
+    const { error: colorErr } = await authClient.from("calendar_categories").update({ color }).eq("id", id);
+    if (colorErr) { setCategories(prev); setError("Error al actualizar color"); }
+  }, [categories]);
 
   const addCategory = useCallback(async (label: string, color: string): Promise<string> => {
     const id = label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
     const newCat: DbCategory = { id, label, color };
-    await authClient.from("calendar_categories").insert(newCat);
+    const { error: addErr } = await authClient.from("calendar_categories").insert(newCat);
+    if (addErr) { setError("Error al crear categoría"); return id; }
     setCategories((prev) => ({ ...prev, [id]: newCat }));
     return id;
   }, []);
 
+  const clearError = useCallback(() => setError(null), []);
+
   return {
-    events, categories, saving,
+    events, categories, saving, error, clearError,
     addEvent, updateEvent, deleteEvent, moveEvent,
     updateCategoryColor, addCategory,
   };

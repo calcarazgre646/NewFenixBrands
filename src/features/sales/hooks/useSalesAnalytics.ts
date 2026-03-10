@@ -1,21 +1,20 @@
 /**
  * features/sales/hooks/useSalesAnalytics.ts
  *
- * Hook de datos para los tabs analiticos de la pagina de ventas.
+ * Hook de datos para las cards analíticas de la página de ventas.
  *
- * Fuentes:
- *   - fetchBrandBreakdown, fetchChannelMix, fetchTopSkus (server-filtered)
- *   - fetchDailyDetail (server-filtered, for day-of-week behavior)
- *   - fetchMonthlySalesWide + fetchAnnualTickets (cached wide, for store breakdown)
+ * OPTIMIZACIÓN V2:
+ *   - brandBreakdown y channelMix se derivan LOCALMENTE de datos cacheados
+ *     (salesWide CY + PY, ya cargados por useSalesDashboard → 0 queries nuevas)
+ *   - skusQ y dailyQ son LAZY: solo se disparan cuando su card está habilitada
+ *   - storeBreakdown usa datos cacheados (salesWide + tickets + stores)
  *
- * El periodo viene de useSalesDashboard (activeMonths).
+ * El periodo viene de useSalesDashboard (activeMonths / closedMonths).
  */
 import { useMemo } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { useFilters } from "@/context/FilterContext";
 import {
-  fetchBrandBreakdown,
-  fetchChannelMix,
   fetchTopSkus,
   fetchDailyDetail,
   fetchMonthlySalesWide,
@@ -29,15 +28,14 @@ import type {
 } from "@/queries/sales.queries";
 import { fetchAnnualTickets, filterTicketsByChannel } from "@/queries/tickets.queries";
 import { fetchStores } from "@/queries/stores.queries";
-import { salesKeys, storeKeys } from "@/queries/keys";
+import { salesKeys, storeKeys, STALE_30MIN, GC_60MIN } from "@/queries/keys";
 import { brandIdToCanonical } from "@/api/normalize";
+
 import {
   calcGrossMargin,
   calcMarkdownDependency,
+  calcYoY,
 } from "@/domain/kpis/calculations";
-
-const STALE_30MIN = 30 * 60 * 1000;
-const GC_60MIN    = 60 * 60 * 1000;
 
 // ─── Tipos publicos ──────────────────────────────────────────────────────────
 
@@ -71,8 +69,16 @@ export interface SalesAnalyticsData {
   topSkus: TopSkuRow[];
   dayOfWeek: DayOfWeekStat[];
   storeBreakdown: StoreBreakdownRow[];
+  storeBreakdownB2C: StoreBreakdownRow[];
+  storeBreakdownB2B: StoreBreakdownRow[];
+  /** Raw monthly rows (CY) — for store detail derivation in UI. */
+  salesWideRaw: MonthlySalesRow[];
+  /** Raw daily detail rows — for single-month store sparklines/charts. */
+  dailyDetailRaw: DailyDetailRow[];
+  activeMonths: number[];
   isLoading: boolean;
   isDowLoading: boolean;
+  isSkusLoading: boolean;
   isStoresLoading: boolean;
   error: string | null;
 }
@@ -129,7 +135,6 @@ function buildStoreBreakdown(
   const canonical = brand !== "total" ? brandIdToCanonical(brand) : null;
   const ch = channel !== "total" ? channel.toUpperCase() : null;
 
-  // Aggregate sales by store (cosujd)
   const storeAcc = new Map<string, { neto: number; cogs: number; bruto: number; dcto: number }>();
   for (const r of salesRows) {
     if (!activeMonths.includes(r.month)) continue;
@@ -143,7 +148,6 @@ function buildStoreBreakdown(
     storeAcc.set(r.store, acc);
   }
 
-  // Aggregate tickets by store (cosupc → cosujd via storeMap)
   const ticketsByStore = new Map<string, { tickets: number; sales: number }>();
   for (const t of ticketRows) {
     if (!activeMonths.includes(t.month)) continue;
@@ -176,53 +180,100 @@ function buildStoreBreakdown(
   return rows.sort((a, b) => b.neto - a.neto);
 }
 
+/** Deriva brandBreakdown localmente de datos cacheados (0 queries). */
+function deriveBrandBreakdown(
+  cyRows: MonthlySalesRow[],
+  pyRows: MonthlySalesRow[],
+  activeMonths: number[],
+  channel: string,
+  store: string,
+): BrandBreakdownRow[] {
+  const ch = channel !== "total" ? channel.toUpperCase() : null;
+
+  const aggCurr = new Map<string, { neto: number; cogs: number; bruto: number; dcto: number }>();
+  for (const r of cyRows) {
+    if (!activeMonths.includes(r.month)) continue;
+    if (ch && r.channel !== ch) continue;
+    if (store && r.store !== store) continue;
+    const acc = aggCurr.get(r.brand) ?? { neto: 0, cogs: 0, bruto: 0, dcto: 0 };
+    acc.neto  += r.neto;
+    acc.cogs  += r.cogs;
+    acc.bruto += r.bruto;
+    acc.dcto  += r.dcto;
+    aggCurr.set(r.brand, acc);
+  }
+
+  const aggPrev = new Map<string, number>();
+  for (const r of pyRows) {
+    if (!activeMonths.includes(r.month)) continue;
+    if (ch && r.channel !== ch) continue;
+    if (store && r.store !== store) continue;
+    aggPrev.set(r.brand, (aggPrev.get(r.brand) ?? 0) + r.neto);
+  }
+
+  const result: BrandBreakdownRow[] = [];
+  aggCurr.forEach((vals, brand) => {
+    const prevNeto = aggPrev.get(brand) ?? 0;
+    const yoyPct = prevNeto > 0 ? calcYoY(vals.neto, prevNeto) : undefined;
+    result.push({ brand, ...vals, prevNeto, yoyPct });
+  });
+
+  return result.sort((a, b) => b.neto - a.neto);
+}
+
+/** Deriva channelMix localmente de datos cacheados (0 queries). */
+function deriveChannelMix(
+  cyRows: MonthlySalesRow[],
+  activeMonths: number[],
+  brand: string,
+  store: string,
+): ChannelMixRow[] {
+  const canonical = brand !== "total" ? brandIdToCanonical(brand) : null;
+
+  const acc = new Map<string, number>();
+  for (const r of cyRows) {
+    if (!activeMonths.includes(r.month)) continue;
+    if (canonical && r.brand !== canonical) continue;
+    if (store && r.store !== store) continue;
+    if (!r.channel) continue;
+    acc.set(r.channel, (acc.get(r.channel) ?? 0) + r.neto);
+  }
+
+  let total = 0;
+  acc.forEach((v) => { total += v; });
+
+  const result: ChannelMixRow[] = [];
+  acc.forEach((neto, channel) => {
+    result.push({
+      channel: channel as "B2C" | "B2B",
+      neto,
+      pct: total > 0 ? (neto / total) * 100 : 0,
+    });
+  });
+
+  return result.sort((a, b) => b.neto - a.neto);
+}
+
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
-export function useSalesAnalytics(activeMonths: number[]): SalesAnalyticsData {
+interface UseSalesAnalyticsOptions {
+  activeMonths: number[];
+  /** Habilitar query pesada de SKUs (lazy). */
+  enableSkus?: boolean;
+  /** Habilitar query pesada de Comportamiento (lazy). */
+  enableBehavior?: boolean;
+}
+
+export function useSalesAnalytics({
+  activeMonths,
+  enableSkus = false,
+  enableBehavior = false,
+}: UseSalesAnalyticsOptions): SalesAnalyticsData {
   const { filters } = useFilters();
   const enabled = activeMonths.length > 0;
 
-  // ── Server-filtered queries ──────────────────────────────────────────────
-  const brandsQ = useQuery({
-    queryKey: [...salesKeys.brandBreakdown(filters), activeMonths] as const,
-    queryFn: () => fetchBrandBreakdown(filters, activeMonths),
-    enabled,
-    staleTime: STALE_30MIN,
-    gcTime: GC_60MIN,
-  });
-
-  const channelQ = useQuery({
-    queryKey: [...salesKeys.channelMix(filters), activeMonths] as const,
-    queryFn: () => fetchChannelMix(filters, activeMonths),
-    enabled,
-    staleTime: STALE_30MIN,
-    gcTime: GC_60MIN,
-  });
-
-  const skusQ = useQuery({
-    queryKey: [...salesKeys.topSkus(filters), activeMonths] as const,
-    queryFn: () => fetchTopSkus(filters, activeMonths),
-    enabled,
-    staleTime: STALE_30MIN,
-    gcTime: GC_60MIN,
-  });
-
-  // ── Daily detail for day-of-week behavior ──────────────────────────────
-  const dailyQ = useQuery({
-    queryKey: [
-      "sales", "daily",
-      filters.brand, filters.channel, filters.store, filters.year,
-      "salesPage", activeMonths,
-    ] as const,
-    queryFn: () => fetchDailyDetail(filters, activeMonths),
-    enabled,
-    staleTime: STALE_30MIN,
-    gcTime: GC_60MIN,
-    retry: 1,
-  });
-
-  // ── Wide data for store breakdown (shared cache) ──────────────────────
-  const [salesWideQ, ticketsQ, storesQ] = useQueries({
+  // ── Datos cacheados WIDE (compartidos con useSalesDashboard, 0 cost) ────
+  const [salesCYQ, salesPYQ] = useQueries({
     queries: [
       {
         queryKey: salesKeys.monthlyWide(filters.year),
@@ -230,6 +281,40 @@ export function useSalesAnalytics(activeMonths: number[]): SalesAnalyticsData {
         staleTime: STALE_30MIN,
         gcTime: GC_60MIN,
       },
+      {
+        queryKey: salesKeys.priorYearWide(filters.year),
+        queryFn: () => fetchMonthlySalesWide(filters.year - 1),
+        staleTime: STALE_30MIN,
+        gcTime: GC_60MIN,
+      },
+    ],
+  });
+
+  // ── Queries LAZY (solo se disparan cuando su card está visible) ─────────
+  const skusQ = useQuery({
+    queryKey: [...salesKeys.topSkus(filters), activeMonths] as const,
+    queryFn: () => fetchTopSkus(filters, activeMonths),
+    enabled: enabled && enableSkus,
+    staleTime: STALE_30MIN,
+    gcTime: GC_60MIN,
+  });
+
+  const dailyQ = useQuery({
+    queryKey: [
+      "sales", "daily",
+      filters.brand, filters.channel, filters.store, filters.year,
+      "salesPage", activeMonths,
+    ] as const,
+    queryFn: () => fetchDailyDetail(filters, activeMonths),
+    enabled: enabled && enableBehavior,
+    staleTime: STALE_30MIN,
+    gcTime: GC_60MIN,
+    retry: 1,
+  });
+
+  // ── Wide data para store breakdown (shared cache) ──────────────────────
+  const [ticketsQ, storesQ] = useQueries({
+    queries: [
       {
         queryKey: ["tickets", "annual", filters.year] as const,
         queryFn: () => fetchAnnualTickets(filters.year),
@@ -245,6 +330,23 @@ export function useSalesAnalytics(activeMonths: number[]): SalesAnalyticsData {
       },
     ],
   });
+
+  // ── Derivación LOCAL de brandBreakdown (0 queries) ─────────────────────
+  const brandBreakdown = useMemo(
+    () => deriveBrandBreakdown(
+      salesCYQ.data ?? [], salesPYQ.data ?? [],
+      activeMonths, filters.channel, filters.store ?? "",
+    ),
+    [salesCYQ.data, salesPYQ.data, activeMonths, filters.channel, filters.store],
+  );
+
+  // ── Derivación LOCAL de channelMix (0 queries) ─────────────────────────
+  const channelMix = useMemo(
+    () => deriveChannelMix(
+      salesCYQ.data ?? [], activeMonths, filters.brand, filters.store ?? "",
+    ),
+    [salesCYQ.data, activeMonths, filters.brand, filters.store],
+  );
 
   // ── Compute day-of-week from daily detail ───────────────────────────────
   const dayOfWeek = useMemo(
@@ -271,31 +373,53 @@ export function useSalesAnalytics(activeMonths: number[]): SalesAnalyticsData {
 
   const storeBreakdown = useMemo(
     () => buildStoreBreakdown(
-      salesWideQ.data ?? [],
+      salesCYQ.data ?? [],
       activeMonths,
       filters.brand,
       filters.channel,
       filteredTickets,
       storeMap,
     ),
-    [salesWideQ.data, activeMonths, filters.brand, filters.channel, filteredTickets, storeMap],
+    [salesCYQ.data, activeMonths, filters.brand, filters.channel, filteredTickets, storeMap],
+  );
+
+  // Breakdowns separados por canal (para vista "total")
+  const storeBreakdownB2C = useMemo(
+    () => filters.channel === "total"
+      ? buildStoreBreakdown(salesCYQ.data ?? [], activeMonths, filters.brand, "b2c", filteredTickets, storeMap)
+      : [],
+    [salesCYQ.data, activeMonths, filters.brand, filters.channel, filteredTickets, storeMap],
+  );
+
+  const storeBreakdownB2B = useMemo(
+    () => filters.channel === "total"
+      ? buildStoreBreakdown(salesCYQ.data ?? [], activeMonths, filters.brand, "b2b", filteredTickets, storeMap)
+      : [],
+    [salesCYQ.data, activeMonths, filters.brand, filters.channel, filteredTickets, storeMap],
   );
 
   // ── Loading states ─────────────────────────────────────────────────────
-  const isLoading = brandsQ.isLoading || channelQ.isLoading || skusQ.isLoading;
-  const isDowLoading = dailyQ.isLoading;
-  const isStoresLoading = salesWideQ.isLoading || ticketsQ.isLoading || storesQ.isLoading;
-  const error = brandsQ.error?.message ?? channelQ.error?.message
-    ?? skusQ.error?.message ?? null;
+  const isLoading = salesCYQ.isLoading || salesPYQ.isLoading;
+  const isDowLoading = enableBehavior && dailyQ.isLoading;
+  const isSkusLoading = enableSkus && skusQ.isLoading;
+  const isStoresLoading = ticketsQ.isLoading || storesQ.isLoading;
+  const error = salesCYQ.error?.message ?? salesPYQ.error?.message
+    ?? skusQ.error?.message ?? dailyQ.error?.message ?? null;
 
   return {
-    brandBreakdown: brandsQ.data ?? [],
-    channelMix: channelQ.data ?? [],
+    brandBreakdown,
+    channelMix,
     topSkus: skusQ.data ?? [],
     dayOfWeek,
     storeBreakdown,
+    storeBreakdownB2C,
+    storeBreakdownB2B,
+    salesWideRaw: salesCYQ.data ?? [],
+    dailyDetailRaw: dailyQ.data ?? [],
+    activeMonths,
     isLoading,
     isDowLoading,
+    isSkusLoading,
     isStoresLoading,
     error,
   };

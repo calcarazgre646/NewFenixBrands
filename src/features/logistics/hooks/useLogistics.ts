@@ -3,52 +3,40 @@
  *
  * Orchestrates import data fetch + domain logic for the logistics page.
  * Pattern: fetch → transform pure → filter → memoize.
+ *
+ * Marca: viene del filtro global (useFilters) — consistente con Inicio/Ventas/Acciones.
+ * showPast: único filtro local (toggle para ver embarques pasados).
  */
 import { useMemo, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchLogisticsImports } from "@/queries/logistics.queries";
 import { logisticsKeys } from "@/queries/keys";
+import { useFilters } from "@/context/FilterContext";
 import { toArrivals, groupArrivals, computeSummary } from "@/domain/logistics/arrivals";
 import type { LogisticsArrival, LogisticsGroup, LogisticsSummary } from "@/domain/logistics/types";
 
 const STALE_15MIN = 15 * 60 * 1000;
 const GC_30MIN    = 30 * 60 * 1000;
 
-export interface LogisticsFilters {
-  brand:    string | null;
-  category: string | null;
-  showPast: boolean;
-}
-
 export interface LogisticsData {
   arrivals:    LogisticsArrival[];
   groups:      LogisticsGroup[];
   summary:     LogisticsSummary;
-  filters:     LogisticsFilters;
-  setBrand:    (b: string | null) => void;
-  setCategory: (c: string | null) => void;
+  showPast:    boolean;
   togglePast:  () => void;
-  clearFilters: () => void;
-  hasFilters:  boolean;
   isLoading:   boolean;
   error:       string | null;
-  availableBrands:     string[];
-  availableCategories: string[];
+  /** Total de items con status "past" (no incluye overdue) */
+  hiddenPastCount: number;
 }
 
 export function useLogistics(): LogisticsData {
-  const [brand, setBrand]       = useState<string | null>(null);
-  const [category, setCategory] = useState<string | null>(null);
+  // Marca viene del filtro global (header con avatares)
+  const { filters: globalFilters } = useFilters();
+  const globalBrand = globalFilters.brand; // "total" | "martel" | "wrangler" | "lee"
+
   const [showPast, setShowPast] = useState(false);
-
   const togglePast = useCallback(() => setShowPast(p => !p), []);
-  const clearFilters = useCallback(() => {
-    setBrand(null);
-    setCategory(null);
-    setShowPast(false);
-  }, []);
-
-  const hasFilters = brand !== null || category !== null || showPast;
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const importsQ = useQuery({
@@ -65,29 +53,20 @@ export function useLogistics(): LogisticsData {
     return toArrivals(importsQ.data);
   }, [importsQ.data]);
 
-  // ── Available filter options ───────────────────────────────────────────────
-  const { availableBrands, availableCategories } = useMemo(() => {
-    const brands = new Set<string>();
-    const cats   = new Set<string>();
-    for (const a of allArrivals) {
-      if (a.brand) brands.add(a.brand);
-      if (a.category) cats.add(a.category);
-    }
-    return {
-      availableBrands:     Array.from(brands).sort(),
-      availableCategories: Array.from(cats).sort(),
-    };
-  }, [allArrivals]);
+  // ── Count hidden past items (for badge display) ────────────────────────────
+  const hiddenPastCount = useMemo(() => {
+    if (showPast) return 0;
+    return allArrivals.filter(a => a.status === "past").length;
+  }, [allArrivals, showPast]);
 
   // ── Apply filters ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     return allArrivals.filter(a => {
       if (!showPast && a.status === "past") return false;
-      if (brand && a.brandNorm !== brand.toLowerCase()) return false;
-      if (category && a.category.toLowerCase() !== category.toLowerCase()) return false;
+      if (globalBrand !== "total" && a.brandNorm !== globalBrand) return false;
       return true;
     });
-  }, [allArrivals, brand, category, showPast]);
+  }, [allArrivals, globalBrand, showPast]);
 
   // ── Group + summary ────────────────────────────────────────────────────────
   const groups  = useMemo(() => groupArrivals(filtered), [filtered]);
@@ -97,15 +76,10 @@ export function useLogistics(): LogisticsData {
     arrivals: filtered,
     groups,
     summary,
-    filters: { brand, category, showPast },
-    setBrand,
-    setCategory,
+    showPast,
     togglePast,
-    clearFilters,
-    hasFilters,
     isLoading: importsQ.isLoading,
     error: importsQ.error?.message ?? null,
-    availableBrands,
-    availableCategories,
+    hiddenPastCount,
   };
 }

@@ -99,3 +99,22 @@ export function buildPeriodLabel(
 export function monthToQueryParts(year: number, month: number) {
   return { year, month };
 }
+
+/** Días en un mes dado (1-indexed). Ej: daysInMonth(2026, 3) → 31. */
+export function daysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+/**
+ * Factor de prorrateo para el mes en curso del año actual.
+ * Ej: 8 de Marzo 2026 → { month: 3, factor: 8/31 ≈ 0.258 }
+ * Retorna null si el año analizado no es el año calendario (todos los meses son cerrados).
+ */
+export function currentMonthProrata(year: number): { month: number; factor: number } | null {
+  const calYear = getCalendarYear();
+  const calMonth = getCalendarMonth();
+  const calDay = getCalendarDay();
+  if (year !== calYear) return null;
+  const dim = daysInMonth(year, calMonth);
+  return { month: calMonth, factor: calDay / dim };
+}

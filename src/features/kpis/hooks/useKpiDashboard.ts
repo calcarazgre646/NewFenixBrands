@@ -38,9 +38,10 @@ import { useFilters } from "@/context/FilterContext";
 import {
   fetchMonthlySalesWide,
   fetchDailyDetail,
+  fetchDailySalesWide,
   fetchPriorYearMTDWide,
 } from "@/queries/sales.queries";
-import type { MonthlySalesRow, PriorYearMTDRow } from "@/queries/sales.queries";
+import type { PriorYearMTDRow } from "@/queries/sales.queries";
 import { fetchInventoryValue } from "@/queries/inventory.queries";
 import {
   fetchAnnualTickets,
@@ -48,7 +49,8 @@ import {
   filterTicketsByChannel,
 } from "@/queries/tickets.queries";
 import { fetchStores } from "@/queries/stores.queries";
-import { salesKeys, inventoryKeys, storeKeys } from "@/queries/keys";
+import { salesKeys, inventoryKeys, storeKeys, STALE_30MIN, GC_60MIN } from "@/queries/keys";
+import { filterSalesRows } from "@/queries/filters";
 import { resolvePeriod } from "@/domain/period/resolve";
 import { getCalendarMonth, getCalendarYear, getCalendarDay } from "@/domain/period/helpers";
 import { brandIdToCanonical } from "@/api/normalize";
@@ -65,13 +67,6 @@ import {
 } from "@/domain/kpis/calculations";
 import type { KpiUnit } from "@/utils/format";
 import { checkKpiAvailability } from "@/domain/kpis/filterSupport";
-
-// ─── Cache durations ─────────────────────────────────────────────────────────
-// 30 min staleTime: dato cambia ~cada 6h, 30 min es conservador.
-// Además resuelve el "recarga al volver de otra pestaña" — TanStack Query
-// sirve del cache si el dato tiene < 30 min. No refetchea.
-const STALE_30MIN = 30 * 60 * 1000;
-const GC_60MIN    = 60 * 60 * 1000;  // mantener en memoria tras unmount
 
 // ─── Tipos públicos ───────────────────────────────────────────────────────────
 
@@ -127,23 +122,6 @@ function computeProvisionalMonths(period: PeriodFilter, year: number): number[] 
 }
 
 // ─── Helpers de filtrado local (solo para queries WIDE) ──────────────────────
-
-/** Filtra filas MonthlySalesRow por los filtros activos del usuario. */
-function filterMonthlySales(
-  rows: MonthlySalesRow[],
-  brand: string,
-  channel: string,
-  store: string | null,
-): MonthlySalesRow[] {
-  const canonical = brand !== "total" ? brandIdToCanonical(brand) : null;
-  const ch = channel !== "total" ? channel.toUpperCase() : null;
-  return rows.filter((r) => {
-    if (canonical && r.brand !== canonical) return false;
-    if (ch && r.channel !== ch) return false;
-    if (store && r.store !== store) return false;
-    return true;
-  });
-}
 
 /** Filtra y agrega filas PriorYearMTDRow por los filtros activos del usuario. */
 function filterPriorYearMTD(
@@ -254,16 +232,37 @@ export function useKpiDashboard(): UseKpiDashboardResult {
   // ── Prior year MTD WIDE (para YoY currentMonth y YTD) ─────────────────────
   //   Pre-agregado por brand+channel+store durante paginación (~50 filas).
   //   Acumulación order-agnostic: elimina no-determinismo de fjdhstvta1 sin ORDER BY.
-  //   Key incluye calDay para que cambie solo cuando cambia el día (no en cada render).
+  //   Key incluye lastDataDay para simetría con datos CY reales.
   const calMonth = getCalendarMonth();
-  const calDay   = getCalendarDay();
   const needsDayPreciseYoY =
     filters.period === "currentMonth" ||
     (filters.period === "ytd" && filters.year === calYear);
 
+  // ── Detectar último día con datos reales (cache hit desde Executive) ─────
+  const dailyCYQ = useQuery({
+    queryKey: salesKeys.dailyWide(calYear),
+    queryFn: () => fetchDailySalesWide(calYear),
+    enabled: needsDayPreciseYoY,
+    staleTime: STALE_30MIN,
+    gcTime: GC_60MIN,
+  });
+
+  const lastDataDay = useMemo((): number | null => {
+    if (!needsDayPreciseYoY) return null;
+    const allDaily = dailyCYQ.data ?? [];
+    const daysInCurrentMonth = allDaily
+      .filter(r => r.month === calMonth)
+      .map(r => r.day);
+    if (daysInCurrentMonth.length === 0) return null;
+    return Math.max(...daysInCurrentMonth);
+  }, [dailyCYQ.data, calMonth, needsDayPreciseYoY]);
+
+  // cutoffDay: último día con datos reales, o fallback al día calendario
+  const cutoffDay = lastDataDay ?? getCalendarDay();
+
   const prevCurrentMonthQ = useQuery({
-    queryKey: salesKeys.priorYearMTDWide(calYear, calMonth, calDay),
-    queryFn: () => fetchPriorYearMTDWide(),
+    queryKey: salesKeys.priorYearMTDWide(calYear, calMonth, cutoffDay),
+    queryFn: () => fetchPriorYearMTDWide(cutoffDay),
     enabled: needsDayPreciseYoY,
     staleTime: STALE_30MIN,
     gcTime: GC_60MIN,
@@ -272,12 +271,12 @@ export function useKpiDashboard(): UseKpiDashboardResult {
 
   // ── Filtrado local: datos WIDE cacheados → filtrados por brand/channel/store
   const filteredSales = useMemo(
-    () => filterMonthlySales(salesQ.data ?? [], filters.brand, filters.channel, filters.store),
+    () => filterSalesRows(salesQ.data ?? [], filters.brand, filters.channel, filters.store),
     [salesQ.data, filters.brand, filters.channel, filters.store],
   );
 
   const filteredPrevSales = useMemo(
-    () => filterMonthlySales(prevSalesQ.data ?? [], filters.brand, filters.channel, filters.store),
+    () => filterSalesRows(prevSalesQ.data ?? [], filters.brand, filters.channel, filters.store),
     [prevSalesQ.data, filters.brand, filters.channel, filters.store],
   );
 

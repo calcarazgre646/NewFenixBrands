@@ -119,6 +119,9 @@ SELECT
     'Sin categoria'
   )                           AS lineapr,
   TRIM(f.e_tipoart)          AS tipo_articulo,
+  -- SKU Comercial de Dim_maestro_comercial (ej: "MACA004428")
+  -- Instruccion Rodrigo 25/02: "Todo analisis de SKU sobre SKU Comercial"
+  TRIM(d."codigo_unico_final") AS sku_comercial,
   SUM(f.e_cantid)            AS units,
   MAX(f.e_precio)            AS price,
   MAX(f.e_precmay)           AS price_may,
@@ -128,7 +131,12 @@ SELECT
   TRIM(f.e_carryov)          AS carry_over,
   f.e_tpitem                 AS tpitem
 FROM fjdexisemp f
-LEFT JOIN "Dim_maestro_comercial" d
+LEFT JOIN (
+  SELECT DISTINCT ON ("SKU-I", talla)
+    "SKU-I", talla, tipo_articulo, "codigo_unico_final"
+  FROM "Dim_maestro_comercial"
+  ORDER BY "SKU-I", talla
+) d
   ON TRIM(f.e_sku) ~ '^\d+$'
   AND d."SKU-I" = CAST(TRIM(f.e_sku) AS bigint)
   AND TRIM(d.talla) = TRIM(f.e_talle)
@@ -141,8 +149,10 @@ GROUP BY
   TRIM(f.e_descrip),
   TRIM(f.e_rubro),
   TRIM(f.e_marca),
-  COALESCE(NULLIF(TRIM(d.tipo_articulo), ''), NULLIF(TRIM(f.e_lineapr), ''), 'Sin categoria'),
+  TRIM(d.tipo_articulo),
+  TRIM(f.e_lineapr),
   TRIM(f.e_tipoart),
+  TRIM(d."codigo_unico_final"),
   TRIM(f.e_estcomer),
   TRIM(f.e_carryov),
   f.e_tpitem

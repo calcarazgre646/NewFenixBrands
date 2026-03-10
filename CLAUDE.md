@@ -11,7 +11,7 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 
 ---
 
-## Estado actual (actualizado 07/03/2026)
+## Estado actual (actualizado 08/03/2026 17:11)
 
 | Fase | Feature | Estado |
 |------|---------|--------|
@@ -20,12 +20,13 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 1 | KpiDashboardPage (`/kpis`) — Grid de 9 KPIs con fetch-wide/filter-local | ✅ COMPLETO |
 | 1B | ExecutivePage (`/`) — Road to Annual Target, chart acumulado, tabla mensual | ✅ COMPLETO |
 | 2 | SalesPage (`/ventas`) — Metricas, 4 tabs analytics (Marcas, Canal/Zonas, Comportamiento, SKUs) | ✅ COMPLETO |
-| 3 | ActionQueuePage (`/acciones`) — Waterfall algorithm, tabla 13 columnas, export HTML | ✅ COMPLETO |
+| 3 | ActionQueuePage (`/acciones`) — Waterfall 4 niveles, vista agrupada (Tienda/Marca/Lista), export HTML | ✅ COMPLETO + AUDITADO |
 | 4 | LogisticsPage (`/logistica`) — ETAs importacion, tabla agrupada, filtros, summary cards | ✅ COMPLETO |
 | 5 | CalendarPage (`/calendario`) — FullCalendar + CRUD + Realtime + vista Ano | ✅ COMPLETO |
 | 6 | SettingsPage (`/configuracion`) — DEUDA: sin spec, sin ruta, requiere definicion del cliente | ⬜ DEUDA |
 
 **La app corre:** `npm run dev` → http://localhost:5173
+**Tests:** 365 passing | TSC 0 errores | Build OK
 
 ---
 
@@ -64,12 +65,13 @@ src/
   domain/period/resolve.ts      — resolvePeriod() — fuente de verdad de periodos
   domain/actionQueue/waterfall.ts — Algoritmo waterfall puro (4 niveles)
   domain/actionQueue/clusters.ts  — Clusters de tiendas (A/B/OUT) + restricciones horarias
+  domain/actionQueue/grouping.ts  — Agrupacion pura por tienda/marca
   domain/logistics/types.ts      — Tipos logística (ArrivalStatus, LogisticsGroup, etc.)
   domain/logistics/arrivals.ts   — Funciones puras: toArrivals, groupArrivals, computeSummary
   context/FilterContext.tsx     — useFilters() — estado global de filtros
   queries/sales.queries.ts      — fetchMonthlySales, fetchDailyDetail, fetchBrandBreakdown...
   queries/inventory.queries.ts  — fetchInventory, fetchInventoryValue
-  queries/salesHistory.queries.ts — fetchSalesHistory (12m promedio por tienda+SKU)
+  queries/salesHistory.queries.ts — fetchSalesHistory (6m promedio por tienda+SKU)
   queries/tickets.queries.ts    — fetchTickets (AOV diario)
   queries/logistics.queries.ts  — fetchLogisticsImports (tabla Import, ETAs)
   queries/budget.queries.ts     — fetchBudget
@@ -83,3 +85,5 @@ src/
 - `docs/ARCHITECTURE.md` — Arquitectura completa, convenciones, patrones
 - `docs/NEXT_FEATURES.md` — Spec de features (fases 1-4 completadas, ver estado arriba)
 - `docs/OLD_PROJECT_REFERENCE.md` — Como y cuando usar el proyecto viejo como referencia
+- `docs/AUDIT_WATERFALL_CORE_2026-03-08.md` — Auditoria end-to-end del algoritmo SISO/waterfall (8 bugs corregidos, flujo de datos completo, campos usados/no usados, preguntas pendientes cliente)
+- `docs/PREGUNTAS_CLIENTE_COLA_ACCIONES.md` — 5+3 preguntas pendientes para Rodrigo/Derlys

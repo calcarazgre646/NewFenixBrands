@@ -1,104 +1,44 @@
 /**
  * features/sales/SalesPage.tsx
  *
- * Pagina de analisis de ventas.
+ * Página de Ventas — Redesign V2.
  *
- * Secciones:
- *   1. Performance banner (vs presupuesto, vs ano anterior)
- *   2. 4 metric cards (Ventas, Cumplimiento, Crecimiento YoY, Margen Bruto)
- *   3. Analytics panel con tabs (Marcas, Canal, Top SKUs)
+ * Estructura (consistente con ExecutivePage):
+ *   TIER 1 (Command Center — above the fold):
+ *     - Filtros in-page (DataFreshnessTag + ExecutiveFilters)
+ *     - Grid 3 columnas: Hero Ventas + 2 mini-cards + Margen Bruto
+ *   TIER 2 (Analytics — below fold):
+ *     - Cards independientes: Marcas, Canal, Comportamiento, SKUs
  *
- * REGLA: Sin logica de negocio. Solo layout + composicion.
+ * REGLA: Sin lógica de negocio. Solo layout + composición.
  */
+import { useState } from "react";
 import { useSalesDashboard } from "./hooks/useSalesDashboard";
 import { useSalesAnalytics } from "./hooks/useSalesAnalytics";
-import { SalesAnalyticsPanel } from "./components/SalesAnalyticsPanel";
+import { BrandsCard, ChannelCard, StoresTable, BehaviorCard, SkusCard } from "./components/SalesAnalyticsPanel";
 import { useFilters } from "@/context/FilterContext";
+import { formatPYGSuffix, formatPYGShort, formatPct, formatChange } from "@/utils/format";
+import { classifyMarginHealth } from "@/domain/kpis/calculations";
+import { Card } from "@/components/ui/card/Card";
+import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
+import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
+import { ExecutiveFilters } from "@/features/executive/components/ExecutiveFilters";
 
-// ─── Format helpers ──────────────────────────────────────────────────────────
-
-function fmtGs(value: number): string {
-  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)} MM Gs.`;
-  if (value >= 1_000_000)     return `${(value / 1_000_000).toFixed(0)} M Gs.`;
-  return `${Math.round(value).toLocaleString("es-PY")} Gs.`;
-}
-
-function fmtPct(value: number): string {
-  return `${value.toFixed(1)}%`;
-}
-
-function fmtChange(value: number): string {
-  const sign = value >= 0 ? "+" : "";
-  return `${sign}${value.toFixed(1)}%`;
-}
-
-// ─── Metric Card ─────────────────────────────────────────────────────────────
-
-function MetricCard({
-  label,
-  value,
-  sub,
-  badge,
-  badgePositive,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  badge?: string;
-  badgePositive?: boolean;
-}) {
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-        {label}
-      </p>
-      <div className="flex items-baseline gap-2">
-        <p className="break-words text-xl font-bold leading-tight text-gray-900 dark:text-white">
-          {value}
-        </p>
-        {badge && (
-          <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
-              badgePositive
-                ? "bg-success-100 text-success-700 dark:bg-success-500/15 dark:text-success-400"
-                : "bg-error-100 text-error-700 dark:bg-error-500/15 dark:text-error-400"
-            }`}
-          >
-            {badgePositive ? "▲" : "▼"} {badge}
-          </span>
-        )}
-      </div>
-      {sub && <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">{sub}</p>}
-    </div>
-  );
-}
-
-// ─── Loading skeleton ────────────────────────────────────────────────────────
-
-function SalesSkeleton() {
-  return (
-    <div className="animate-pulse space-y-6 p-4 sm:p-6">
-      <div className="h-14 rounded-2xl bg-gray-100 dark:bg-gray-800" />
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-28 rounded-2xl bg-gray-100 dark:bg-gray-800" />
-        ))}
-      </div>
-      <div className="h-80 rounded-2xl bg-gray-100 dark:bg-gray-800" />
-    </div>
-  );
-}
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function SalesPage() {
   const { filters } = useFilters();
+  const [enableSkus, setEnableSkus] = useState(true);
+  const [enableBehavior, setEnableBehavior] = useState(true);
+
   const {
     metrics,
-    periodLabel,
     activeMonths,
     isLoading: dashLoading,
     error: dashError,
+    lastDataDay,
+    calendarMonth,
   } = useSalesDashboard();
 
   const {
@@ -107,12 +47,17 @@ export default function SalesPage() {
     topSkus,
     dayOfWeek,
     storeBreakdown,
-    isLoading: analyticsLoading,
+    storeBreakdownB2C,
+    storeBreakdownB2B,
+    salesWideRaw,
+    dailyDetailRaw,
+    activeMonths: analyticsActiveMonths,
     isDowLoading,
+    isSkusLoading,
     isStoresLoading,
-  } = useSalesAnalytics(activeMonths);
+  } = useSalesAnalytics({ activeMonths, enableSkus, enableBehavior });
 
-  if (dashLoading) return <SalesSkeleton />;
+  if (dashLoading) return <PageSkeleton />;
 
   if (dashError || !metrics) {
     return (
@@ -126,115 +71,250 @@ export default function SalesPage() {
     );
   }
 
-  const { real, budget, grossMarginPct, budgetAttainment, growthVsLY, lastYear, isPartialMonth } = metrics;
+  const { real, budget, grossMarginPct, markdownPct, budgetAttainment, growthVsLY, lastYear, globalAOV, isPartialMonth } = metrics;
   const budgetDeviation = budgetAttainment - 100;
   const isBudgetPositive = budgetDeviation >= 0;
   const isGrowthPositive = growthVsLY >= 0;
 
+  // Margin health: channel-aware thresholds
+  const marginChannel = filters.channel === "b2b" ? "b2b" as const : filters.channel === "b2c" ? "b2c" as const : "total" as const;
+  const marginHealth = classifyMarginHealth(grossMarginPct, marginChannel);
+  const marginColorClass = marginHealth === "healthy"
+    ? "text-success-600 dark:text-success-400"
+    : marginHealth === "moderate"
+    ? "text-warning-600 dark:text-warning-400"
+    : "text-error-600 dark:text-error-400";
+  const marginBarClass = marginHealth === "healthy"
+    ? "bg-gradient-to-r from-success-400 to-success-500"
+    : marginHealth === "moderate"
+    ? "bg-gradient-to-r from-warning-400 to-warning-500"
+    : "bg-gradient-to-r from-error-400 to-error-500";
+  const marginBadgeClass = marginHealth === "healthy"
+    ? "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500"
+    : marginHealth === "moderate"
+    ? "bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-warning-500"
+    : "bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500";
+  const marginLabel = marginHealth === "healthy" ? "Saludable" : marginHealth === "moderate" ? "Moderado" : "Bajo";
+
   return (
     <div className="space-y-6 p-4 sm:p-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-          Analisis de Ventas
-        </h1>
-        {periodLabel && (
-          <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-            {periodLabel}
-          </p>
-        )}
+
+      {/* ═══ TIER 1: COMMAND CENTER ═══════════════════════════════════════ */}
+
+      {/* Filtros — consistente con Inicio */}
+      <div className="exec-anim-1">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <DataFreshnessTag
+            lastDataDay={lastDataDay}
+            calendarMonth={calendarMonth}
+            isPartialMonth={isPartialMonth}
+          />
+          <ExecutiveFilters />
+        </div>
       </div>
 
-      {/* Performance banner */}
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200 bg-white px-6 py-3 dark:border-gray-700 dark:bg-gray-800">
-        {/* Budget pill */}
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
-            isBudgetPositive
-              ? "bg-success-100 text-success-700 dark:bg-success-500/15 dark:text-success-400"
-              : "bg-error-100 text-error-700 dark:bg-error-500/15 dark:text-error-400"
-          }`}
-        >
-          <span className={`h-1.5 w-1.5 rounded-full ${isBudgetPositive ? "bg-success-500" : "bg-error-500"}`} />
-          {fmtChange(budgetDeviation)} vs presupuesto
-        </span>
+      {/* Grid 4 columnas: Hero + Mini-cards + Margen + AOV */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
 
-        {/* YoY pill */}
-        {lastYear > 0 && (
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
+        {/* Ventas Reales — hero card (like Inicio's Ventas Netas) */}
+        <div className="exec-anim-2">
+          <Card padding="lg" className="flex h-full flex-col">
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Ventas Netas
+            </p>
+            <div className="mt-auto">
+              <p className="mt-1 text-xl font-bold tabular-nums text-gray-900 dark:text-white">
+                {formatPYGSuffix(real)}
+              </p>
+              {budget > 0 && (
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                  Presupuesto: {formatPYGShort(budget)}
+                </p>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* Cumplimiento + Crecimiento — 2 mini-cards stacked (like Inicio) */}
+        <div className="exec-anim-2 flex flex-col gap-2">
+          <Card padding="sm" className="relative flex-1 flex flex-col px-4 py-3">
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              Cumplimiento Presupuesto
+            </p>
+            <p className={`mt-auto text-xl font-bold tabular-nums ${
+              isBudgetPositive
+                ? "text-success-600 dark:text-success-400"
+                : "text-error-600 dark:text-error-400"
+            }`}>
+              {formatPct(budgetAttainment)}
+            </p>
+            <span className={`absolute right-4 bottom-3 inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${
+              isBudgetPositive
+                ? "bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-400"
+                : "bg-error-50 text-error-600 dark:bg-error-500/10 dark:text-error-400"
+            }`}>
+              {formatChange(budgetDeviation)}
+            </span>
+          </Card>
+          <Card padding="sm" className="relative flex-1 flex flex-col px-4 py-3">
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              Crecimiento vs Año Anterior
+            </p>
+            <p className={`mt-auto text-xl font-bold tabular-nums ${
               isGrowthPositive
-                ? "bg-success-100 text-success-700 dark:bg-success-500/15 dark:text-success-400"
-                : "bg-error-100 text-error-700 dark:bg-error-500/15 dark:text-error-400"
-            }`}
-          >
-          <span className={`h-1.5 w-1.5 rounded-full ${isGrowthPositive ? "bg-success-500" : "bg-error-500"}`} />
-            {fmtChange(growthVsLY)} vs ano anterior
-          </span>
-        )}
+                ? "text-success-600 dark:text-success-400"
+                : "text-error-600 dark:text-error-400"
+            }`}>
+              {formatChange(growthVsLY)}
+            </p>
+            {lastYear > 0 && (
+              <span className={`absolute right-4 bottom-3 inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${
+                isGrowthPositive
+                  ? "bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-400"
+                  : "bg-error-50 text-error-600 dark:bg-error-500/10 dark:text-error-400"
+              }`}>
+                {isGrowthPositive ? "▲" : "▼"} YoY
+              </span>
+            )}
+          </Card>
+        </div>
 
-        {/* Period label */}
-        <span className="ml-auto flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
-          {periodLabel}
-          {isPartialMonth && (
-            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-warning-500" />
-          )}
-        </span>
+        {/* Margen Bruto + Markdown — card with visual indicators */}
+        <div className="exec-anim-2">
+          <Card padding="lg" className="flex h-full flex-col">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+              Margen Bruto
+            </p>
+
+            <div className="mt-auto flex flex-col items-center justify-center py-3">
+              <p className={`text-3xl font-bold tabular-nums ${marginColorClass}`}>
+                {formatPct(grossMarginPct)}
+              </p>
+
+              {/* Visual bar */}
+              <div className="mt-3 w-full max-w-[180px]">
+                <div className="relative h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
+                  <div
+                    className={`absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out ${marginBarClass}`}
+                    style={{ width: `${Math.min(grossMarginPct, 100)}%` }}
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-center">
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${marginBadgeClass}`}>
+                    {marginLabel}
+                  </span>
+                </div>
+              </div>
+
+              {/* Markdown dependency */}
+              <div className="mt-3 w-full border-t border-gray-100 pt-3 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400 dark:text-gray-500">Dependencia Dcto</span>
+                  <span className="text-sm font-bold tabular-nums text-gray-700 dark:text-gray-300">
+                    {formatPct(markdownPct)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Ticket Promedio (AOV) — no disponible con filtro de marca */}
+        <div className="exec-anim-2">
+          <Card padding="lg" className="flex h-full flex-col">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 text-center">
+              Ticket Promedio
+            </p>
+            <div className="flex-1 flex flex-col items-center justify-center">
+              {filters.brand !== "total" ? (
+                <>
+                  <p className="text-sm font-medium text-gray-400 dark:text-gray-500">—</p>
+                  <p className="mt-2 text-center text-xs text-gray-400 dark:text-gray-500">
+                    No disponible con filtro de marca
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold tabular-nums text-gray-900 dark:text-white">
+                    {globalAOV > 0 ? formatPYGSuffix(globalAOV) : "—"}
+                  </p>
+                </>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 dark:text-gray-500 text-center pb-1">
+              Promedio por transacción
+            </p>
+          </Card>
+        </div>
       </div>
 
-      {/* Partial month warning */}
-      {isPartialMonth && (
-        <div className="flex items-center gap-2 rounded-xl border border-warning-200 bg-warning-50 px-4 py-2.5 text-xs text-warning-700 dark:border-warning-500/20 dark:bg-warning-500/10 dark:text-warning-400">
-          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-warning-500" />
-          Los datos incluyen el mes en curso con informacion parcial
+      {/* ═══ TIER 2: ANALYTICS ════════════════════════════════════════════ */}
+
+      {/* Marcas — solo visible cuando brand="total" */}
+      {filters.brand === "total" && (
+        <div className="exec-anim-3">
+          <BrandsCard data={brandBreakdown} year={filters.year} />
         </div>
       )}
 
-      {/* 4 Metric Cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <MetricCard
-          label="Ventas Reales"
-          value={fmtGs(real)}
-          sub={budget > 0 ? `Presupuesto: ${fmtGs(budget)}` : undefined}
-          badge={budget > 0 && real > budget ? fmtGs(real - budget) : undefined}
-          badgePositive={real >= budget}
-        />
-        <MetricCard
-          label="Cumplimiento Presupuesto"
-          value={fmtPct(budgetAttainment)}
-          sub={isBudgetPositive ? "Sobre objetivo" : "Bajo objetivo"}
-          badge={fmtChange(budgetDeviation)}
-          badgePositive={isBudgetPositive}
-        />
-        <MetricCard
-          label="Crecimiento vs Ano Ant."
-          value={fmtChange(growthVsLY)}
-          sub={lastYear > 0 ? `Ano anterior: ${fmtGs(lastYear)}` : "Sin datos ano anterior"}
-          badge={lastYear > 0 ? fmtChange(growthVsLY) : undefined}
-          badgePositive={isGrowthPositive}
-        />
-        <MetricCard
-          label="Margen Bruto"
-          value={fmtPct(grossMarginPct)}
-          sub="Sobre ventas netas"
-          badge={grossMarginPct >= 30 ? "Saludable" : "Bajo"}
-          badgePositive={grossMarginPct >= 30}
-        />
-      </div>
+      {/* Tiendas (+ Zonas cuando canal=total) — full width */}
+      {filters.channel === "total" ? (
+        <div className="exec-anim-4">
+          <StoresTable
+            storeBreakdown={storeBreakdownB2C}
+            storeBreakdownB2B={storeBreakdownB2B}
+            isStoresLoading={isStoresLoading}
+            channelMode="b2c"
+            salesWideRaw={salesWideRaw}
+            dailyDetailRaw={dailyDetailRaw}
+            activeMonths={analyticsActiveMonths}
+            brand={filters.brand}
+          />
+        </div>
+      ) : (
+        <div className="exec-anim-4">
+          <StoresTable
+            storeBreakdown={storeBreakdown}
+            isStoresLoading={isStoresLoading}
+            channelMode={filters.channel}
+            salesWideRaw={salesWideRaw}
+            dailyDetailRaw={dailyDetailRaw}
+            activeMonths={analyticsActiveMonths}
+            brand={filters.brand}
+          />
+        </div>
+      )}
 
-      {/* Analytics Panel */}
-      <SalesAnalyticsPanel
-        brandBreakdown={brandBreakdown}
-        channelMix={channelMix}
-        topSkus={topSkus}
-        dayOfWeek={dayOfWeek}
-        storeBreakdown={storeBreakdown}
-        isLoading={analyticsLoading}
-        isDowLoading={isDowLoading}
-        isStoresLoading={isStoresLoading}
-        showBrandsTab={filters.brand === "total"}
-        channelMode={filters.channel}
-      />
+      {/* Mix + Comportamiento (izq) | Top SKUs (der) */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <div className="flex flex-col gap-3">
+          <div className="exec-anim-4">
+            <ChannelCard
+              channelMix={channelMix}
+              storeBreakdown={storeBreakdown}
+              channelMode={filters.channel}
+              isStoresLoading={isStoresLoading}
+              salesWideRaw={salesWideRaw}
+              activeMonths={analyticsActiveMonths}
+              brand={filters.brand}
+            />
+          </div>
+          <div className="exec-anim-5">
+            <BehaviorCard
+              data={dayOfWeek}
+              isLoading={isDowLoading}
+              onRequestLoad={() => setEnableBehavior(true)}
+            />
+          </div>
+        </div>
+        <div className="exec-anim-6">
+          <SkusCard
+            data={topSkus}
+            isLoading={isSkusLoading}
+            onRequestLoad={() => setEnableSkus(true)}
+          />
+        </div>
+      </div>
     </div>
   );
 }

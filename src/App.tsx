@@ -3,10 +3,10 @@
  *
  * Estructura de rutas:
  *   /signin                — Pública, sin layout
- *   /                      — Ejecutivo (Home)
+ *   /                      — Inicio
  *   /kpis                  — Dashboard KPIs (grid de 9 KPIs)
- *   /kpis/:categoryId      — Categoría de KPI en detalle
- *   /ventas                — Análisis de Ventas
+ *   /kpis/:categoryId      — (stub — sin implementar)
+ *   /ventas                — Ventas
  *   /acciones              — Cola de Acciones (inventario waterfall)
  *   /logistica             — Logística (ETAs, importaciones)
  *   /calendario            — Calendario (FullCalendar + Supabase)

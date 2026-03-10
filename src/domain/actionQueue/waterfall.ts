@@ -20,20 +20,27 @@ import type {
   WaterfallInput,
   InventoryRecord,
 } from "./types";
-import { getStoreCluster, getTimeRestriction, getCoverMonths } from "./clusters";
+import { getStoreCluster, getTimeRestriction, getCoverWeeks } from "./clusters";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const RETAILS_DEPOT = "RETAILS";
 const STOCK_DEPOT   = "STOCK";
 
-const LOW_STOCK_RATIO  = 0.40;
-const HIGH_STOCK_RATIO = 2.50;
-const MIN_STOCK_ABS    = 3;
-const MIN_AVG_FOR_RATIO = 5;
-const MAX_COUNTERPARTS = 3;
-const MAX_ACTIONS      = 100;
-const PARETO_TARGET    = 0.80;
+const LOW_STOCK_RATIO      = 0.40;
+const HIGH_STOCK_RATIO     = 2.50;
+const MIN_STOCK_ABS        = 3;
+const MIN_AVG_FOR_RATIO    = 5;
+const MIN_TRANSFER_UNITS   = 2;   // Minimum units per source — avoids "move 1 unit from X" noise
+const PARETO_TARGET        = 0.80;
+const SURPLUS_LIQUIDATE_RATIO = 0.60;
+
+/**
+ * Minimum impact score for an action to be included.
+ * Actions below this threshold are noise — moving 1-3 units of cheap SKUs.
+ * Gs. 500,000 ≈ $70 USD. Filters out ~60-80% of trivial actions.
+ */
+export const MIN_IMPACT_THRESHOLD = 500_000;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -52,6 +59,9 @@ function salesHistoryKey(store: string, sku: string): string {
 }
 
 let _idCounter = 0;
+function resetIdCounter(): void {
+  _idCounter = 0;
+}
 function nextId(): string {
   return `aq-${Date.now()}-${++_idCounter}`;
 }
@@ -59,13 +69,15 @@ function nextId(): string {
 // ─── Types internos ──────────────────────────────────────────────────────────
 
 interface StoreEntry {
-  qty:         number;
-  descrip:     string;
-  brand:       string;
-  linea:       string;
-  categoria:   string;
-  price:       number;
-  cost:        number;
+  qty:           number;
+  descrip:       string;
+  brand:         string;
+  skuComercial:  string;
+  linea:         string;
+  categoria:     string;
+  price:         number;
+  priceMay:      number;
+  cost:          number;
 }
 
 interface Classified {
@@ -97,8 +109,10 @@ export function computeActionQueue(
   lineaFilter: string | null,
   categoriaFilter: string | null,
   storeFilter: string | null,
+  impactThreshold: number = MIN_IMPACT_THRESHOLD,
 ): ActionItemFull[] {
-  const { inventory, salesHistory, bestDayMap } = input;
+  resetIdCounter();
+  const { inventory, salesHistory } = input;
 
   // -- 1. Separate rows into operational zones
   const b2cRows:    InventoryRecord[] = [];
@@ -110,13 +124,14 @@ export function computeActionQueue(
     const store = r.store.trim().toUpperCase();
     if (!store) continue;
 
+    // Depot stores must always pass — they provide context for N2/N3 regardless of filters
+    if (store === RETAILS_DEPOT) { retailRows.push(r); continue; }
+    if (store === STOCK_DEPOT)   { stockRows.push(r);  continue; }
+
     if (brandFilter && r.brand.toLowerCase() !== brandFilter.toLowerCase()) continue;
     if (lineaFilter && r.linea.toLowerCase() !== lineaFilter.toLowerCase()) continue;
     if (categoriaFilter && r.categoria.toLowerCase() !== categoriaFilter.toLowerCase()) continue;
     if (storeFilter && store !== storeFilter.toUpperCase()) continue;
-
-    if (store === RETAILS_DEPOT) { retailRows.push(r); continue; }
-    if (store === STOCK_DEPOT)   { stockRows.push(r);  continue; }
     if (r.channel === "b2b")     { b2bRows.push(r);    continue; }
     b2cRows.push(r);
   }
@@ -138,6 +153,7 @@ export function computeActionQueue(
     if (!skuMap.has(key)) skuMap.set(key, new Map());
     const sm = skuMap.get(key)!;
     const price = r.price > 0 ? r.price : r.cost * 2;
+    const priceMay = r.priceMay > 0 ? r.priceMay : price;
     const ex = sm.get(store);
     if (ex) {
       ex.qty += r.units;
@@ -146,9 +162,11 @@ export function computeActionQueue(
         qty: r.units,
         descrip: r.description,
         brand: r.brand,
+        skuComercial: r.skuComercial,
         linea: r.linea,
         categoria: r.categoria,
         price,
+        priceMay,
         cost: r.cost,
       });
     }
@@ -173,23 +191,31 @@ export function computeActionQueue(
     const [sku, talle] = key.split("|||");
     const stores = [...storeMap.entries()];
 
-    if (mode === "b2c" && stores.length < 1) continue;
+    if (stores.length < 1) continue;
 
     const firstEntry  = stores[0][1];
-    const brand       = firstEntry.brand;
-    const descrip     = firstEntry.descrip;
-    const linea       = firstEntry.linea;
-    const categoria   = firstEntry.categoria;
+    const brand        = firstEntry.brand;
+    const skuComercial = firstEntry.skuComercial;
+    const descrip      = firstEntry.descrip;
+    const linea        = firstEntry.linea;
+    const categoria    = firstEntry.categoria;
     const price       = Math.max(...stores.map(([, v]) => v.price), 1);
+    const priceMay    = Math.max(...stores.map(([, v]) => v.priceMay), 1);
     const cost        = Math.max(...stores.map(([, v]) => v.cost), 0);
-    const coverMonths = getCoverMonths(brand);
+    // B2B uses wholesale price for impact — retail price inflates B2B priority artificially
+    const effectivePrice = mode === "b2b" ? priceMay : price;
+    const coverWeeks = getCoverWeeks(brand);
+    // Convert weekly coverage to monthly: 12 weeks = ~3 months, 24 weeks = ~6 months
+    const coverMonths = coverWeeks / 4.33;
 
     const totalQty = stores.reduce((s, [, v]) => s + v.qty, 0);
     const avgQty   = stores.length > 0 ? totalQty / stores.length : 0;
     const depotRetails = retailMap.get(key) ?? 0;
     const depotStock   = stockMap.get(key)  ?? 0;
 
-    // -- Per-store targets using 12m historical average
+    // -- Per-store targets using 6m historical average (spec cliente)
+    // Target stock = avg_monthly_sales × coverMonths
+    // MOS (Months of Stock) = current_stock / avg_monthly_sales
     const storeData: Classified[] = [];
 
     for (const [store, vals] of stores) {
@@ -220,8 +246,17 @@ export function computeActionQueue(
       storeData.push({ store, qty, need, excess });
     }
 
-    const deficitStores  = storeData.filter(s => s.need > 0);
-    const surplusStores  = storeData.filter(s => s.excess > 0);
+    // Sort deficit stores by severity: critical (qty=0) first, then by need descending.
+    // This ensures scarce surplus resources go to the most urgent stores first.
+    const deficitStores  = storeData.filter(s => s.need > 0)
+      .sort((a, b) => {
+        if (a.qty === 0 && b.qty !== 0) return -1;
+        if (a.qty !== 0 && b.qty === 0) return 1;
+        return b.need - a.need;
+      });
+    // Sort surplus stores by excess descending — prefer larger donors for fewer transfers.
+    const surplusStores  = storeData.filter(s => s.excess > 0)
+      .sort((a, b) => b.excess - a.excess);
 
     // Helper to create action item
     const makeItem = (
@@ -234,11 +269,15 @@ export function computeActionQueue(
       counterparts: CounterpartStore[],
       recommended: string,
     ): ActionItemFull => {
-      const bestDay = bestDayMap.get(store) ?? "—";
+      const currentStock = storeData.find(s => s.store === store)?.qty ?? 0;
+      const histAvg = salesHistory.get(salesHistoryKey(store, sku)) ?? 0;
+      // MOS = current stock / average monthly sales. 0 if no sales history.
+      const currentMOS = histAvg > 0 ? currentStock / histAvg : 0;
       return {
         id: nextId(),
         rank: 0,
         sku,
+        skuComercial,
         talle,
         description: descrip,
         brand,
@@ -246,100 +285,125 @@ export function computeActionQueue(
         categoria,
         store,
         targetStore: counterparts.length > 0 ? counterparts[0].store : undefined,
-        currentStock: storeData.find(s => s.store === store)?.qty ?? 0,
+        currentStock,
         suggestedUnits: suggested,
-        historicalAvg: salesHistory.get(salesHistoryKey(store, sku)) ?? 0,
-        coverMonths,
+        historicalAvg: histAvg,
+        coverWeeks,
+        currentMOS,
         risk,
         waterfallLevel,
         actionType,
-        impactScore: calcImpactScore(units, price, cost),
+        impactScore: calcImpactScore(units, effectivePrice, cost),
         paretoFlag: false,
         storeCluster: getStoreCluster(store),
         timeRestriction: getTimeRestriction(store),
-        bestDay,
         counterpartStores: counterparts,
         recommendedAction: recommended,
       };
     };
 
-    // -- LEVEL 1: store <-> store transfers (deficit side)
+    // -- Mutable resource tracking: each unit assigned exactly once
+    const surplusPool = new Map<string, number>();
+    for (const s of surplusStores) surplusPool.set(s.store, s.excess);
+    let remainingDepot = depotRetails;
+    let unmetDeficit = 0;
+    // Track deficit-side allocations so surplus side can create mirror "send" actions
+    const surplusAllocations = new Map<string, CounterpartStore[]>();
+
+    // -- LEVEL 1 + 2: Deficit stores seek supply (cascade with resource tracking)
     for (const deficit of deficitStores) {
       const risk: RiskLevel = deficit.qty === 0 ? "critical" : "low";
 
-      const counterparts: CounterpartStore[] = surplusStores
-        .filter(s => s.store !== deficit.store)
-        .map(s => ({ store: s.store, units: Math.min(s.excess, deficit.need) }))
-        .filter(c => c.units > 0)
-        .slice(0, MAX_COUNTERPARTS);
+      // N1: Try lateral transfers from surplus stores (greedy, consuming pool)
+      const counterparts: CounterpartStore[] = [];
+      let toFill = deficit.need;
+
+      for (const s of surplusStores) {
+        if (toFill <= 0) break;
+        if (s.store === deficit.store) continue;
+        const avail = surplusPool.get(s.store) ?? 0;
+        if (avail <= 0) continue;
+        const take = Math.min(avail, toFill);
+        // Skip tiny transfers — not worth the logistics unless it's the last units needed
+        if (take < MIN_TRANSFER_UNITS && toFill > take) continue;
+        counterparts.push({ store: s.store, units: take });
+        toFill -= take;
+        surplusPool.set(s.store, avail - take);
+        // Record for surplus-side mirror actions
+        const existing = surplusAllocations.get(s.store) ?? [];
+        existing.push({ store: deficit.store, units: take });
+        surplusAllocations.set(s.store, existing);
+      }
 
       if (counterparts.length > 0) {
         const transferUnits = counterparts.reduce((s, c) => s + c.units, 0);
         actions.push(makeItem(
           deficit.store, risk, "transfer", "store_to_store",
-          transferUnits, deficit.need, counterparts,
-          `Mover desde ${counterparts[0].store} (${counterparts[0].units} u.) — misma zona`,
+          transferUnits, transferUnits, counterparts,
+          `Mover desde ${counterparts[0].store} (${counterparts[0].units} u.)`,
         ));
+        if (toFill > 0) unmetDeficit += toFill;
         continue;
       }
 
-      // -- LEVEL 2: RETAILS depot -> store
-      if (depotRetails > 0) {
-        const unitsFromDepot = Math.min(depotRetails, deficit.need);
-        if (unitsFromDepot > 0) {
-          actions.push(makeItem(
-            deficit.store, risk, "restock_from_depot", "depot_to_store",
-            unitsFromDepot, deficit.need,
-            [{ store: RETAILS_DEPOT, units: unitsFromDepot }],
-            `Mover desde deposito RETAILS (${unitsFromDepot} u.)`,
-          ));
-        }
+      // N2: RETAILS depot -> store (consuming shared depot pool)
+      if (remainingDepot > 0) {
+        const fromDepot = Math.min(remainingDepot, deficit.need);
+        remainingDepot -= fromDepot;
+        actions.push(makeItem(
+          deficit.store, risk, "restock_from_depot", "depot_to_store",
+          fromDepot, fromDepot,
+          [{ store: RETAILS_DEPOT, units: fromDepot }],
+          `Mover desde deposito RETAILS (${fromDepot} u.)`,
+        ));
+        const unfilled = deficit.need - fromDepot;
+        if (unfilled > 0) unmetDeficit += unfilled;
         continue;
       }
 
-      // -- LEVEL 3: STOCK depot needs to supply RETAILS
-      if (depotStock > 0 || depotRetails === 0) {
-        const totalNeed = deficitStores.reduce((s, d) => s + d.need, 0);
-        const fromStock = depotStock > 0 ? Math.min(depotStock, totalNeed) : totalNeed;
-
-        const alreadyGenerated = actions.some(
-          a => a.sku === sku && a.talle === talle && a.waterfallLevel === "central_to_depot",
-        );
-        if (!alreadyGenerated && fromStock > 0) {
-          actions.push(makeItem(
-            RETAILS_DEPOT, "critical", "resupply_depot", "central_to_depot",
-            fromStock, totalNeed,
-            [{ store: STOCK_DEPOT, units: fromStock }],
-            `Trasladar desde STOCK → RETAILS (${fromStock} u.) para cubrir ${deficitStores.length} tiendas`,
-          ));
-        }
-      }
+      // Neither N1 nor N2 could help — accumulate for N3
+      unmetDeficit += deficit.need;
     }
 
-    // -- LEVEL 1 (OUT): surplus stores sending out
+    // -- LEVEL 3: STOCK central → RETAILS (one action per SKU, only unmet deficit)
+    if (unmetDeficit > 0 && depotStock > 0) {
+      const fromStock = Math.min(depotStock, unmetDeficit);
+      const item = makeItem(
+        RETAILS_DEPOT, "critical", "resupply_depot", "central_to_depot",
+        fromStock, fromStock,
+        [{ store: STOCK_DEPOT, units: fromStock }],
+        `Trasladar desde STOCK → RETAILS (${fromStock} u.) para cubrir ${deficitStores.length} tiendas`,
+      );
+      // Override currentStock: RETAILS isn't in storeData, use actual depot inventory
+      item.currentStock = depotRetails;
+      actions.push(item);
+    }
+
+    // -- SURPLUS: redistribution + liquidation (using tracked allocations)
     for (const surplus of surplusStores) {
-      const receivers: CounterpartStore[] = deficitStores
-        .filter(d => d.store !== surplus.store)
-        .map(d => ({ store: d.store, units: Math.min(Math.round(surplus.excess * 0.4), d.need) }))
-        .filter(r => r.units > 0)
-        .slice(0, MAX_COUNTERPARTS);
+      const sentTo = surplusAllocations.get(surplus.store) ?? [];
+      const remaining = surplusPool.get(surplus.store) ?? 0;
 
-      if (receivers.length === 0) {
-        const excess = Math.min(surplus.excess, Math.round(surplus.excess * 0.6));
-        if (excess < 3) continue;
-
+      // Mirror action: what this surplus store sent to deficit stores in N1
+      if (sentTo.length > 0) {
+        const totalSent = sentTo.reduce((s, c) => s + c.units, 0);
         actions.push(makeItem(
           surplus.store, "overstock", "transfer", "store_to_store",
-          excess, excess, [],
-          "Liquidar excedente. Considerar markdown progresivo.",
+          totalSent, totalSent, sentTo,
+          `Mover a ${sentTo[0].store} (${sentTo[0].units} u.)`,
         ));
-      } else {
-        const units = receivers.reduce((s, r) => s + r.units, 0);
-        actions.push(makeItem(
-          surplus.store, "overstock", "transfer", "store_to_store",
-          units, surplus.excess, receivers,
-          `Mover a ${receivers[0].store} (${receivers[0].units} u.)`,
-        ));
+      }
+
+      // Liquidation for remaining unsent excess
+      if (remaining >= 3) {
+        const liquidate = Math.min(remaining, Math.round(remaining * SURPLUS_LIQUIDATE_RATIO));
+        if (liquidate >= 3) {
+          actions.push(makeItem(
+            surplus.store, "overstock", "transfer", "store_to_store",
+            liquidate, liquidate, [],
+            "Liquidar excedente. Considerar markdown progresivo.",
+          ));
+        }
       }
     }
 
@@ -358,7 +422,13 @@ export function computeActionQueue(
     }
   }
 
-  // -- 4. Deterministic sort
+  // -- 4. Filter out noise: actions below minimum impact threshold.
+  //    Critical risk actions are always kept regardless of impact (safety net).
+  const filtered = actions.filter(
+    a => a.risk === "critical" || a.impactScore >= impactThreshold,
+  );
+
+  // -- 5. Deterministic sort
   const RISK_PRIORITY: Record<RiskLevel, number> = {
     critical:  0,
     low:       1,
@@ -366,7 +436,7 @@ export function computeActionQueue(
     balanced:  3,
   };
 
-  actions.sort((a, b) => {
+  filtered.sort((a, b) => {
     const rp = RISK_PRIORITY[a.risk] - RISK_PRIORITY[b.risk];
     if (rp !== 0) return rp;
     const ud = b.suggestedUnits - a.suggestedUnits;
@@ -378,16 +448,26 @@ export function computeActionQueue(
     return a.store < b.store ? -1 : 1;
   });
 
-  // -- 5. Pareto flagging: top items that sum to 80% of total impact
-  const totalImpact = actions.reduce((s, a) => s + a.impactScore, 0);
-  let cumulative = 0;
-  for (const action of actions) {
-    cumulative += action.impactScore;
-    action.paretoFlag = totalImpact > 0 && cumulative / totalImpact <= PARETO_TARGET;
+  // -- 6. Pareto flagging: top items BY IMPACT that sum to 80% of total impact.
+  //    The Pareto 20/80 principle: flag the HIGHEST-IMPACT items whose cumulative
+  //    impact accounts for 80% of the total. This is independent of risk sort order.
+  const totalImpact = filtered.reduce((s, a) => s + a.impactScore, 0);
+  if (totalImpact > 0) {
+    // Sort a COPY by impact descending to identify the top items
+    const byImpact = [...filtered].sort((a, b) => b.impactScore - a.impactScore);
+    const paretoIds = new Set<string>();
+    let cumulative = 0;
+    for (const action of byImpact) {
+      if (cumulative / totalImpact >= PARETO_TARGET) break;
+      cumulative += action.impactScore;
+      paretoIds.add(action.id);
+    }
+    // Map flags back to the risk-sorted original
+    for (const action of filtered) {
+      action.paretoFlag = paretoIds.has(action.id);
+    }
   }
 
-  // -- 6. Assign ranks and limit
-  return actions
-    .slice(0, MAX_ACTIONS)
-    .map((a, i) => ({ ...a, rank: i + 1 }));
+  // -- 7. Assign ranks (no artificial limit — show all actionable items)
+  return filtered.map((a, i) => ({ ...a, rank: i + 1 }));
 }

@@ -2,22 +2,14 @@
  * layout/AppSidebar.tsx
  *
  * Sidebar de navegación principal.
- * Las rutas de categorías KPI apuntan a /kpis/:categoryId (no /kpi/:id).
  */
 import { useCallback } from "react";
 import { Link, useLocation } from "react-router";
 import {
-  GridIcon,
   BoltIcon,
   DollarLineIcon,
-  BoxCubeIcon,
-  GroupIcon,
-  PieChartIcon,
-  ShootingStarIcon,
-  TaskIcon,
   HorizontaLDots,
   ListIcon,
-  BoxIconLine,
   CalenderIcon,
   AngleLeftIcon,
   AngleRightIcon,
@@ -27,26 +19,14 @@ import { useSidebar } from "@/context/SidebarContext";
 
 // Secciones principales del sidebar
 const MAIN_NAV = [
-  { path: "/",          label: "Home Ejecutivo",     icon: <BoltIcon /> },
-  { path: "/ventas",    label: "Análisis de Ventas",  icon: <DollarLineIcon /> },
-  { path: "/acciones",  label: "Cola de Acciones",    icon: <ListIcon /> },
+  { path: "/",          label: "Inicio",             icon: <BoltIcon /> },
+  { path: "/ventas",    label: "Ventas",               icon: <DollarLineIcon /> },
+  { path: "/acciones",  label: "Centro de Acciones",    icon: <ListIcon /> },
   { path: "/logistica", label: "Logística / ETAs",    icon: <BoxIcon /> },
 ];
 
 const ANALYSIS_NAV = [
-  { path: "/kpis",       label: "Dashboard KPIs", icon: <GridIcon /> },
   { path: "/calendario", label: "Calendario",     icon: <CalenderIcon /> },
-];
-
-// Categorías de KPIs para sub-navegación
-const KPI_CATEGORIES = [
-  { id: "sales",       label: "Ventas",        icon: <DollarLineIcon /> },
-  { id: "profit",      label: "Rentabilidad",  icon: <PieChartIcon /> },
-  { id: "inventory",   label: "Inventario",    icon: <BoxCubeIcon /> },
-  { id: "store",       label: "Tiendas",       icon: <GroupIcon /> },
-  { id: "customer",    label: "Clientes",      icon: <ShootingStarIcon /> },
-  { id: "product",     label: "Producto",      icon: <BoxIconLine /> },
-  { id: "commercial",  label: "Comercial",     icon: <TaskIcon /> },
 ];
 
 const AppSidebar: React.FC = () => {
@@ -55,11 +35,6 @@ const AppSidebar: React.FC = () => {
 
   const isActive = useCallback(
     (path: string) => location.pathname === path,
-    [location.pathname]
-  );
-
-  const isKpiCategoryActive = useCallback(
-    (categoryId: string) => location.pathname === `/kpis/${categoryId}`,
     [location.pathname]
   );
 
@@ -77,8 +52,17 @@ const AppSidebar: React.FC = () => {
       {/* Logo + colapsar */}
       <div className={`py-8 flex items-center ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-between"}`}>
         <Link to="/">
-          <img src="/negro.avif" alt="FenixBrands" className="h-8 w-auto object-contain dark:hidden" />
-          <img src="/blanco.png" alt="FenixBrands" className="h-8 w-auto object-contain hidden dark:block" />
+          {showLabel ? (
+            <>
+              <img src="/negro.avif" alt="FenixBrands" className="h-8 w-auto object-contain dark:hidden" />
+              <img src="/blanco.png" alt="FenixBrands" className="h-8 w-auto object-contain hidden dark:block" />
+            </>
+          ) : (
+            <>
+              <img src="/images/logo/logo-icon.svg" alt="FenixBrands" className="h-8 w-8 object-contain dark:hidden" />
+              <img src="/images/logo/logo-icon-dark.svg" alt="FenixBrands" className="h-8 w-8 object-contain hidden dark:block" />
+            </>
+          )}
         </Link>
         {showLabel && (
           <button
@@ -133,30 +117,6 @@ const AppSidebar: React.FC = () => {
                 ))}
               </ul>
             </div>
-
-            {/* ── Categorías KPIs (solo cuando expandido) ─── */}
-            {showLabel && (
-              <div>
-                <h2 className="mb-4 text-xs uppercase flex leading-[20px] text-gray-400 justify-start">
-                  Categorías KPIs
-                </h2>
-                <ul className="flex flex-col gap-1">
-                  {KPI_CATEGORIES.map(({ id, label, icon }) => (
-                    <li key={id}>
-                      <Link
-                        to={`/kpis/${id}`}
-                        className={`menu-item group ${isKpiCategoryActive(id) ? "menu-item-active" : "menu-item-inactive"}`}
-                      >
-                        <span className={`menu-item-icon-size ${isKpiCategoryActive(id) ? "menu-item-icon-active" : "menu-item-icon-inactive"}`}>
-                          {icon}
-                        </span>
-                        <span className="menu-item-text flex-1">{label}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
 
           </div>
         </nav>

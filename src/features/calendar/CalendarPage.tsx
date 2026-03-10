@@ -21,6 +21,7 @@ import type {
 import { Modal } from "@/components/ui/modal";
 import { useModal } from "@/hooks/useModal";
 import { useCalendar, type CalendarEvent, type DbCategory } from "./hooks/useCalendar";
+import { useSidebar } from "@/context/SidebarContext";
 
 // ── Year View helpers ────────────────────────────────────────────────────────
 
@@ -110,7 +111,7 @@ function MiniMonth({ year, month, events, categories, today, onDayClick }: MiniM
                     const color = categories[ev.extendedProps?.calendar]?.color ?? "#465fff";
                     return (
                       <span
-                        key={j}
+                        key={ev.id ?? j}
                         className="block h-1 w-1 rounded-full"
                         style={{ backgroundColor: color }}
                       />
@@ -133,7 +134,7 @@ function MiniMonth({ year, month, events, categories, today, onDayClick }: MiniM
 
 export default function CalendarPage() {
   const {
-    events, categories, saving,
+    events, categories, saving, error, clearError,
     addEvent, updateEvent, deleteEvent, moveEvent,
     updateCategoryColor, addCategory,
   } = useCalendar();
@@ -161,6 +162,15 @@ export default function CalendarPage() {
 
   const calendarRef = useRef<FullCalendar>(null);
   const { isOpen, openModal, closeModal } = useModal();
+  const { isExpanded, isHovered } = useSidebar();
+
+  // ── Recalculate FC size after sidebar expand/collapse transition ────────
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      calendarRef.current?.getApi().updateSize();
+    }, 320); // sidebar transition is 300ms
+    return () => clearTimeout(timer);
+  }, [isExpanded, isHovered]);
 
   // ── Day view date picker ─────────────────────────────────────────────────
 
@@ -315,7 +325,20 @@ export default function CalendarPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+    <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+
+      {/* Error banner */}
+      {error && (
+        <div className="flex items-center justify-between border-b border-error-200 bg-error-50 px-6 py-3 dark:border-error-500/20 dark:bg-error-500/10">
+          <p className="text-sm text-error-700 dark:text-error-400">{error}</p>
+          <button
+            onClick={clearError}
+            className="text-xs font-medium text-error-600 hover:text-error-800 dark:text-error-400 dark:hover:text-error-300"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
 
       {/* ── Year view ──────────────────────────────────────────────────────── */}
       {yearViewActive && (

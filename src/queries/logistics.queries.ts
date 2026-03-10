@@ -2,17 +2,18 @@
  * queries/logistics.queries.ts
  *
  * Queries para el módulo de logística.
- * Fuente: Import (tabla de órdenes de importación)
+ * Fuente: Import (tabla de órdenes de importación, ~500 filas)
  *
  * NOTAS sobre la tabla:
- *   - COSTOESTIMADO: "$68,450.00" → USD, coma como decimal
- *   - PVPSUGERIDOB2C/B2B: string con coma decimal
- *   - FECHAAPROXIMADADEARRIBO: string "DD/MM/YYYY"
+ *   - COSTOESTIMADO: "$68,450.00" → USD, coma como separador de miles
+ *   - PVPSUGERIDOB2C/B2B: string con coma como decimal
+ *   - FECHAAPROXIMADADEARRIBO: string "MM/DD/YYYY" (formato USA, NO DD/MM/YYYY)
  *   - MARGENB2C/B2B: "64%" → number
  *   - Calidad de datos limitada (Derlys limpiará gradualmente)
  */
 import { dataClient } from "@/api/client";
-import { trimStr, toInt, parseUSDString, parsePct } from "@/api/normalize";
+import { trimStr, toInt, parseUSDString, parsePct, normalizeBrand } from "@/api/normalize";
+import { fetchAllRows } from "@/queries/paginate";
 
 /**
  * Parsea fecha MM/DD/YYYY (formato EE.UU. que usa la tabla Import).
@@ -52,23 +53,23 @@ export interface LogisticsImport {
 }
 
 export async function fetchLogisticsImports(): Promise<LogisticsImport[]> {
-  const { data, error } = await dataClient
-    .from("Import")
-    .select(
-      '"MARCA", "TEMPORADA", "PROVEEDOR", "CATEGORIA", "DESCRIPCIÓN", ' +
-      '"COLOR/WASH", "CANTIDAD", "ORIGEN", "COSTOESTIMADO", ' +
-      '"PVPSUGERIDOB2C", "PVPSUGERIDOB2B", "MARGENB2C", "MARGENB2B", ' +
-      '"FECHAAPROXIMADADEARRIBO"'
-    )
-    .order('"FECHAAPROXIMADADEARRIBO"');
+  const data = await fetchAllRows(() =>
+    dataClient
+      .from("Import")
+      .select(
+        '"MARCA", "TEMPORADA", "PROVEEDOR", "CATEGORIA", "DESCRIPCIÓN", ' +
+        '"COLOR/WASH", "CANTIDAD", "ORIGEN", "COSTOESTIMADO", ' +
+        '"PVPSUGERIDOB2C", "PVPSUGERIDOB2B", "MARGENB2C", "MARGENB2B", ' +
+        '"FECHAAPROXIMADADEARRIBO"'
+      )
+      .order('"FECHAAPROXIMADADEARRIBO"')
+  ) as Row[];
 
-  if (error) throw new Error(`fetchLogisticsImports: ${error.message}`);
-
-  return ((data ?? []) as Row[]).map((r) => {
+  return data.map((r) => {
     const etaStr = trimStr(r["FECHAAPROXIMADADEARRIBO"]);
     const eta    = parseMMDDYYYY(etaStr);
     return {
-      brand:       trimStr(r["MARCA"]),
+      brand:       normalizeBrand(r["MARCA"]),
       season:      trimStr(r["TEMPORADA"]),
       supplier:    trimStr(r["PROVEEDOR"]),
       category:    trimStr(r["CATEGORIA"]),

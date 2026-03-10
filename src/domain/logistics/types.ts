@@ -6,13 +6,15 @@
  */
 import type { LogisticsImport } from "@/queries/logistics.queries";
 
-export type ArrivalStatus = "past" | "this_month" | "next_month" | "upcoming";
+export type ArrivalStatus = "overdue" | "past" | "this_month" | "next_month" | "upcoming";
 
 export interface LogisticsArrival extends LogisticsImport {
   status:    ArrivalStatus;
   daysUntil: number;
   dateLabel: string;
   brandNorm: string;
+  /** Fecha ISO normalizada para grouping key (evita inconsistencias de formato BD) */
+  etaKey:    string;
 }
 
 export interface LogisticsGroup {
@@ -33,6 +35,8 @@ export interface LogisticsSummary {
   activeOrders: number;
   totalUnits:   number;
   nextDate:     string;
+  /** Embarques con ETA vencida (dentro del mes actual pero ya pasaron) */
+  overdueCount: number;
   byBrand:      Record<string, number>;
   byOrigin:     Record<string, number>;
 }

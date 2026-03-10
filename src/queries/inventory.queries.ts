@@ -22,7 +22,8 @@ type Row = Record<string, any>;
 export interface InventoryItem {
   store:       string;
   storeType:   "b2c" | "b2b" | "excluded";
-  sku:         string;
+  sku:         string;      // SKU técnico ERP (ej: "7031457")
+  skuComercial: string;     // SKU Comercial de Dim_maestro_comercial (ej: "MACA004428")
   talle:       string;
   description: string;
   brand:       string;
@@ -50,15 +51,36 @@ export interface InventoryValueSummary {
  * Ya viene pre-agregado por (store, sku, talle).
  */
 export async function fetchInventory(): Promise<InventoryItem[]> {
-  const data = await fetchAllRows(() =>
-    dataClient
-      .from("mv_stock_tienda")
-      .select(
-        "store, sku, talle, description, rubro, brand, lineapr, tipo_articulo, " +
-        "units, price, price_may, cost, value, est_comercial, carry_over"
-      )
-      .gt("units", 0)
-  );
+  // Try with sku_comercial first; fall back without it if column doesn't exist yet
+  // (pending sql/002_sku_comercial.sql migration)
+  let data: Row[];
+  try {
+    data = await fetchAllRows(() =>
+      dataClient
+        .from("mv_stock_tienda")
+        .select(
+          "store, sku, talle, description, rubro, brand, lineapr, tipo_articulo, " +
+          "sku_comercial, units, price, price_may, cost, value, est_comercial, carry_over"
+        )
+        .gt("units", 0)
+    ) as Row[];
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("sku_comercial")) {
+      console.warn("[fetchInventory] sku_comercial column not found — run sql/002_sku_comercial.sql");
+      data = await fetchAllRows(() =>
+        dataClient
+          .from("mv_stock_tienda")
+          .select(
+            "store, sku, talle, description, rubro, brand, lineapr, tipo_articulo, " +
+            "units, price, price_may, cost, value, est_comercial, carry_over"
+          )
+          .gt("units", 0)
+      ) as Row[];
+    } else {
+      throw e;
+    }
+  }
 
   const results: InventoryItem[] = [];
   for (const r of data as Row[]) {
@@ -67,6 +89,7 @@ export async function fetchInventory(): Promise<InventoryItem[]> {
       store,
       storeType:    classifyStore(store),
       sku:          trimStr(r.sku),
+      skuComercial: trimStr(r.sku_comercial),
       talle:        trimStr(r.talle),
       description:  trimStr(r.description) || "Sin descripcion",
       brand:        normalizeBrand(r.brand),
@@ -125,6 +148,7 @@ export async function fetchInventoryValue(): Promise<InventoryValueSummary> {
 export function toInventoryRecord(item: InventoryItem): InventoryRecord {
   return {
     sku:          item.sku,
+    skuComercial: item.skuComercial,
     talle:        item.talle,
     description:  item.description,
     brand:        item.brand,
@@ -133,6 +157,7 @@ export function toInventoryRecord(item: InventoryItem): InventoryRecord {
     channel:      item.storeType === "b2b" ? "b2b" : "b2c",
     units:        item.units,
     price:        item.price,
+    priceMay:     item.priceMay,
     cost:         item.cost,
     linea:        item.linea,
     categoria:    item.categoria,

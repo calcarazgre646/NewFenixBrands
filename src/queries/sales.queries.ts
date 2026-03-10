@@ -77,7 +77,8 @@ export interface ChannelMixRow {
 }
 
 export interface TopSkuRow {
-  sku:         string;
+  sku:         string;      // SKU técnico ERP (ej: "7031457")
+  skuComercial: string;     // SKU Comercial de Dim_maestro_comercial (ej: "MACA004428")
   description: string;
   brand:       string;
   neto:        number;
@@ -444,9 +445,9 @@ export interface PriorYearMTDRow {
 
 const MTD_PAGE_SIZE = 1000;
 
-export async function fetchPriorYearMTDWide(): Promise<PriorYearMTDRow[]> {
+export async function fetchPriorYearMTDWide(cutoffDay?: number): Promise<PriorYearMTDRow[]> {
   const calMonth = getCalendarMonth();
-  const calDay   = getCalendarDay();
+  const dayLimit = cutoffDay ?? getCalendarDay();
   const prevYear = getCalendarYear() - 1;
 
   // Acumulador: Map<"brand|channel|store", totales>
@@ -462,7 +463,7 @@ export async function fetchPriorYearMTDWide(): Promise<PriorYearMTDRow[]> {
       .select("v_vtasimpu, v_valor, v_impbruto, v_impdscto, v_marca, v_canal_venta, v_sucursal_final")
       .eq("v_año", prevYear)
       .eq("v_mes", calMonth)
-      .lte("v_dia", calDay)
+      .lte("v_dia", dayLimit)
       .in("v_canal_venta", ["B2C", "B2B"])
       .order("v_marca")
       .order("v_sucursal_final")
@@ -504,9 +505,79 @@ export async function fetchPriorYearMTDWide(): Promise<PriorYearMTDRow[]> {
   return Array.from(acc.values());
 }
 
+// ─── Daily Wide (mv_ventas_diarias) ──────────────────────────────────────────
+
+/**
+ * Ventas diarias WIDE — pre-agregadas por (año, mes, día, marca, canal).
+ * Fuente: mv_ventas_diarias (~2.000 filas/año → 2-3 páginas → <1s).
+ * Uso: YoY día-a-día preciso en Executive y Sales dashboards.
+ */
+export interface DailySalesRow {
+  year:    number;
+  month:   number;
+  day:     number;
+  brand:   string;
+  channel: "B2C" | "B2B" | null;
+  neto:    number;
+  costo:   number;
+  bruto:   number;
+  dcto:    number;
+  units:   number;
+}
+
+export async function fetchDailySalesWide(year: number): Promise<DailySalesRow[]> {
+  const buildQuery = () =>
+    dataClient
+      .from("mv_ventas_diarias")
+      .select("year, month, day, brand, channel, neto, costo, bruto, dcto, units")
+      .eq("year", year)
+      .order("month").order("day").order("brand").order("channel");
+
+  const data = await fetchAllRows(buildQuery);
+
+  return data.map((r: Row) => ({
+    year:    toInt(r.year),
+    month:   toInt(r.month),
+    day:     toInt(r.day),
+    brand:   normalizeBrand(r.brand),
+    channel: normalizeChannel(r.channel),
+    neto:    toNum(r.neto),
+    costo:   toNum(r.costo),
+    bruto:   toNum(r.bruto),
+    dcto:    toNum(r.dcto),
+    units:   toInt(r.units),
+  }));
+}
+
+/**
+ * Mapa de SKU técnico → SKU Comercial desde Dim_maestro_comercial.
+ * Cada SKU técnico mapea a exactamente un codigo_unico_final (independiente de talla).
+ * Se usa para enriquecer fetchTopSkus (que viene de fjdhstvta1, sin JOIN a la dimensión).
+ */
+async function fetchSkuComercialMap(): Promise<Map<string, string>> {
+  const buildQuery = () =>
+    dataClient
+      .from("Dim_maestro_comercial")
+      .select("\"SKU-I\", codigo_unico_final")
+      .not("codigo_unico_final", "is", null);
+
+  const data = await fetchAllRows(buildQuery);
+
+  const map = new Map<string, string>();
+  for (const r of data as Row[]) {
+    const skuI = String(r["SKU-I"] ?? "").trim();
+    const comercial = trimStr(r.codigo_unico_final);
+    if (skuI && comercial && !map.has(skuI)) {
+      map.set(skuI, comercial);
+    }
+  }
+  return map;
+}
+
 /**
  * Top SKUs por neto.
  * Fuente: fjdhstvta1 (granularidad de SKU necesaria).
+ * Enriquecido con SKU Comercial de Dim_maestro_comercial.
  * Paginación obligatoria: max_rows=1000 truncaba resultados.
  */
 export async function fetchTopSkus(
@@ -534,7 +605,11 @@ export async function fetchTopSkus(
     return q;
   };
 
-  const data = await fetchAllRows(buildQuery);
+  // Fetch sales data and SKU mapping in parallel
+  const [data, skuMap] = await Promise.all([
+    fetchAllRows(buildQuery),
+    fetchSkuComercialMap(),
+  ]);
 
   // Agregar por SKU en JS (más flexible que GROUP BY en Supabase REST)
   const agg = new Map<string, TopSkuRow>();
@@ -542,6 +617,7 @@ export async function fetchTopSkus(
     const sku = trimStr(r.v_sku);
     const acc = agg.get(sku) ?? {
       sku,
+      skuComercial: skuMap.get(sku) ?? "",
       description: trimStr(r.v_descrip) || sku,
       brand: normalizeBrand(r.v_marca),
       neto: 0,
