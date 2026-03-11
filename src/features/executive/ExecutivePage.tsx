@@ -244,25 +244,21 @@ export default function ExecutivePage() {
   }
 
   const {
-    periodTarget,
     annualTarget,
     ytd,
     forecastYearEnd,
-    gapToTarget,
     yoyPct,
     yoyDelta,
     gmroi,
     inventoryTurnover,
   } = metrics;
 
-  const isAheadOfPeriod = gapToTarget <= 0;
   const forecastBeatsAnnual = forecastYearEnd >= annualTarget;
   const isMonthView = !isYtdView;
   const isClosedMonth = isMonthView && forecastYearEnd === ytd;
   const metaLabel = isMonthView ? "Meta del Mes" : "Meta Anual";
   const viewMonth = isClosedMonth ? calendarMonth - 1 : calendarMonth;
   const viewMonthName = MONTH_FULL[viewMonth] ?? "";
-  const vsMetaLabel = isMonthView ? `vs. Meta de ${viewMonthName}` : "vs. Meta Actual YTD";
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -300,53 +296,31 @@ export default function ExecutivePage() {
           </Card>
         </div>
 
-        {/* Brecha vs Período + vs Año Anterior (2 mini-cards stacked) */}
-        <div className="exec-anim-2 flex flex-col gap-2">
-          <Card padding="sm" className="relative flex-1 px-4 py-3">
-            <span className={`absolute right-4 top-1/2 -translate-y-1/2 inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${
-              isAheadOfPeriod
-                ? "bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-400"
-                : "bg-error-50 text-error-600 dark:bg-error-500/10 dark:text-error-400"
-            }`}>
-              {periodTarget > 0
-                ? `${isAheadOfPeriod ? "+" : ""}${(((ytd - periodTarget) / periodTarget) * 100).toFixed(1)}%`
-                : "—"}
-            </span>
-            <p className="text-xs text-gray-400 dark:text-gray-500">
-              {vsMetaLabel}
-            </p>
-            <p className={`mt-1 text-lg font-bold tabular-nums ${
-              isAheadOfPeriod
-                ? "text-success-600 dark:text-success-400"
-                : "text-error-600 dark:text-error-400"
-            }`}>
-              {isAheadOfPeriod ? "+" : "−"}{formatPYGSuffix(Math.abs(gapToTarget))}
-            </p>
-            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-              {periodDateRange}
-            </p>
-          </Card>
-          <Card padding="sm" className="relative flex-1 px-4 py-3">
-            <span className={`absolute right-4 top-1/2 -translate-y-1/2 inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${
+        {/* vs Año Anterior */}
+        <div className="exec-anim-2">
+          <Card padding="lg" className="relative flex h-full flex-col">
+            <span className={`absolute right-4 top-5 inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${
               yoyPct >= 0
                 ? "bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-400"
                 : "bg-error-50 text-error-600 dark:bg-error-500/10 dark:text-error-400"
             }`}>
               {formatChange(yoyPct)}
             </span>
-            <p className="text-xs text-gray-400 dark:text-gray-500">
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
               {isMonthView ? `vs. ${viewMonthName} ${new Date().getFullYear() - 1}` : `vs Mismo Período ${new Date().getFullYear() - 1}`}
             </p>
-            <p className={`mt-1 text-lg font-bold tabular-nums ${
-              yoyDelta >= 0
-                ? "text-success-600 dark:text-success-400"
-                : "text-error-600 dark:text-error-400"
-            }`}>
-              {yoyDelta >= 0 ? "+" : "−"}{formatPYGSuffix(Math.abs(yoyDelta))}
-            </p>
-            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-              {periodDateRange}
-            </p>
+            <div className="mt-auto">
+              <p className={`mt-1 text-xl font-bold tabular-nums ${
+                yoyDelta >= 0
+                  ? "text-success-600 dark:text-success-400"
+                  : "text-error-600 dark:text-error-400"
+              }`}>
+                {yoyDelta >= 0 ? "+" : "−"}{formatPYGSuffix(Math.abs(yoyDelta))}
+              </p>
+              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                {periodDateRange}
+              </p>
+            </div>
           </Card>
         </div>
 

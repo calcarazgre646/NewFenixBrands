@@ -17,7 +17,7 @@ import { useSalesDashboard } from "./hooks/useSalesDashboard";
 import { useSalesAnalytics } from "./hooks/useSalesAnalytics";
 import { BrandsCard, ChannelCard, StoresTable, BehaviorCard, SkusCard } from "./components/SalesAnalyticsPanel";
 import { useFilters } from "@/context/FilterContext";
-import { formatPYGSuffix, formatPYGShort, formatPct, formatChange } from "@/utils/format";
+import { formatPYG, formatPYGSuffix, formatPct, formatChange } from "@/utils/format";
 import { classifyMarginHealth } from "@/domain/kpis/calculations";
 import { Card } from "@/components/ui/card/Card";
 import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
@@ -132,7 +132,7 @@ export default function SalesPage() {
               </p>
               {budget > 0 && (
                 <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                  Presupuesto: {formatPYGShort(budget)}
+                  Presupuesto: {formatPYG(budget)}
                 </p>
               )}
             </div>

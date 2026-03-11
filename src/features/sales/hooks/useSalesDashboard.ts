@@ -230,9 +230,29 @@ export function useSalesDashboard(): SalesDashboardData {
       }
     }
 
-    const budget = aggregateBudget(
-      budgetQ.data ?? [], activeMonths, filters.brand, filters.channel, correctedProrata,
+    // Budget de los meses activos (sin prorrateo)
+    const periodBudget = aggregateBudget(
+      budgetQ.data ?? [], activeMonths, filters.brand, filters.channel, null,
     );
+
+    // En YTD: mostrar meta anual completa, consistente con Executive/Inicio.
+    // Sin filtros (total/total): meta fija 70MM Gs (definida por el cliente).
+    // Con filtros: sumar budget de BD para los 12 meses.
+    const isYtd = filters.period === "ytd";
+    const isUnfiltered = filters.brand === "total" && filters.channel === "total";
+    const fullYearBudget = isYtd
+      ? isUnfiltered
+        ? 70_000_000_000
+        : aggregateBudget(
+            budgetQ.data ?? [],
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+            filters.brand,
+            filters.channel,
+            null,
+          )
+      : periodBudget;
+
+    const budget = isYtd ? fullYearBudget : periodBudget;
 
     const grossMarginPct = calcGrossMargin(real, cogs);
     const markdownPct = calcMarkdownDependency(dcto, bruto);

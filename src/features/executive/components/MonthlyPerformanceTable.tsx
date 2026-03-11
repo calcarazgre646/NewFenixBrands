@@ -79,8 +79,8 @@ export function MonthlyPerformanceTable({ rows, highlightMonth, lastDataDay, cal
   const totals = useMemo(() => {
     const withData = rows.filter((r) => r.hasRealData);
     const totalReal      = withData.reduce((s, r) => s + r.real, 0);
-    const totalBudget    = rows.reduce((s, r) => s + r.budget, 0);
-    const totalLastYear  = rows.reduce((s, r) => s + r.lastYear, 0);
+    const totalBudget    = withData.reduce((s, r) => s + r.budget, 0);
+    const totalLastYear  = withData.reduce((s, r) => s + r.lastYear, 0);
     const totalCost      = withData.reduce((s, r) => s + (r.real - r.real * r.marginPct / 100), 0);
     const totalMarginPct = totalReal > 0 ? ((totalReal - totalCost) / totalReal) * 100 : 0;
     // Budget margin: weighted average
@@ -94,8 +94,8 @@ export function MonthlyPerformanceTable({ rows, highlightMonth, lastDataDay, cal
     const totalPYMarginPct = totalPYLY > 0 ? (totalPYGm / totalPYLY) * 100 : 0;
     // Units
     const totalUnits       = withData.reduce((s, r) => s + r.units, 0);
-    const totalUnitsBudget = rows.reduce((s, r) => s + r.unitsBudget, 0);
-    const totalUnitsPY     = rows.reduce((s, r) => s + r.unitsPY, 0);
+    const totalUnitsBudget = withData.reduce((s, r) => s + r.unitsBudget, 0);
+    const totalUnitsPY     = withData.reduce((s, r) => s + r.unitsPY, 0);
 
     return {
       totalReal, totalBudget, totalLastYear,
