@@ -7,7 +7,7 @@
  *
  * REGLA: Cuando Rodrigo actualice clusters o tiendas, solo se cambia este archivo.
  *
- * NOTA: 8 tiendas (PASEOLAMB, TOLAMB, SHOPSANLO, LARURAL, MVMORRA, SHOPFUENTE,
+ * NOTA: 7 tiendas (PASEOLAMB, TOLAMB, LARURAL, MVMORRA, SHOPFUENTE,
  *       FERIA, LUQ-OUTLET) no aparecían en la tabla original de clusterización.
  *       Clusters asignados por el equipo dev — confirmado por Rodrigo (10/03/2026).
  */
@@ -33,7 +33,6 @@ export const STORE_CLUSTERS: Record<string, StoreCluster> = {
   // Asignados por el equipo dev — confirmado por Rodrigo (10/03/2026)
   PASEOLAMB:     "B",
   TOLAMB:        "B",
-  SHOPSANLO:     "B",
   LARURAL:       "B",
   MVMORRA:       "B",
   SHOPFUENTE:    "B",

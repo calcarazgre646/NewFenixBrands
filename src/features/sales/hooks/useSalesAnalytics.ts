@@ -262,15 +262,26 @@ interface UseSalesAnalyticsOptions {
   enableSkus?: boolean;
   /** Habilitar query pesada de Comportamiento (lazy). */
   enableBehavior?: boolean;
+  /** Override de tienda para filtrar Top SKUs (selección desde StoresTable). */
+  selectedStoreOverride?: string | null;
 }
 
 export function useSalesAnalytics({
   activeMonths,
   enableSkus = false,
   enableBehavior = false,
+  selectedStoreOverride,
 }: UseSalesAnalyticsOptions): SalesAnalyticsData {
   const { filters } = useFilters();
   const enabled = activeMonths.length > 0;
+
+  // Filtros con override de tienda (para SKUs, channelMix, comportamiento)
+  const storeFilters = useMemo(
+    () => selectedStoreOverride
+      ? { ...filters, store: selectedStoreOverride }
+      : filters,
+    [filters, selectedStoreOverride],
+  );
 
   // ── Datos cacheados WIDE (compartidos con useSalesDashboard, 0 cost) ────
   const [salesCYQ, salesPYQ] = useQueries({
@@ -292,8 +303,8 @@ export function useSalesAnalytics({
 
   // ── Queries LAZY (solo se disparan cuando su card está visible) ─────────
   const skusQ = useQuery({
-    queryKey: [...salesKeys.topSkus(filters), activeMonths] as const,
-    queryFn: () => fetchTopSkus(filters, activeMonths),
+    queryKey: [...salesKeys.topSkus(storeFilters), activeMonths] as const,
+    queryFn: () => fetchTopSkus(storeFilters, activeMonths),
     enabled: enabled && enableSkus,
     staleTime: STALE_30MIN,
     gcTime: GC_60MIN,
@@ -302,10 +313,10 @@ export function useSalesAnalytics({
   const dailyQ = useQuery({
     queryKey: [
       "sales", "daily",
-      filters.brand, filters.channel, filters.store, filters.year,
+      storeFilters.brand, storeFilters.channel, storeFilters.store, storeFilters.year,
       "salesPage", activeMonths,
     ] as const,
-    queryFn: () => fetchDailyDetail(filters, activeMonths),
+    queryFn: () => fetchDailyDetail(storeFilters, activeMonths),
     enabled: enabled && enableBehavior,
     staleTime: STALE_30MIN,
     gcTime: GC_60MIN,
@@ -336,16 +347,16 @@ export function useSalesAnalytics({
     () => deriveBrandBreakdown(
       salesCYQ.data ?? [], salesPYQ.data ?? [],
       activeMonths, filters.channel, filters.store ?? "",
-    ),
+    ).filter((b) => b.brand !== "Otras"),
     [salesCYQ.data, salesPYQ.data, activeMonths, filters.channel, filters.store],
   );
 
   // ── Derivación LOCAL de channelMix (0 queries) ─────────────────────────
   const channelMix = useMemo(
     () => deriveChannelMix(
-      salesCYQ.data ?? [], activeMonths, filters.brand, filters.store ?? "",
+      salesCYQ.data ?? [], activeMonths, storeFilters.brand, storeFilters.store ?? "",
     ),
-    [salesCYQ.data, activeMonths, filters.brand, filters.store],
+    [salesCYQ.data, activeMonths, storeFilters.brand, storeFilters.store],
   );
 
   // ── Compute day-of-week from daily detail ───────────────────────────────

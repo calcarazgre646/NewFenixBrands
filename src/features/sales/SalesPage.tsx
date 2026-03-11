@@ -12,7 +12,7 @@
  *
  * REGLA: Sin lógica de negocio. Solo layout + composición.
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSalesDashboard } from "./hooks/useSalesDashboard";
 import { useSalesAnalytics } from "./hooks/useSalesAnalytics";
 import { BrandsCard, ChannelCard, StoresTable, BehaviorCard, SkusCard } from "./components/SalesAnalyticsPanel";
@@ -31,6 +31,10 @@ export default function SalesPage() {
   const { filters } = useFilters();
   const [enableSkus, setEnableSkus] = useState(true);
   const [enableBehavior, setEnableBehavior] = useState(true);
+  const [selectedStore, setSelectedStore] = useState<string | null>(null);
+
+  // Limpiar selección de tienda cuando cambian los filtros globales
+  useEffect(() => { setSelectedStore(null); }, [filters.brand, filters.channel, filters.store, filters.period, filters.year]);
 
   const {
     metrics,
@@ -55,7 +59,7 @@ export default function SalesPage() {
     isDowLoading,
     isSkusLoading,
     isStoresLoading,
-  } = useSalesAnalytics({ activeMonths, enableSkus, enableBehavior });
+  } = useSalesAnalytics({ activeMonths, enableSkus, enableBehavior, selectedStoreOverride: selectedStore });
 
   if (dashLoading) return <PageSkeleton />;
 
@@ -265,6 +269,8 @@ export default function SalesPage() {
             storeBreakdownB2B={storeBreakdownB2B}
             isStoresLoading={isStoresLoading}
             channelMode="b2c"
+            onSelectStore={setSelectedStore}
+            onDeselectStore={() => setSelectedStore(null)}
             salesWideRaw={salesWideRaw}
             dailyDetailRaw={dailyDetailRaw}
             activeMonths={analyticsActiveMonths}
@@ -277,6 +283,8 @@ export default function SalesPage() {
             storeBreakdown={storeBreakdown}
             isStoresLoading={isStoresLoading}
             channelMode={filters.channel}
+            onSelectStore={setSelectedStore}
+            onDeselectStore={() => setSelectedStore(null)}
             salesWideRaw={salesWideRaw}
             dailyDetailRaw={dailyDetailRaw}
             activeMonths={analyticsActiveMonths}
@@ -285,36 +293,45 @@ export default function SalesPage() {
         </div>
       )}
 
-      {/* Mix + Comportamiento (izq) | Top SKUs (der) */}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <div className="flex flex-col gap-3">
-          <div className="exec-anim-4">
-            <ChannelCard
-              channelMix={channelMix}
-              storeBreakdown={storeBreakdown}
-              channelMode={filters.channel}
-              isStoresLoading={isStoresLoading}
-              salesWideRaw={salesWideRaw}
-              activeMonths={analyticsActiveMonths}
-              brand={filters.brand}
-            />
+      {/* Comportamiento + Mix (izq) | Top SKUs (der) */}
+      {(() => {
+        const showChannelMix = filters.channel === "total" && !selectedStore;
+        return (
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <div className="flex flex-col gap-3">
+              {showChannelMix && (
+                <div className="exec-anim-4">
+                  <ChannelCard
+                    channelMix={channelMix}
+                    storeBreakdown={storeBreakdown}
+                    channelMode={filters.channel}
+                    isStoresLoading={isStoresLoading}
+                    salesWideRaw={salesWideRaw}
+                    activeMonths={analyticsActiveMonths}
+                    brand={filters.brand}
+                  />
+                </div>
+              )}
+              <div className="exec-anim-5">
+                <BehaviorCard
+                  data={dayOfWeek}
+                  isLoading={isDowLoading}
+                  onRequestLoad={() => setEnableBehavior(true)}
+                  filteredStoreName={selectedStore}
+                />
+              </div>
+            </div>
+            <div className="exec-anim-6">
+              <SkusCard
+                data={topSkus}
+                isLoading={isSkusLoading}
+                onRequestLoad={() => setEnableSkus(true)}
+                filteredStoreName={selectedStore}
+              />
+            </div>
           </div>
-          <div className="exec-anim-5">
-            <BehaviorCard
-              data={dayOfWeek}
-              isLoading={isDowLoading}
-              onRequestLoad={() => setEnableBehavior(true)}
-            />
-          </div>
-        </div>
-        <div className="exec-anim-6">
-          <SkusCard
-            data={topSkus}
-            isLoading={isSkusLoading}
-            onRequestLoad={() => setEnableSkus(true)}
-          />
-        </div>
-      </div>
+        );
+      })()}
     </div>
   );
 }

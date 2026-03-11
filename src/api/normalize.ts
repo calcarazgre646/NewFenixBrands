@@ -131,14 +131,18 @@ export function brandIdToCanonical(brandId: string): BrandCanonical | null {
  * Tiendas B2B (mayoristas). Fuente: auditoria FenixBrands 26/02/2026.
  * REGLA: Si cosujd.trim() está en esta lista → B2B. Resto de activas → B2C.
  */
-export const B2B_STORES = new Set(["MAYORISTA", "UTP"]);
+export const B2B_STORES = new Set(["MAYORISTA", "UTP", "UNIFORMES"]);
 
 /**
  * Tiendas excluidas del análisis comercial (depósitos, batas, lavado, etc.)
  */
 export const EXCLUDED_STORES = new Set([
   "ALM-BATAS", "FABRICA", "LAMBARE", "LAVADO", "LUQ-DEP-OUT",
-  "MP", // muestrarios, depósitos
+  "MP",          // muestrarios, depósitos
+  "E-COMMERCE",  // canal virtual, sin lógica de inventario físico
+  "PRODUCTO",    // clasificación interna, no es punto de venta
+  "SHOPSANLO",   // tienda cerrada
+  "M-AGUSTIN", "M-EDGAR", "M-EMILIO", "M-JUAN", "M-SALABERRY", "M-SILVIO", // vendedores B2B (futuro: integrar como agentes)
 ]);
 
 export function classifyStore(cosujd: string): "b2c" | "b2b" | "excluded" {

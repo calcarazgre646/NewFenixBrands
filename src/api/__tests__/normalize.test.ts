@@ -53,10 +53,15 @@ describe('normalizeBrand', () => {
 describe('classifyStore', () => {
   it('"MAYORISTA" → "b2b"', () => expect(classifyStore("MAYORISTA")).toBe("b2b"))
   it('"UTP" → "b2b"', () => expect(classifyStore("UTP")).toBe("b2b"))
+  it('"UNIFORMES" → "b2b"', () => expect(classifyStore("UNIFORMES")).toBe("b2b"))
   it('"ESTRELLA" → "b2c"', () => expect(classifyStore("ESTRELLA")).toBe("b2c"))
   it('"FABRICA" → "excluded"', () => expect(classifyStore("FABRICA")).toBe("excluded"))
   it('"ALM-BATAS" → "excluded"', () => expect(classifyStore("ALM-BATAS")).toBe("excluded"))
   it('"LAVADO" → "excluded"', () => expect(classifyStore("LAVADO")).toBe("excluded"))
+  it('"E-COMMERCE" → "excluded"', () => expect(classifyStore("E-COMMERCE")).toBe("excluded"))
+  it('"PRODUCTO" → "excluded"', () => expect(classifyStore("PRODUCTO")).toBe("excluded"))
+  it('"M-SILVIO" → "excluded"', () => expect(classifyStore("M-SILVIO")).toBe("excluded"))
+  it('"M-AGUSTIN" → "excluded"', () => expect(classifyStore("M-AGUSTIN")).toBe("excluded"))
   it('padding " MAYORISTA " → "b2b"', () => expect(classifyStore(" MAYORISTA ")).toBe("b2b"))
 })
 

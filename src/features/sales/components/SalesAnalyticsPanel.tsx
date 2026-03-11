@@ -46,16 +46,16 @@ const MARGIN_DOT: Record<MarginHealth, string> = {
 
 const BRAND_COLORS: Record<string, { bg: string; text: string; bar: string }> = {
   Martel:   { bg: "bg-emerald-50 dark:bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", bar: "bg-gradient-to-r from-emerald-400 to-emerald-500" },
-  Wrangler: { bg: "bg-amber-50 dark:bg-amber-500/10",     text: "text-amber-700 dark:text-amber-400",     bar: "bg-gradient-to-r from-amber-400 to-amber-500" },
-  Lee:      { bg: "bg-red-50 dark:bg-red-500/10",         text: "text-red-700 dark:text-red-400",         bar: "bg-gradient-to-r from-red-400 to-red-500" },
-  Otras:    { bg: "bg-gray-50 dark:bg-gray-700/50",       text: "text-gray-600 dark:text-gray-400",       bar: "bg-gradient-to-r from-gray-300 to-gray-400" },
+  Wrangler: { bg: "bg-orange-50 dark:bg-orange-500/10", text: "text-orange-700 dark:text-orange-400", bar: "bg-gradient-to-r from-orange-400 to-orange-500" },
+  Lee:      { bg: "bg-blue-50 dark:bg-blue-500/10",     text: "text-blue-700 dark:text-blue-400",     bar: "bg-gradient-to-r from-blue-400 to-blue-500" },
+  Otras:    { bg: "bg-gray-50 dark:bg-gray-700/50",     text: "text-gray-600 dark:text-gray-400",     bar: "bg-gradient-to-r from-gray-300 to-gray-400" },
 };
 
-/** Brand-specific chart color for radial. */
+/** Brand chart color for radial. */
 const BRAND_CHART_COLOR: Record<string, string> = {
   Martel:   "#10B981",
-  Wrangler: "#F59E0B",
-  Lee:      "#EF4444",
+  Wrangler: "#F97316",
+  Lee:      "#3B82F6",
 };
 
 /** Radial chart options for brand mix — semicircle, brand-colored. */
@@ -530,6 +530,7 @@ export function StoresTable({
   isStoresLoading,
   channelMode,
   onSelectStore,
+  onDeselectStore,
   salesWideRaw,
   dailyDetailRaw,
   activeMonths,
@@ -540,6 +541,7 @@ export function StoresTable({
   isStoresLoading: boolean;
   channelMode: string;
   onSelectStore?: (storeCode: string) => void;
+  onDeselectStore?: () => void;
   salesWideRaw?: MonthlySalesRow[];
   dailyDetailRaw?: DailyDetailRow[];
   activeMonths?: number[];
@@ -583,11 +585,9 @@ export function StoresTable({
   );
 
   const handleSelect = (code: string, ch?: string) => {
+    setSelectedStore(code);
+    setSelectedChannel(ch ?? channelMode);
     if (onSelectStore) onSelectStore(code);
-    else {
-      setSelectedStore(code);
-      setSelectedChannel(ch ?? channelMode);
-    }
   };
 
   // Find detail in B2C or B2B
@@ -601,7 +601,7 @@ export function StoresTable({
       <Card padding="lg">
         <StoreDetailView
           store={storeDetail}
-          onBack={() => { setSelectedStore(null); setSelectedChannel(null); }}
+          onBack={() => { setSelectedStore(null); setSelectedChannel(null); if (onDeselectStore) onDeselectStore(); }}
           channelLabel={selectedChannel === "b2b" ? "B2B" : selectedChannel === "b2c" ? "B2C" : "Total"}
           salesWideRaw={salesWideRaw}
           dailyDetailRaw={dailyDetailRaw}
@@ -786,10 +786,12 @@ export function BehaviorCard({
   data,
   isLoading,
   onRequestLoad,
+  filteredStoreName,
 }: {
   data: DayOfWeekStat[];
   isLoading: boolean;
   onRequestLoad: () => void;
+  filteredStoreName?: string | null;
 }) {
   const bestDay = data.find((d) => d.isBest);
   const hasData = data.some((d) => d.totalNeto > 0);
@@ -858,16 +860,28 @@ export function BehaviorCard({
             type="bar"
             height={220}
           />
-          {bestDay && (
-            <div className="mt-auto flex flex-wrap gap-6 border-t border-gray-100 pt-3 dark:border-gray-700">
-              <div className="text-xs">
-                <span className="text-gray-400 dark:text-gray-500">Promedio {bestDay.dayName}: </span>
-                <span className="font-semibold tabular-nums text-gray-700 dark:text-gray-300">{formatPYGShort(bestDay.avgNeto)}</span>
-              </div>
-              <div className="text-xs">
-                <span className="text-gray-400 dark:text-gray-500">Transacciones: </span>
-                <span className="font-semibold tabular-nums text-gray-700 dark:text-gray-300">{bestDay.txCount.toLocaleString("es-PY")}</span>
-              </div>
+          {(bestDay || filteredStoreName) && (
+            <div className="mt-auto flex flex-wrap items-center gap-6 border-t border-gray-100 pt-3 dark:border-gray-700">
+              {bestDay && (
+                <>
+                  <div className="text-xs">
+                    <span className="text-gray-400 dark:text-gray-500">Promedio {bestDay.dayName}: </span>
+                    <span className="font-semibold tabular-nums text-gray-700 dark:text-gray-300">{formatPYGShort(bestDay.avgNeto)}</span>
+                  </div>
+                  <div className="text-xs">
+                    <span className="text-gray-400 dark:text-gray-500">Transacciones: </span>
+                    <span className="font-semibold tabular-nums text-gray-700 dark:text-gray-300">{bestDay.txCount.toLocaleString("es-PY")}</span>
+                  </div>
+                </>
+              )}
+              {filteredStoreName && (
+                <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.22-.53l4.72-4.72M2.46 15l4.72-4.72a.75.75 0 00.22-.53V2.25" />
+                  </svg>
+                  {filteredStoreName}
+                </span>
+              )}
             </div>
           )}
         </>
@@ -882,10 +896,12 @@ export function SkusCard({
   data,
   isLoading,
   onRequestLoad,
+  filteredStoreName,
 }: {
   data: TopSkuRow[];
   isLoading: boolean;
   onRequestLoad: () => void;
+  filteredStoreName?: string | null;
 }) {
   // Lazy load prompt
   if (data.length === 0 && !isLoading) {
@@ -909,7 +925,19 @@ export function SkusCard({
 
   return (
     <Card padding="lg" className="flex h-full flex-col">
-      <SectionLabel>Top SKUs</SectionLabel>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+          Top SKUs
+        </p>
+        {filteredStoreName && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.22-.53l4.72-4.72M2.46 15l4.72-4.72a.75.75 0 00.22-.53V2.25" />
+            </svg>
+            {filteredStoreName}
+          </span>
+        )}
+      </div>
       {isLoading ? (
         <div className="-mb-2 flex flex-1 flex-col gap-2">
           {[...Array(10)].map((_, i) => (
@@ -1050,7 +1078,7 @@ function deriveStoreBrands(
 
   const result: StoreBrandSlice[] = [];
   acc.forEach((neto, brand) => {
-    if (brand === "Otras" && neto === 0) return;
+    if (brand === "Otras") return;
     result.push({ brand, neto, pct: total > 0 ? (neto / total) * 100 : 0 });
   });
 
