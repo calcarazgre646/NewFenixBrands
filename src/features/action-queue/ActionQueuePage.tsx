@@ -17,7 +17,7 @@ import { ActionGroupCard } from "./components/ActionGroupCard";
 import { groupActions } from "@/domain/actionQueue/grouping";
 import type { GroupByMode } from "@/domain/actionQueue/grouping";
 import { StatCard } from "@/components/ui/stat-card/StatCard";
-import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
+import { ActionQueueLoader } from "./components/ActionQueueLoader";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -58,6 +58,7 @@ export default function ActionQueuePage() {
     isLoading,
     isHistoryLoading,
     error,
+    loadingProgress,
   } = useActionQueue();
 
   const [viewMode, setViewMode] = useState<ViewMode>("store");
@@ -77,7 +78,7 @@ export default function ActionQueuePage() {
     [visibleItems, viewMode],
   );
 
-  if (isLoading) return <PageSkeleton />;
+  if (isLoading) return <ActionQueueLoader progress={loadingProgress} />;
 
   if (error) {
     return (
@@ -222,10 +223,15 @@ export default function ActionQueuePage() {
             </p>
           </div>
 
-          {/* Group cards */}
-          <div className="space-y-3">
+          {/* Group cards — staggered cascade, all cards animate top-down */}
+          <div className="space-y-3" key={`${viewMode}-${filters.channel}-${filters.brand}-${showParetoOnly}`}>
             {groups.map((group, idx) => (
-              <div key={group.key} className={idx < 6 ? `exec-anim-${Math.min(idx + 4, 8)}` : ""}>
+              <div
+                key={group.key}
+                style={{
+                  animation: `exec-fade-slide-up 0.4s var(--ease-out) ${200 + idx * 40}ms both`,
+                }}
+              >
                 <ActionGroupCard
                   group={group}
                   mode={viewMode as GroupByMode}

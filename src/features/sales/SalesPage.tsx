@@ -15,7 +15,11 @@
 import { useState, useEffect } from "react";
 import { useSalesDashboard } from "./hooks/useSalesDashboard";
 import { useSalesAnalytics } from "./hooks/useSalesAnalytics";
-import { BrandsCard, ChannelCard, StoresTable, BehaviorCard, SkusCard } from "./components/SalesAnalyticsPanel";
+import { BrandsCard } from "./components/BrandsCard";
+import { ChannelCard } from "./components/ChannelCard";
+import { StoresTable } from "./components/StoresTable";
+import { BehaviorCard } from "./components/BehaviorCard";
+import { SkusCard } from "./components/SkusCard";
 import { useFilters } from "@/context/FilterContext";
 import { formatPYG, formatPYGSuffix, formatPct, formatChange } from "@/utils/format";
 import { classifyMarginHealth } from "@/domain/kpis/calculations";

@@ -328,6 +328,42 @@ layer(base);
   background-color: #344054;
 }
 
+/* ── Action Queue transparent loading animations ── */
+@keyframes aq-float {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 0.4; }
+  50%  { opacity: 0.6; }
+  100% { transform: translateY(-18px) rotate(1.5deg); opacity: 0.35; }
+}
+@keyframes aq-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes aq-slide-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes aq-ping {
+  0%   { transform: scale(1); opacity: 0.6; }
+  75%  { transform: scale(2); opacity: 0; }
+  100% { transform: scale(2); opacity: 0; }
+}
+@keyframes aq-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.15); }
+}
+@keyframes aq-spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Respect reduced-motion preference — keep fade-in (opacity-only) but kill movement */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
 /* ── Executive Dashboard staggered entry animations ── */
 @keyframes exec-fade-slide-up {
   from { opacity: 0; transform: translateY(10px); }

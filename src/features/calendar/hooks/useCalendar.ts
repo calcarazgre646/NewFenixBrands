@@ -55,18 +55,24 @@ export function useCalendar() {
   // ── Fetch + Realtime ─────────────────────────────────────────────────────
 
   useEffect(() => {
-    authClient.from("calendar_categories").select("*").then(({ data, error: catErr }) => {
-      if (catErr) { setError("Error cargando categorías"); return; }
-      if (!data) return;
-      const map: Record<string, DbCategory> = {};
-      (data as DbCategory[]).forEach((c) => { map[c.id] = c; });
-      setCategories(map);
-    });
+    authClient.from("calendar_categories").select("*").then(
+      ({ data, error: catErr }) => {
+        if (catErr) { setError("Error cargando categorías"); return; }
+        if (!data) return;
+        const map: Record<string, DbCategory> = {};
+        (data as DbCategory[]).forEach((c) => { map[c.id] = c; });
+        setCategories(map);
+      },
+      () => setError("Error de conexión"),
+    );
 
-    authClient.from("calendar_events").select("*").then(({ data, error: evErr }) => {
-      if (evErr) { setError("Error cargando eventos"); return; }
-      setEvents((data as DbEvent[]).map(toFC));
-    });
+    authClient.from("calendar_events").select("*").then(
+      ({ data, error: evErr }) => {
+        if (evErr) { setError("Error cargando eventos"); return; }
+        setEvents((data as DbEvent[]).map(toFC));
+      },
+      () => setError("Error de conexión"),
+    );
 
     const evCh = authClient.channel("cal_ev_rt")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "calendar_events" }, (p) => {

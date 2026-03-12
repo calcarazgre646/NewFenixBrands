@@ -299,7 +299,7 @@ export function useSalesDashboard(): SalesDashboardData {
     };
   }, [filteredCY, filteredPY, filteredDailyPY, salesQ.isLoading, activeMonths, closedMonths,
       budgetQ.data, ticketsQ.data, storesQ.data, filters.brand, filters.channel, filters.store,
-      isPartial, correctedProrata, lastDataDay]);
+      filters.period, isPartial, correctedProrata, lastDataDay]);
 
   const isLoading = salesQ.isLoading || prevSalesQ.isLoading || budgetQ.isLoading || dailyPYQ.isLoading || dailyCYQ.isLoading || ticketsQ.isLoading || storesQ.isLoading;
   const error = salesQ.error?.message ?? prevSalesQ.error?.message

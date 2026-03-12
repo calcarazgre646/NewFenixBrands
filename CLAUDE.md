@@ -11,7 +11,7 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 
 ---
 
-## Estado actual (actualizado 11/03/2026 02:51)
+## Estado actual (actualizado 12/03/2026)
 
 | Fase | Feature | Estado |
 |------|---------|--------|
@@ -26,8 +26,9 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 6 | SettingsPage (`/configuracion`) — DEUDA: sin spec, sin ruta, requiere definicion del cliente | ⬜ DEUDA |
 
 **La app corre:** `npm run dev` → http://localhost:5173
-**Tests:** 428 passing (10 suites) | TSC 0 errores | Build OK
-**Última auditoría integral:** 11/03/2026 — Score 8.5/10 — ver `docs/AUDIT_INTEGRAL_2026-03-11.md`
+**Tests:** 480 passing (12 suites) | TSC 0 errores | Build OK | ESLint 0 errors
+**Última auditoría profunda:** 12/03/2026 — Score 9.0/10 — 7 ESLint errors→0, split monolito, error boundaries, 47 tests nuevos
+**Sesión 12/03/2026 01:25:** Transparent Loading UX para ActionQueuePage (ver abajo)
 
 ---
 
@@ -89,3 +90,31 @@ src/
 - `docs/AUDIT_WATERFALL_CORE_2026-03-08.md` — Auditoria end-to-end del algoritmo SISO/waterfall (8 bugs corregidos, flujo de datos completo, campos usados/no usados, preguntas pendientes cliente)
 - `docs/AUDIT_INTEGRAL_2026-03-11.md` — Auditoria integral completa (428 tests, 16 hallazgos, score 8.5/10)
 - `docs/PREGUNTAS_CLIENTE_COLA_ACCIONES.md` — 5+3 preguntas pendientes para Rodrigo/Derlys
+
+---
+
+## Sesión 12/03/2026 01:25 — Transparent Loading UX (ActionQueuePage)
+
+**Objetivo:** Transformar la latencia de carga de la Cola de Acciones en parte de la UX en vez de ocultarla con un skeleton genérico.
+
+**Patrón:** Process Transparency — Live Activity Feed, Ambient Motion, Staggered Reveal, Progress Theater.
+
+### Archivos creados/modificados
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/features/action-queue/hooks/useActionQueue.ts` | Agregado `LoadingPhase`, `LoadingProgress` types y `loadingProgress` computed property con fases granulares: `fetching-inventory` → `processing-records` → `fetching-history` → `computing-waterfall` → `done` |
+| `src/features/action-queue/components/ActionQueueLoader.tsx` | **NUEVO.** Componente de carga transparente: icono spinning + título "Definiendo Acciones", 4 phase step cards con indicadores (done/active/pending), activity log con mensajes contextuales drip-fed, 2 counter pills (Registros, SKUs), 5 floating cards ambient con colores de marca |
+| `src/index.css` | 6 keyframes CSS: `aq-float`, `aq-fade-in`, `aq-slide-in`, `aq-ping`, `aq-pulse`, `aq-spin-slow` |
+| `src/features/action-queue/ActionQueuePage.tsx` | Reemplazado `<PageSkeleton />` por `<ActionQueueLoader progress={loadingProgress} />` |
+
+### Ajustes de refinamiento
+- Icono spinner movido a la izquierda del título (inline flex)
+- Activity log limitado a ~3 bullets visibles con `max-h-[92px]` + `overflow-y-auto`
+- Phase step cards sin `maxHeight` fijo (no se rompen al pasar a verde/check)
+- Floating cards redistribuidas a esquinas del viewport (sin superposición con contenido central)
+- Composición centrada verticalmente con `h-[calc(100vh-4rem)]` + `pb-[12vh]` para centro óptico
+- Eliminada pill "Acciones" (nunca muestra cifra durante loading)
+- Título cambiado a "Definiendo Acciones"
+
+**Verificación:** TSC 0 errores | Build OK | ESLint 0 errors | 480 tests passing

@@ -19,6 +19,8 @@ import { Suspense, lazy } from "react";
 
 import { useAuth } from "@/context/AuthContext";
 import AppLayout from "@/layout/AppLayout";
+import { FeatureErrorBoundary } from "@/components/common/FeatureErrorBoundary";
+import { ScrollToTop } from "@/components/common/ScrollToTop";
 
 // ─── Páginas (lazy load para code splitting) ──────────────────────────────────
 const SignInPage        = lazy(() => import("@/features/auth/SignInPage"));
@@ -52,6 +54,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Ruta pública */}
@@ -65,13 +68,13 @@ export default function App() {
               </AuthGuard>
             }
           >
-            <Route index element={<ExecutivePage />} />
-            <Route path="kpis" element={<KpiDashboardPage />} />
-            <Route path="kpis/:categoryId" element={<KpiCategoryPage />} />
-            <Route path="ventas" element={<SalesPage />} />
-            <Route path="acciones" element={<ActionQueuePage />} />
-            <Route path="logistica" element={<LogisticsPage />} />
-            <Route path="calendario" element={<CalendarPage />} />
+            <Route index element={<FeatureErrorBoundary feature="Inicio"><ExecutivePage /></FeatureErrorBoundary>} />
+            <Route path="kpis" element={<FeatureErrorBoundary feature="KPIs"><KpiDashboardPage /></FeatureErrorBoundary>} />
+            <Route path="kpis/:categoryId" element={<FeatureErrorBoundary feature="KPIs"><KpiCategoryPage /></FeatureErrorBoundary>} />
+            <Route path="ventas" element={<FeatureErrorBoundary feature="Ventas"><SalesPage /></FeatureErrorBoundary>} />
+            <Route path="acciones" element={<FeatureErrorBoundary feature="Centro de Acciones"><ActionQueuePage /></FeatureErrorBoundary>} />
+            <Route path="logistica" element={<FeatureErrorBoundary feature="Logística"><LogisticsPage /></FeatureErrorBoundary>} />
+            <Route path="calendario" element={<FeatureErrorBoundary feature="Calendario"><CalendarPage /></FeatureErrorBoundary>} />
           </Route>
 
           {/* Catch-all */}

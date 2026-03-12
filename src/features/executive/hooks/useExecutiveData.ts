@@ -60,8 +60,6 @@ export interface ExecutiveMetrics {
   /** periodTarget - ytd. Positivo = faltante, negativo = adelantado. */
   gapToTarget: number;
   requiredMonthlyRunRate: number;
-  /** periodTarget - ytd (budget-aligned, no lineal). Positivo = atrasado. */
-  linearPaceGap: number;
   /** ytd / periodTarget * 100 — progreso real vs meta del período. */
   realProgressPct: number;
   /** forecastYearEnd / annualTarget * 100 — proyección vs meta anual. */
@@ -421,7 +419,6 @@ export function useExecutiveData(): ExecutiveData {
     const daysRemaining = Math.max(0, daysInYear - daysElapsed);
 
     let forecastYearEnd: number;
-    let linearPaceGap: number;
     let requiredMonthlyRunRate: number;
     let monthsRemainingCalc: number;
 
@@ -444,7 +441,6 @@ export function useExecutiveData(): ExecutiveData {
 
     // Brecha vs objetivo del período (budget-aligned, no lineal)
     // periodTarget ya está prorrateado al último día con datos reales.
-    linearPaceGap = periodTarget - ytd;
     const gapToTarget = periodTarget - ytd;
 
     // Progreso real = ventas vs meta del período (comparación justa)
@@ -515,7 +511,6 @@ export function useExecutiveData(): ExecutiveData {
       forecastYearEnd,
       gapToTarget,
       requiredMonthlyRunRate,
-      linearPaceGap,
       realProgressPct,
       forecastProgressPct,
       monthsRemaining: monthsRemainingCalc,
@@ -654,7 +649,7 @@ export function useExecutiveData(): ExecutiveData {
       correctedProrata,
     );
     return generateChannelInsights(salesAgg, budgetAgg, 3);
-  }, [metrics, salesQ.data, budgetQ.data, filters.store, activeMonths, correctedProrata, filters.brand]);
+  }, [metrics, salesQ.data, budgetQ.data, filters.store, activeMonths, correctedProrata, filters.brand, filters.channel]);
 
   // ── getRowsForView: re-filtra datos wide cacheados para una vista ──────
   const getRowsForView = useCallback(

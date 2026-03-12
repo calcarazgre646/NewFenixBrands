@@ -28,6 +28,22 @@ export interface ActionQueueFilters {
   brand: string;
 }
 
+/** Granular loading phases for transparent loading UX */
+export type LoadingPhase =
+  | "idle"
+  | "fetching-inventory"
+  | "processing-records"
+  | "fetching-history"
+  | "computing-waterfall"
+  | "done";
+
+export interface LoadingProgress {
+  phase: LoadingPhase;
+  inventoryRows: number;
+  uniqueSkus: number;
+  totalActions: number;
+}
+
 export interface ActionQueueData {
   items: ActionItemFull[];
   /** Total units currently in stock per store (all SKUs, not just actioned ones) */
@@ -43,6 +59,8 @@ export interface ActionQueueData {
   isLoading: boolean;
   isHistoryLoading: boolean;
   error: string | null;
+  /** Granular loading progress for transparent loading UX */
+  loadingProgress: LoadingProgress;
 }
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
@@ -140,6 +158,23 @@ export function useActionQueue(): ActionQueueData {
       };
     }, [items]);
 
+  // ── Loading progress (granular phases for transparent loading UX) ─────────
+  const loadingProgress: LoadingProgress = useMemo(() => {
+    if (inventoryQ.isLoading) {
+      return { phase: "fetching-inventory", inventoryRows: 0, uniqueSkus: 0, totalActions: 0 };
+    }
+    if (records.length > 0 && uniqueSkuList.length === 0) {
+      return { phase: "processing-records", inventoryRows: records.length, uniqueSkus: 0, totalActions: 0 };
+    }
+    if (historyQ.isLoading && uniqueSkuList.length > 0) {
+      return { phase: "fetching-history", inventoryRows: records.length, uniqueSkus: uniqueSkuList.length, totalActions: 0 };
+    }
+    if (records.length > 0 && historyQ.data && items.length === 0 && !historyQ.isLoading) {
+      return { phase: "computing-waterfall", inventoryRows: records.length, uniqueSkus: uniqueSkuList.length, totalActions: 0 };
+    }
+    return { phase: "done", inventoryRows: records.length, uniqueSkus: uniqueSkuList.length, totalActions: items.length };
+  }, [inventoryQ.isLoading, records.length, uniqueSkuList.length, historyQ.isLoading, historyQ.data, items.length]);
+
   return {
     items,
     storeStockMap,
@@ -154,5 +189,6 @@ export function useActionQueue(): ActionQueueData {
     isLoading: inventoryQ.isLoading || (historyQ.isLoading && records.length > 0),
     isHistoryLoading: historyQ.isLoading,
     error: inventoryQ.error?.message ?? historyQ.error?.message ?? null,
+    loadingProgress,
   };
 }

@@ -286,6 +286,7 @@ export default function GlobalSearch() {
                         id={`search-result-${idx}`}
                         role="option"
                         aria-selected={isSelected}
+                        tabIndex={-1}
                         className={`px-3 py-2.5 rounded-lg transition-colors cursor-default ${
                           isSelected
                             ? "bg-gray-50 dark:bg-gray-800"
