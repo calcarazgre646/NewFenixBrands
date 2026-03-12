@@ -10,9 +10,9 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router";
 import { useSidebar } from "@/context/SidebarContext";
+import { useScrollDirection } from "@/hooks/useScrollDirection";
 import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
 import NotificationDropdown from "@/components/header/NotificationDropdown";
-import UserDropdown from "@/components/header/UserDropdown";
 import { useFilters } from "@/context/FilterContext";
 import FilterBar from "@/components/filters/FilterBar";
 import GlobalSearch from "@/components/search/GlobalSearch";
@@ -22,8 +22,12 @@ const AppHeader: React.FC = () => {
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
   const { filters } = useFilters();
   const { pathname } = useLocation();
+  const scrollDir = useScrollDirection();
   const hideFilters = pathname === "/calendario";
   const hasInPageFilters = pathname === "/" || pathname === "/ventas" || pathname === "/acciones" || pathname === "/logistica";
+
+  // Header visible when: at top, scrolling up, or mobile menu is open
+  const isVisible = scrollDir !== "down" || isMenuOpen || isMobileOpen;
 
   const handleToggle = () => {
     if (window.innerWidth >= 1024) toggleSidebar();
@@ -31,7 +35,11 @@ const AppHeader: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 flex flex-col w-full bg-white border-gray-200 z-99999 dark:border-gray-800 dark:bg-gray-900 lg:border-b">
+    <header
+      className={`sticky top-0 flex flex-col w-full bg-white border-gray-200 z-99999 dark:border-gray-800 dark:bg-gray-900 lg:border-b transition-transform duration-300 ease-in-out ${
+        isVisible ? "translate-y-0" : "-translate-y-full"
+      }`}
+    >
       {/* Skip to content for keyboard navigation */}
       <a href="#main-content" className="skip-to-content">
         Ir al contenido principal
@@ -91,7 +99,6 @@ const AppHeader: React.FC = () => {
         <div className="hidden lg:flex items-center gap-2">
           <ThemeToggleButton />
           <NotificationDropdown />
-          <UserDropdown />
         </div>
       </div>
 
@@ -103,7 +110,6 @@ const AppHeader: React.FC = () => {
           <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
             <ThemeToggleButton />
             <NotificationDropdown />
-            <UserDropdown />
           </div>
         </div>
       )}

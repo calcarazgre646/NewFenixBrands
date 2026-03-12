@@ -4,8 +4,8 @@
  * Day-of-week behavior bar chart with best-day highlight.
  */
 import { useMemo, useState, useEffect } from "react";
-import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
+import ResponsiveChart from "@/components/ui/chart/ResponsiveChart";
 import type { DayOfWeekStat } from "../hooks/useSalesAnalytics";
 import { formatPYGShort } from "@/utils/format";
 import { Card } from "@/components/ui/card/Card";
@@ -83,7 +83,7 @@ export function BehaviorCard({
         <BehaviorLoadingFeed />
       ) : (
         <>
-          <Chart
+          <ResponsiveChart
             options={chartOptions}
             series={[{ name: "Ventas", data: data.map((d) => Math.round(d.totalNeto)) }]}
             type="bar"

@@ -17,8 +17,8 @@
  * Toda la data viene de useExecutiveData.
  */
 import { useMemo } from "react";
-import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
+import ResponsiveChart from "@/components/ui/chart/ResponsiveChart";
 import { useExecutiveData } from "./hooks/useExecutiveData";
 import { InsightBar } from "./components/InsightBar";
 import { ExecutiveFilters } from "./components/ExecutiveFilters";
@@ -341,7 +341,7 @@ export default function ExecutivePage() {
                 return (
                   <>
                     <div className="relative mt-30">
-                      <Chart
+                      <ResponsiveChart
                         key={`gauge-${ytdPctRounded}`}
                         options={{
                           colors: [forecastBeatsAnnual ? "#039855" : "#465FFF"],
@@ -406,7 +406,7 @@ export default function ExecutivePage() {
         <div className="exec-anim-3 sm:col-span-2 lg:col-span-2">
           <Card padding="lg">
             <div role="img" aria-label={dailyChartPoints ? "Gráfico diario del mes" : "Gráfico acumulado anual"}>
-              <Chart
+              <ResponsiveChart
                 key={dailyChartPoints ? "daily" : "cumulative"}
                 options={buildChartOptions(labels, currentMonthLabel, isPartialMonth, !!dailyChartPoints, lastDataDay)}
                 series={series}

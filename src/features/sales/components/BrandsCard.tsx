@@ -3,7 +3,7 @@
  *
  * Brand breakdown cards with radial chart, YoY badge, margin & markdown.
  */
-import Chart from "react-apexcharts";
+import ResponsiveChart from "@/components/ui/chart/ResponsiveChart";
 import type { BrandBreakdownRow } from "@/queries/sales.queries";
 import { calcGrossMargin, calcMarkdownDependency } from "@/domain/kpis/calculations";
 import { formatPYGSuffix, formatPct, formatChange } from "@/utils/format";
@@ -35,7 +35,7 @@ export function BrandsCard({ data, year }: { data: BrandBreakdownRow[]; year: nu
 
               {/* Radial chart — mix % */}
               <div className="relative mt-2 h-[100px] overflow-hidden">
-                <Chart
+                <ResponsiveChart
                   options={buildBrandRadialOptions(mix, b.brand)}
                   series={[Math.min(Math.round(mix * 10) / 10, 100)]}
                   type="radialBar"

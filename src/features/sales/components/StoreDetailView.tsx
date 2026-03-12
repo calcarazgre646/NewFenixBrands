@@ -5,8 +5,8 @@
  * Private component used by ChannelCard and StoresTable.
  */
 import { useMemo } from "react";
-import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
+import ResponsiveChart from "@/components/ui/chart/ResponsiveChart";
 import type { MonthlySalesRow, DailyDetailRow } from "@/queries/sales.queries";
 import type { StoreBreakdownRow } from "../hooks/useSalesAnalytics";
 import { calcGrossMargin, classifyMarginHealth, marginHealthThresholds } from "@/domain/kpis/calculations";
@@ -337,7 +337,7 @@ export function StoreDetailView({
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
               Evolución Mensual
             </p>
-            <Chart
+            <ResponsiveChart
               options={trendOptions}
               series={[{ name: "Ventas", data: monthly.map((m) => Math.round(m.neto)) }]}
               type="area"
@@ -364,7 +364,7 @@ export function StoreDetailView({
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
               Evolución Diaria
             </p>
-            <Chart
+            <ResponsiveChart
               options={dailyTrendOptions}
               series={[{ name: "Ventas", data: daily.map((d) => Math.round(d.neto)) }]}
               type="area"

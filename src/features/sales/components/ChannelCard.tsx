@@ -4,8 +4,8 @@
  * Channel mix horizontal bar chart (B2C vs B2B).
  */
 import { useState, useMemo } from "react";
-import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
+import ResponsiveChart from "@/components/ui/chart/ResponsiveChart";
 import type { ChannelMixRow, MonthlySalesRow } from "@/queries/sales.queries";
 import type { StoreBreakdownRow } from "../hooks/useSalesAnalytics";
 import { formatPYGShort } from "@/utils/format";
@@ -115,7 +115,7 @@ export function ChannelCard({
 
         {/* Bar chart */}
         <div className="mt-2">
-          <Chart
+          <ResponsiveChart
             options={barOptions}
             series={[{ name: "Ventas", data: sorted.map((c) => c.neto) }]}
             type="bar"
