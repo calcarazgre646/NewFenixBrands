@@ -7,7 +7,8 @@ import { useState, useMemo } from "react";
 import type { MonthlySalesRow, DailyDetailRow } from "@/queries/sales.queries";
 import type { StoreBreakdownRow } from "../hooks/useSalesAnalytics";
 import { classifyMarginHealth } from "@/domain/kpis/calculations";
-import { formatPYGShort, formatPYGSuffix, formatPct } from "@/utils/format";
+import { formatPYGShort, formatPYGSuffix, formatPct, formatChange } from "@/utils/format";
+import { useFilters } from "@/context/FilterContext";
 import { Card } from "@/components/ui/card/Card";
 import {
   MARGIN_TEXT,
@@ -41,6 +42,9 @@ export function StoresTable({
   activeMonths?: number[];
   brand?: string;
 }) {
+  const { filters } = useFilters();
+  const priorYear = filters.year - 1;
+
   const [selectedStore, setSelectedStore] = useState<string | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
 
@@ -183,6 +187,15 @@ export function StoresTable({
                       {formatPct(share)} del canal
                     </p>
                     <div className="mt-3 flex flex-wrap gap-1.5">
+                      {row.yoyPct != null && (
+                        <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+                          row.yoyPct >= 0
+                            ? "bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-400"
+                            : "bg-error-50 text-error-700 dark:bg-error-500/10 dark:text-error-400"
+                        }`}>
+                          {row.yoyPct >= 0 ? "▲" : "▼"} {formatChange(row.yoyPct)} vs {priorYear}
+                        </span>
+                      )}
                       <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${marginBg} ${marginColor}`}>
                         M {formatPct(row.grossMargin, 0)}
                       </span>
@@ -246,6 +259,15 @@ export function StoresTable({
                       {formatPct(share)} del total
                     </p>
                     <div className="mt-3 flex flex-wrap gap-1.5">
+                      {row.yoyPct != null && (
+                        <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+                          row.yoyPct >= 0
+                            ? "bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-400"
+                            : "bg-error-50 text-error-700 dark:bg-error-500/10 dark:text-error-400"
+                        }`}>
+                          {row.yoyPct >= 0 ? "▲" : "▼"} {formatChange(row.yoyPct)} vs {priorYear}
+                        </span>
+                      )}
                       <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${marginBg} ${marginColor}`}>
                         M {formatPct(row.grossMargin, 0)}
                       </span>

@@ -177,7 +177,6 @@ export default function ExecutivePage() {
     dailyChartPoints,
     monthlyRows,
     insights,
-    channelInsights,
     periodLabel,
     calendarMonth,
     isPartialMonth,
@@ -326,73 +325,83 @@ export default function ExecutivePage() {
 
         {/* Cumplimiento vs Objetivo — gauge card (tall, spans 2 rows on lg) */}
         <div className="exec-anim-2 sm:col-span-2 lg:col-span-1 lg:row-span-2">
-          <div className="h-full rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-white/[0.03]">
-            <div className="h-full px-5 pb-5 pt-5 sm:px-6 sm:pt-6">
-              <h3 className="text-base font-semibold text-gray-800 dark:text-white/90">
-                {metaLabel}
-              </h3>
-              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                {periodDateRange}
-              </p>
+          <div className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-white/[0.03]">
+            <div className="flex flex-1 flex-col px-5 pb-5 pt-5 sm:px-6 sm:pt-6">
+              {/* TOP — título izquierda, badge derecha */}
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-base font-semibold text-gray-800 dark:text-white/90">
+                    {metaLabel}
+                  </h3>
+                  <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {periodDateRange}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${
+                    forecastBeatsAnnual
+                      ? "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500"
+                      : "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400"
+                  }`}
+                >
+                  {forecastBeatsAnnual
+                    ? (isClosedMonth ? "Meta superada" : "Proyección supera meta")
+                    : `Faltan ₲ ${formatCompact(annualTarget - ytd)}`}
+                </span>
+              </div>
+
               {(() => {
                 const ytdPct = annualTarget > 0 ? (ytd / annualTarget) * 100 : 0;
                 const ytdPctRounded = Math.round(ytdPct * 10) / 10;
-                const remaining = annualTarget - ytd;
                 return (
                   <>
-                    <div className="relative mt-30">
-                      <ResponsiveChart
-                        key={`gauge-${ytdPctRounded}`}
-                        options={{
-                          colors: [forecastBeatsAnnual ? "#039855" : "#465FFF"],
-                          chart: {
-                            fontFamily: "Outfit, sans-serif",
-                            type: "radialBar",
-                            sparkline: { enabled: true },
-                          },
-                          plotOptions: {
-                            radialBar: {
-                              startAngle: -85,
-                              endAngle: 85,
-                              hollow: { size: "80%" },
-                              track: {
-                                background: "#E4E7EC",
-                                strokeWidth: "100%",
-                                margin: 5,
-                              },
-                              dataLabels: {
-                                name: { show: false },
-                                value: {
-                                  fontSize: "36px",
-                                  fontWeight: "600",
-                                  offsetY: -40,
-                                  color: undefined,
-                                  formatter: () => `${ytdPctRounded.toFixed(1)}%`,
+                    {/* CENTER — gauge + badge como bloque centrado */}
+                    <div className="flex flex-1 flex-col items-center justify-center">
+                      <div className="w-full">
+                        <ResponsiveChart
+                          key={`gauge-${ytdPctRounded}`}
+                          options={{
+                            colors: [forecastBeatsAnnual ? "#039855" : "#465FFF"],
+                            chart: {
+                              fontFamily: "Outfit, sans-serif",
+                              type: "radialBar",
+                              sparkline: { enabled: true },
+                            },
+                            plotOptions: {
+                              radialBar: {
+                                startAngle: -85,
+                                endAngle: 85,
+                                hollow: { size: "80%" },
+                                track: {
+                                  background: "#E4E7EC",
+                                  strokeWidth: "100%",
+                                  margin: 5,
+                                },
+                                dataLabels: {
+                                  name: { show: false },
+                                  value: {
+                                    fontSize: "36px",
+                                    fontWeight: "600",
+                                    offsetY: -20,
+                                    color: undefined,
+                                    formatter: () => `${ytdPctRounded.toFixed(1)}%`,
+                                  },
                                 },
                               },
                             },
-                          },
-                          fill: { type: "solid" },
-                          stroke: { lineCap: "round" },
-                          labels: ["Cumplimiento"],
-                        }}
-                        series={[Math.min(ytdPctRounded, 100)]}
-                        type="radialBar"
-                        height={400}
-                      />
-                      <span
-                        className={`absolute left-1/2 top-full -translate-x-1/2 -translate-y-[95%] rounded-full px-3 py-1 text-xs font-medium ${
-                          forecastBeatsAnnual
-                            ? "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500"
-                            : "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400"
-                        }`}
-                      >
-                        {forecastBeatsAnnual
-                          ? (isClosedMonth ? "Meta superada" : "Proyección supera meta")
-                          : `Faltan ₲ ${formatCompact(remaining)}`}
-                      </span>
+                            fill: { type: "solid" },
+                            stroke: { lineCap: "round" },
+                            labels: ["Cumplimiento"],
+                          }}
+                          series={[Math.min(ytdPctRounded, 100)]}
+                          type="radialBar"
+                          height={240}
+                        />
+                      </div>
                     </div>
-                    <p className="mx-auto mt-28 max-w-[280px] text-center text-sm text-gray-500 dark:text-gray-400">
+
+                    {/* FOOTER — sub texto fijo abajo */}
+                    <p className="mt-auto max-w-[280px] self-center text-center text-sm text-gray-500 dark:text-gray-400">
                       {formatPYGSuffix(ytd)} vendidos de una {isMonthView ? "meta mensual" : "meta anual"} de {formatPYGSuffix(annualTarget)}
                     </p>
                   </>
@@ -421,7 +430,7 @@ export default function ExecutivePage() {
       {/* Insight Bar */}
       {insights.length > 0 && (
         <div className="exec-anim-8">
-          <InsightBar insights={insights} altInsights={channelInsights} />
+          <InsightBar insights={insights} />
         </div>
       )}
 

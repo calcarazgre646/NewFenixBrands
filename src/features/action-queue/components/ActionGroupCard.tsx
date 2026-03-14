@@ -123,6 +123,23 @@ export function ActionGroupCard({ group, mode, channel, defaultExpanded = false,
 
   const clusterInfo = group.cluster ? CLUSTER_STYLES[group.cluster] : null;
 
+  // WOI general del grupo: promedio ponderado de MOS (por stock) convertido a semanas.
+  // Excluye depósitos (RETAILS/STOCK) — su MOS es semántica diferente (demanda red vs tienda individual).
+  const groupWOI = useMemo(() => {
+    let totalStock = 0;
+    let weightedMOS = 0;
+    for (const item of group.items) {
+      if (item.currentMOS > 0 && item.currentStock > 0
+        && item.store !== "RETAILS" && item.store !== "STOCK") {
+        weightedMOS += item.currentMOS * item.currentStock;
+        totalStock += item.currentStock;
+      }
+    }
+    if (totalStock === 0) return null;
+    const avgMOS = weightedMOS / totalStock;
+    return avgMOS * 4.33;
+  }, [group.items]);
+
   const handleExport = (e: React.MouseEvent | React.KeyboardEvent) => {
     e.stopPropagation();
     downloadGroupHtml({
@@ -164,6 +181,18 @@ export function ActionGroupCard({ group, mode, channel, defaultExpanded = false,
             <MiniStat value={group.criticalCount} label="sin stock" color="bg-error-50 text-error-700 dark:bg-error-500/10 dark:text-error-400" />
             <MiniStat value={group.lowCount} label="bajo" color="bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-400" />
             <MiniStat value={group.overstockCount} label="exceso" color="bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400" />
+            {groupWOI !== null && (
+              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
+                groupWOI < 4.33
+                  ? "bg-error-50 text-error-700 dark:bg-error-500/10 dark:text-error-400"
+                  : groupWOI < 8.66
+                  ? "bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-400"
+                  : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+              }`}>
+                {groupWOI.toFixed(1)}
+                <span className="font-normal opacity-70">WOI</span>
+              </span>
+            )}
           </div>
 
           {mode === "store" && group.timeRestriction && group.timeRestriction !== "—" && (

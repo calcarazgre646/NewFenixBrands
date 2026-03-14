@@ -1,31 +1,19 @@
 /**
  * features/executive/components/InsightBar.tsx
  *
- * Barra de diagnóstico automático — muestra insights de performance.
+ * Barra de diagnóstico automático — muestra insights de performance por marca.
  * Layout: una sola fila horizontal con bloques separados por divisores.
- * Cuando recibe `altInsights`, rota entre ambos sets con animación.
  *
  * REGLA: Sin lógica de negocio. Recibe insights pre-calculados.
  */
-import { useState, useEffect } from "react";
 import type { BrandInsight } from "@/domain/executive/insights";
 import { formatDiff } from "@/utils/format";
-
-interface InsightBarProps {
-  insights: BrandInsight[];
-  /** Set alternativo para rotación (ej: canales cuando insights muestra marcas). */
-  altInsights?: BrandInsight[];
-}
 
 const LABEL_STYLES: Record<string, { bg: string; text: string }> = {
   Martel:   { bg: "bg-success-50 dark:bg-success-500/10", text: "text-success-700 dark:text-success-400" },
   Wrangler: { bg: "bg-warning-50 dark:bg-warning-500/10", text: "text-warning-700 dark:text-warning-400" },
   Lee:      { bg: "bg-error-50 dark:bg-error-500/10",     text: "text-error-700 dark:text-error-400" },
-  B2C:      { bg: "bg-brand-50 dark:bg-brand-500/10",     text: "text-brand-700 dark:text-brand-400" },
-  B2B:      { bg: "bg-gray-100 dark:bg-gray-700",         text: "text-gray-700 dark:text-gray-300" },
 };
-
-const ROTATE_INTERVAL = 5000;
 
 function ArrowIcon({ type }: { type: BrandInsight["type"] }) {
   if (type === "outperforming") {
@@ -77,40 +65,12 @@ function InsightRow({ items }: { items: BrandInsight[] }) {
   );
 }
 
-export function InsightBar({ insights, altInsights }: InsightBarProps) {
-  const hasAlt = altInsights != null && altInsights.length > 0;
-  const [showAlt, setShowAlt] = useState(false);
-  const [fading, setFading] = useState(false);
-
-  useEffect(() => {
-    if (!hasAlt) return;
-    const interval = setInterval(() => {
-      setFading(true);
-      setTimeout(() => {
-        setShowAlt((prev) => !prev);
-        setFading(false);
-      }, 200);
-    }, ROTATE_INTERVAL);
-    return () => clearInterval(interval);
-  }, [hasAlt]);
-
-  // Reset cuando cambian los datos
-  useEffect(() => {
-    setShowAlt(false);
-    setFading(false);
-  }, [insights, altInsights]);
-
+export function InsightBar({ insights }: { insights: BrandInsight[] }) {
   if (insights.length === 0) return null;
 
-  const current = showAlt && hasAlt ? altInsights : insights;
-
   return (
-    <div
-      className={`overflow-hidden rounded-2xl border border-gray-200 bg-white transition-opacity duration-200 dark:border-gray-700 dark:bg-gray-800 ${
-        fading ? "opacity-0" : "opacity-100"
-      }`}
-    >
-      <InsightRow items={current} />
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+      <InsightRow items={insights} />
     </div>
   );
 }

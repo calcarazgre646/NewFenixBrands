@@ -41,6 +41,7 @@ export interface MonthlySalesRow {
   cogs:     number;
   bruto:    number;
   dcto:     number;
+  units:    number;
 }
 
 export interface DailyDetailRow {
@@ -83,6 +84,8 @@ export interface TopSkuRow {
   brand:       string;
   neto:        number;
   units:       number;
+  /** Peso % del SKU sobre el total de ventas del universo consultado (0-100) */
+  weightPct:   number;
 }
 
 export interface DayOfWeekRow {
@@ -131,7 +134,7 @@ export async function fetchMonthlySales(filters: AppFilters): Promise<MonthlySal
   const buildQuery = () => {
     let q = dataClient
       .from("mv_ventas_mensual")
-      .select("v_año, v_mes, v_marca, v_sucursal_final, v_canal_venta, neto, costo, bruto, dcto")
+      .select("v_año, v_mes, v_marca, v_sucursal_final, v_canal_venta, neto, costo, bruto, dcto, unidades")
       .eq("v_año", filters.year);
     q = applyMonthlySalesFilters(q, filters);
     return q.order("v_mes").order("v_marca").order("v_sucursal_final").order("v_canal_venta");
@@ -149,6 +152,7 @@ export async function fetchMonthlySales(filters: AppFilters): Promise<MonthlySal
     cogs:    toNum(r.costo),
     bruto:   toNum(r.bruto),
     dcto:    toNum(r.dcto),
+    units:   toNum(r.unidades),
   }));
 }
 
@@ -395,7 +399,7 @@ export async function fetchMonthlySalesWide(year: number): Promise<MonthlySalesR
   const buildQuery = () =>
     dataClient
       .from("mv_ventas_mensual")
-      .select("v_año, v_mes, v_marca, v_sucursal_final, v_canal_venta, neto, costo, bruto, dcto")
+      .select("v_año, v_mes, v_marca, v_sucursal_final, v_canal_venta, neto, costo, bruto, dcto, unidades")
       .eq("v_año", year)
       .in("v_canal_venta", ["B2B", "B2C"])
       .order("v_mes").order("v_marca").order("v_sucursal_final").order("v_canal_venta");
@@ -412,6 +416,7 @@ export async function fetchMonthlySalesWide(year: number): Promise<MonthlySalesR
     cogs:    toNum(r.costo),
     bruto:   toNum(r.bruto),
     dcto:    toNum(r.dcto),
+    units:   toNum(r.unidades),
   }));
 }
 
@@ -583,7 +588,7 @@ async function fetchSkuComercialMap(): Promise<Map<string, string>> {
 export async function fetchTopSkus(
   filters: AppFilters,
   months: number[],
-  limit = 20
+  limit = 0,
 ): Promise<TopSkuRow[]> {
   if (months.length === 0) return [];
 
@@ -622,13 +627,20 @@ export async function fetchTopSkus(
       brand: normalizeBrand(r.v_marca),
       neto: 0,
       units: 0,
+      weightPct: 0,
     };
     acc.neto  += toNum(r.v_vtasimpu);
     acc.units += toNum(r.v_cantvend);
     agg.set(sku, acc);
   }
 
-  return Array.from(agg.values())
-    .sort((a, b) => b.neto - a.neto)
-    .slice(0, limit);
+  const all = Array.from(agg.values());
+  const totalNeto = all.reduce((s, r) => s + r.neto, 0);
+
+  for (const row of all) {
+    row.weightPct = totalNeto > 0 ? (row.neto / totalNeto) * 100 : 0;
+  }
+
+  const sorted = all.sort((a, b) => b.neto - a.neto);
+  return limit > 0 ? sorted.slice(0, limit) : sorted;
 }

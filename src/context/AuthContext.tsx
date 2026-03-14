@@ -1,8 +1,12 @@
 /**
  * context/AuthContext.tsx
  *
- * Autenticación via Supabase Auth (instancia auth: uxtzzcjimvapjpkeruwb).
- * Los usuarios del proyecto anterior siguen funcionando — misma instancia.
+ * Autenticación + perfil + permisos via Supabase Auth.
+ *
+ * Diseño:
+ *   - Sesión = estado síncrono (onAuthStateChange)
+ *   - Perfil = data async (TanStack Query via useProfileQuery)
+ *   - isLoading = true hasta que AMBOS estén resueltos
  */
 import {
   createContext,
@@ -10,15 +14,24 @@ import {
   useEffect,
   useState,
   useCallback,
+  useMemo,
   type ReactNode,
 } from "react";
 import type { User, Session } from "@supabase/supabase-js";
 import { authClient } from "@/api/client";
 import { queryClient } from "@/lib/queryClient";
+import { useProfileQuery } from "@/hooks/useProfileQuery";
+import {
+  derivePermissions,
+  type UserProfile,
+  type Permissions,
+} from "@/domain/auth/types";
 
 interface AuthContextValue {
   user:            User | null;
   session:         Session | null;
+  profile:         UserProfile | null;
+  permissions:     Permissions;
   isAuthenticated: boolean;
   isLoading:       boolean;
   login:  (email: string, password: string) => Promise<{ error: string | null }>;
@@ -28,40 +41,52 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser]       = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser]                       = useState<User | null>(null);
+  const [session, setSession]                 = useState<Session | null>(null);
+  const [isSessionLoading, setIsSessionLoading] = useState(true);
 
+  // ─── Sesión: onAuthStateChange (síncrono, sin async) ───────────────────────
   useEffect(() => {
-    // Inicializar sesión existente
-    authClient.auth
-      .getSession()
-      .then(({ data }) => {
-        setSession(data.session);
-        setUser(data.session?.user ?? null);
-      })
-      .catch(() => {
-        setUser(null);
-        setSession(null);
-      })
-      .finally(() => setIsLoading(false));
+    // Safety timeout: si la sesión no se resuelve en 5s, forzar
+    const safetyTimeout = setTimeout(() => {
+      setIsSessionLoading((prev) => {
+        if (prev) {
+          console.warn("[AuthContext] Session restoration timeout (5s). Forcing isSessionLoading=false.");
+          return false;
+        }
+        return prev;
+      });
+    }, 5_000);
 
-    // Escuchar cambios de sesión
     const { data: { subscription } } = authClient.auth.onAuthStateChange(
       (_event, newSession) => {
+        const u = newSession?.user ?? null;
         setSession(newSession);
-        setUser(newSession?.user ?? null);
-        setIsLoading(false);
+        setUser(u);
+        setIsSessionLoading(false);
+        clearTimeout(safetyTimeout);
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(safetyTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
+  // ─── Perfil: TanStack Query (fetch, retry, cache automáticos) ──────────────
+  const profileQuery = useProfileQuery(user?.id);
+  const profile: UserProfile | null = profileQuery.data ?? null;
+
+  // ─── isLoading: sesión + perfil (si autenticado) ───────────────────────────
+  const isAuthenticated = !!user;
+  const isLoading = isSessionLoading || (isAuthenticated && profileQuery.isLoading);
+
+  // ─── Login ─────────────────────────────────────────────────────────────────
   const login = useCallback(
     async (email: string, password: string): Promise<{ error: string | null }> => {
-      const timeout = new Promise<{ error: string }>(
-        (_, reject) => setTimeout(() => reject({ error: "Tiempo de espera agotado" }), 15_000)
+      const timeout = new Promise<never>(
+        (_, reject) => setTimeout(() => reject(new Error("Tiempo de espera agotado")), 15_000)
       );
       try {
         const result = await Promise.race([
@@ -80,22 +105,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  // ─── Logout ────────────────────────────────────────────────────────────────
   const logout = useCallback(async () => {
     await authClient.auth.signOut();
     queryClient.clear();
   }, []);
 
+  // ─── Permisos derivados (memoizado) ────────────────────────────────────────
+  const permissions = useMemo(() => derivePermissions(profile), [profile]);
+
+  const contextValue = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      session,
+      profile,
+      permissions,
+      isAuthenticated,
+      isLoading,
+      login,
+      logout,
+    }),
+    [user, session, profile, permissions, isAuthenticated, isLoading, login, logout]
+  );
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        session,
-        isAuthenticated: !!user,
-        isLoading,
-        login,
-        logout,
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

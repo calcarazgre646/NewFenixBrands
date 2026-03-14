@@ -171,7 +171,7 @@ export function buildMonthlyRows(inputs: MonthlyRowInputs): MonthlyRow[] {
     monthlyReal, monthlyBudget, monthlyPY,
     monthlyCost, monthlyPYCost, monthlyBudgetGmPct,
     monthlyUnits, monthlyBudgetUnits, monthlyPYUnits,
-    calendarMonth, partialProrata,
+    calendarMonth,
   } = inputs;
 
   const rows: MonthlyRow[] = [];
@@ -184,19 +184,19 @@ export function buildMonthlyRows(inputs: MonthlyRowInputs): MonthlyRow[] {
     const lastYearFull = monthlyPY.has(m) ? (monthlyPY.get(m) ?? 0) : budgetFull * LY_BUDGET_FACTOR;
     const lastYearCost = monthlyPYCost.get(m) ?? 0;
 
-    // Prorratear presupuesto y año anterior en el mes parcial
-    const isPartial = partialProrata != null && m === partialProrata.month;
-    const budget   = isPartial ? budgetFull * partialProrata.factor : budgetFull;
-    const lastYear = isPartial ? lastYearFull * partialProrata.factor : lastYearFull;
+    // Presupuesto y año anterior SIEMPRE completos (sin prorrateo).
+    // El cliente quiere ver la meta real del mes, no prorrateada.
+    const budget   = budgetFull;
+    const lastYear = lastYearFull;
 
     // Margen bruto %
     const marginPct       = hasRealData ? calcGrossMargin(real, cost) : 0;
     const marginBudgetPct = monthlyBudgetGmPct.get(m) ?? 0;
     const marginPYPct     = monthlyPY.has(m) ? calcGrossMargin(lastYearFull, lastYearCost) : 0;
 
-    // Unidades — prorrateo del presupuesto en mes parcial
-    const unitsBudgetFull = monthlyBudgetUnits.get(m) ?? 0;
-    const unitsPYFull     = monthlyPYUnits.get(m) ?? 0;
+    // Unidades — siempre completas (sin prorrateo)
+    const unitsBudget = monthlyBudgetUnits.get(m) ?? 0;
+    const unitsPY     = monthlyPYUnits.get(m) ?? 0;
 
     rows.push({
       month: m,
@@ -210,8 +210,8 @@ export function buildMonthlyRows(inputs: MonthlyRowInputs): MonthlyRow[] {
       marginBudgetPct,
       marginPYPct,
       units: hasRealData ? (monthlyUnits.get(m) ?? 0) : 0,
-      unitsBudget: isPartial ? Math.round(unitsBudgetFull * partialProrata!.factor) : unitsBudgetFull,
-      unitsPY: isPartial ? Math.round(unitsPYFull * partialProrata!.factor) : unitsPYFull,
+      unitsBudget,
+      unitsPY,
       hasRealData,
       isCurrentMonth: m === calendarMonth,
     });

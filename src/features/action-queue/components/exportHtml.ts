@@ -58,11 +58,14 @@ function actionRow(item: ActionItemFull, idx: number, showStore: boolean): strin
   const riskBg = RISK_BG[item.risk];
   const riskColor = RISK_COLOR[item.risk];
 
-  const mosStyle = item.currentMOS < 1
+  const isDepot = item.store === "RETAILS" || item.store === "STOCK";
+  const coverValue = isDepot ? item.currentMOS * 4.33 : item.currentMOS;
+  const coverLabel = isDepot ? "WOI" : "MOS";
+  const mosStyle = coverValue < (isDepot ? 4.33 : 1)
     ? "color:#DC2626;font-weight:700;"
-    : item.currentMOS < 2
+    : coverValue < (isDepot ? 8.66 : 2)
     ? "color:#D97706;font-weight:600;"
-    : item.currentMOS > 6
+    : coverValue > (isDepot ? 26 : 6)
     ? "color:#2563EB;"
     : "";
 
@@ -86,7 +89,7 @@ function actionRow(item: ActionItemFull, idx: number, showStore: boolean): strin
     </td>
     <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:14px;font-weight:700;color:#111827;text-align:center;">${item.suggestedUnits}</td>
     <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;color:#6B7280;">${item.historicalAvg > 0 ? item.historicalAvg.toFixed(1) : "—"}</td>
-    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;${mosStyle}">${item.currentMOS > 0 ? item.currentMOS.toFixed(1) : "—"}</td>
+    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;${mosStyle}">${coverValue > 0 ? `${coverValue.toFixed(1)} ${coverLabel}` : "—"}</td>
     <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;color:#374151;">${esc(item.recommendedAction)}${counterparts}</td>
   </tr>`;
 }
@@ -97,7 +100,7 @@ function sectionBlock(section: ActionSection, showStore: boolean): string {
   const colors = INTENT_COLORS[section.intent];
   const cols = ["#", "Producto", "Talle"];
   if (showStore) cols.push("Tienda");
-  cols.push("Estado", "Uds.", "Prom 6m", "MOS", "Accion");
+  cols.push("Estado", "Uds.", "Prom 6m", "Cobertura", "Accion");
 
   const headerCells = cols.map(c =>
     `<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#6B7280;border-bottom:1px solid #E5E7EB;white-space:nowrap;">${c}</th>`

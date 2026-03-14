@@ -7,6 +7,10 @@
  * En la home ejecutiva (brandOnly=true) solo muestra Marca,
  * porque Canal y Período ya están en ExecutiveFilters in-page.
  *
+ * ROLES:
+ *   - super_user / gerencia: filtros libres
+ *   - negocio con channel_scope: canal visible pero deshabilitado (locked)
+ *
  * REGLA: Este componente NO tiene estado propio.
  * Lee y escribe en FilterContext. Todos los hooks se actualizan automáticamente.
  */
@@ -40,14 +44,16 @@ interface FilterBarProps {
 }
 
 export default function FilterBar({ compact = false, brandOnly = false }: FilterBarProps) {
-  const { filters, setBrand, setChannel, setPeriod } = useFilters();
+  const { filters, setBrand, setChannel, setPeriod, isChannelLocked } = useFilters();
 
   const pillBase =
-    "px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer whitespace-nowrap";
+    "px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap";
   const pillActive =
     "bg-brand-500 text-white border-brand-500";
   const pillInactive =
-    "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-brand-400 hover:text-brand-500";
+    "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-brand-400 hover:text-brand-500 cursor-pointer";
+  const pillLocked =
+    "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-60";
 
   if (compact) {
     return (
@@ -55,19 +61,34 @@ export default function FilterBar({ compact = false, brandOnly = false }: Filter
         {/* Canal */}
         {!brandOnly && (
           <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-            {CHANNELS.map(({ value, label }) => (
-              <button
-                key={value}
-                onClick={() => setChannel(value)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                  filters.channel === value
-                    ? "bg-brand-500 text-white"
-                    : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+            {CHANNELS.map(({ value, label }) => {
+              const active = filters.channel === value;
+              const locked = isChannelLocked && !active;
+              return (
+                <button
+                  key={value}
+                  onClick={() => setChannel(value)}
+                  disabled={isChannelLocked}
+                  title={isChannelLocked ? "Canal asignado por tu rol" : undefined}
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                    active
+                      ? isChannelLocked
+                        ? "bg-brand-400 text-white cursor-not-allowed"
+                        : "bg-brand-500 text-white"
+                      : locked
+                        ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                        : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  {label}
+                  {isChannelLocked && active && (
+                    <svg className="inline-block ml-1 h-3 w-3 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -77,7 +98,7 @@ export default function FilterBar({ compact = false, brandOnly = false }: Filter
             <button
               key={value}
               onClick={() => setBrand(value)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
                 filters.brand === value
                   ? "bg-brand-500 text-white"
                   : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -95,7 +116,7 @@ export default function FilterBar({ compact = false, brandOnly = false }: Filter
               <button
                 key={value}
                 onClick={() => setPeriod(value)}
-                className={`${pillBase} ${filters.period === value ? pillActive : pillInactive}`}
+                className={`${pillBase} cursor-pointer ${filters.period === value ? pillActive : pillInactive}`}
               >
                 {label}
               </button>
@@ -111,17 +132,35 @@ export default function FilterBar({ compact = false, brandOnly = false }: Filter
     <div className="flex flex-col gap-3">
       {!brandOnly && (
         <div>
-          <p className="text-xs text-gray-400 mb-1.5">Canal</p>
+          <p className="text-xs text-gray-400 mb-1.5">
+            Canal
+            {isChannelLocked && (
+              <span className="ml-1.5 text-[10px] text-gray-400">
+                (asignado)
+              </span>
+            )}
+          </p>
           <div className="flex gap-1 flex-wrap">
-            {CHANNELS.map(({ value, label }) => (
-              <button
-                key={value}
-                onClick={() => setChannel(value)}
-                className={`${pillBase} ${filters.channel === value ? pillActive : pillInactive}`}
-              >
-                {label}
-              </button>
-            ))}
+            {CHANNELS.map(({ value, label }) => {
+              const active = filters.channel === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => setChannel(value)}
+                  disabled={isChannelLocked}
+                  title={isChannelLocked ? "Canal asignado por tu rol" : undefined}
+                  className={`${pillBase} ${
+                    active
+                      ? pillActive
+                      : isChannelLocked
+                        ? pillLocked
+                        : pillInactive
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -132,7 +171,7 @@ export default function FilterBar({ compact = false, brandOnly = false }: Filter
             <button
               key={value}
               onClick={() => setBrand(value)}
-              className={`${pillBase} ${filters.brand === value ? pillActive : pillInactive}`}
+              className={`${pillBase} cursor-pointer ${filters.brand === value ? pillActive : pillInactive}`}
             >
               {value === "total" ? "Todas" : label}
             </button>
@@ -147,7 +186,7 @@ export default function FilterBar({ compact = false, brandOnly = false }: Filter
               <button
                 key={value}
                 onClick={() => setPeriod(value)}
-                className={`${pillBase} ${filters.period === value ? pillActive : pillInactive}`}
+                className={`${pillBase} cursor-pointer ${filters.period === value ? pillActive : pillInactive}`}
               >
                 {label}
               </button>

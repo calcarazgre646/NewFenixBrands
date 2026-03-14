@@ -1,19 +1,28 @@
 /**
  * features/auth/SignInPage.tsx
  *
- * Página de login. Redirige a / si ya está autenticado.
+ * Página de login. Redirige según rol si ya está autenticado.
  */
 import { useState, type FormEvent } from "react";
-import { useNavigate, Navigate } from "react-router";
+import { Navigate } from "react-router";
 import { useAuth } from "@/context/AuthContext";
+import { getDefaultRoute } from "@/domain/auth/types";
 import { EyeCloseIcon, EyeIcon } from "@/icons";
 import Label from "@/components/form/Label";
 import Input from "@/components/form/input/InputField";
 import Button from "@/components/ui/button/Button";
 
+/** Mapea errores de Supabase a mensajes en español */
+function translateError(msg: string): string {
+  if (msg.includes("Invalid login credentials")) return "Email o contraseña incorrectos";
+  if (msg.includes("Email not confirmed")) return "Tu email no fue confirmado. Revisá tu bandeja de entrada.";
+  if (msg.includes("Too many requests")) return "Demasiados intentos. Esperá un momento.";
+  if (msg.includes("Network")) return "Error de conexión. Verificá tu internet.";
+  return msg;
+}
+
 export default function SignInPage() {
-  const { isAuthenticated, isLoading: authLoading, login } = useAuth();
-  const navigate = useNavigate();
+  const { isAuthenticated, isLoading: authLoading, login, permissions } = useAuth();
 
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
@@ -21,9 +30,10 @@ export default function SignInPage() {
   const [error, setError]       = useState("");
   const [loading, setLoading]   = useState(false);
 
-  // Ya autenticado → redirigir
+  // Ya autenticado → redirigir a ruta por defecto según rol.
+  // isLoading incluye session + profile, así que permissions ya son correctos.
   if (!authLoading && isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={getDefaultRoute(permissions)} replace />;
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -36,11 +46,12 @@ export default function SignInPage() {
     setLoading(true);
     const { error: err } = await login(email, password);
     if (err) {
-      setError(err);
+      setError(translateError(err));
       setLoading(false);
-    } else {
-      navigate("/", { replace: true });
     }
+    // Si login OK, NO navegar manualmente. El auto-redirect de arriba
+    // se encarga cuando profile se carga (onAuthStateChange → loadProfile → re-render).
+    // El spinner sigue visible hasta que el redirect ocurra — es correcto.
   };
 
   return (

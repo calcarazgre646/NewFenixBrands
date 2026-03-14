@@ -11,33 +11,34 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 
 ---
 
-## Estado actual (actualizado 12/03/2026)
+## Estado actual (actualizado 14/03/2026 14:00)
 
 | Fase | Feature | Estado |
 |------|---------|--------|
-| Infra | Rutas, layout, auth, contextos, queries, domain logic (82 tests) | ✅ COMPLETO |
-| 0 | SignInPage | ✅ COMPLETO |
-| 1 | KpiDashboardPage (`/kpis`) — Grid de 9 KPIs con fetch-wide/filter-local | ✅ COMPLETO |
+| Infra | Rutas, layout, auth, contextos, queries, domain logic | ✅ COMPLETO |
+| 0 | SignInPage + ChangePasswordPage (primer login) | ✅ COMPLETO |
+| 1 | KpiDashboardPage (`/kpis`) — 9 core + 50 catálogo + sparklines + UPT activado | ✅ COMPLETO |
 | 1B | ExecutivePage (`/`) — Road to Annual Target, chart acumulado, tabla mensual | ✅ COMPLETO |
-| 2 | SalesPage (`/ventas`) — Metricas, 4 tabs analytics (Marcas, Canal/Zonas, Comportamiento, SKUs) | ✅ COMPLETO |
-| 3 | ActionQueuePage (`/acciones`) — Waterfall 4 niveles, vista agrupada (Tienda/Marca/Lista), export HTML | ✅ COMPLETO + AUDITADO |
-| 4 | LogisticsPage (`/logistica`) — ETAs importacion, tabla agrupada, filtros, summary cards | ✅ COMPLETO + AUDITADO |
-| 5 | CalendarPage (`/calendario`) — FullCalendar + CRUD + Realtime + vista Ano | ✅ COMPLETO |
-| 6 | SettingsPage (`/configuracion`) — DEUDA: sin spec, sin ruta, requiere definicion del cliente | ⬜ DEUDA |
+| 2 | SalesPage (`/ventas`) — Metricas, 4 tabs analytics, YoY tiendas, Top/Bottom SKUs | ✅ COMPLETO |
+| 3 | ActionQueuePage (`/acciones`) — Waterfall 4 niveles, vista agrupada | ✅ COMPLETO + AUDITADO |
+| 4 | LogisticsPage (`/logistica`) — ETAs importacion, tabla agrupada | ✅ COMPLETO + AUDITADO |
+| 5 | CalendarPage (`/calendario`) — FullCalendar + CRUD + Realtime + Llegadas logística | ✅ COMPLETO + AUDITADO |
+| 6 | UsersPage (`/usuarios`) — CRUD completo, Edge Function, cambio contraseña | ✅ COMPLETO + AUDITADO |
+| 6B | DepotsPage (`/depositos`) — Filtros estandarizados in-page | ✅ COMPLETO |
 
 **La app corre:** `npm run dev` → http://localhost:5173
-**Tests:** 480 passing (12 suites) | TSC 0 errores | Build OK | ESLint 0 errors
-**Última auditoría profunda:** 12/03/2026 — Score 9.0/10 — 7 ESLint errors→0, split monolito, error boundaries, 47 tests nuevos
-**Sesión 12/03/2026 01:25:** Transparent Loading UX para ActionQueuePage (ver abajo)
+**Tests:** 848 passing (22 suites) | TSC 0 errores | Build OK
+**Deploy:** https://fenix-brands-one.vercel.app
+**Sesión 14/03/2026 (00:00–04:00):** Ver log detallado abajo
+**Sesión 14/03/2026 (04:00–14:00):** Ver log detallado abajo
 
 ---
 
 ## Proximo trabajo
 
-**Deuda Fase 6:** SettingsPage — no existe spec, ruta ni stub. Posible contenido:
+**Deuda SettingsPage:** Posible contenido restante:
 - Perfil de usuario (nombre, foto, cambiar contraseña)
 - Preferencias de app (tema claro/oscuro)
-- Gestion de usuarios/roles
 - Configuracion de alertas/notificaciones
 - **Requiere definicion de Rodrigo/Derlys antes de implementar**
 
@@ -70,14 +71,20 @@ src/
   domain/actionQueue/grouping.ts  — Agrupacion pura por tienda/marca
   domain/logistics/types.ts      — Tipos logística (ArrivalStatus, LogisticsGroup, etc.)
   domain/logistics/arrivals.ts   — Funciones puras: toArrivals, groupArrivals, computeSummary
+  domain/logistics/calendar.ts   — Funciones puras: groupsToCalendarItems, arrivalsByDay (proyeccion logistica→calendario)
   context/FilterContext.tsx     — useFilters() — estado global de filtros
-  queries/sales.queries.ts      — fetchMonthlySales, fetchDailyDetail, fetchBrandBreakdown...
+  queries/sales.queries.ts      — fetchMonthlySales, fetchDailyDetail, fetchBrandBreakdown, fetchTopSkus (con weightPct)...
   queries/inventory.queries.ts  — fetchInventory, fetchInventoryValue
   queries/salesHistory.queries.ts — fetchSalesHistory (6m promedio por tienda+SKU)
   queries/tickets.queries.ts    — fetchTickets (AOV diario)
   queries/logistics.queries.ts  — fetchLogisticsImports (tabla Import, ETAs)
   queries/budget.queries.ts     — fetchBudget
   queries/keys.ts               — Query key factories para TanStack Query
+  queries/users.queries.ts      — fetchAllProfiles, updateProfile, createUser, deleteUser
+  features/calendar/hooks/useCalendarArrivals.ts — Hook: logística→calendario (read-only)
+  features/users/               — UsersPage CRUD + hooks + modals
+  features/auth/ChangePasswordPage.tsx — Cambio de contraseña obligatorio (primer login)
+  supabase/functions/manage-user/index.ts — Edge Function (create/delete users con service_role)
 ```
 
 ---
@@ -118,3 +125,266 @@ src/
 - Título cambiado a "Definiendo Acciones"
 
 **Verificación:** TSC 0 errores | Build OK | ESLint 0 errors | 480 tests passing
+
+---
+
+## Sesión 14/03/2026 00:00–04:00 — Gestión de Usuarios + Calendario + KPIs + UI
+
+### 1. UsersPage — CRUD completo (00:00–01:30)
+
+**Creado:**
+- `src/features/users/UsersPage.tsx` — Tabla de usuarios con filtros, badges, editar/eliminar
+- `src/features/users/components/UserEditModal.tsx` — Edición de perfil (rol, canal, cargo, estado)
+- `src/features/users/components/UserCreateModal.tsx` — Crear usuario (email, nombre, rol, canal)
+- `src/features/users/components/UserDeleteDialog.tsx` — Confirmación de eliminación
+- `src/features/users/hooks/useUsers.ts` — Hook TanStack Query con mutations create/update/delete
+- `src/domain/users/validation.ts` — validateEmail, validateCreateUser, validatePassword, canDeleteUser
+- `src/queries/users.queries.ts` — fetchAllProfiles, updateProfile, createUser, deleteUser (Edge Function)
+- `src/features/auth/ChangePasswordPage.tsx` — Cambio de contraseña obligatorio (primer login)
+- `supabase/functions/manage-user/index.ts` — Edge Function (create con fenix123 + delete)
+- `sql/005_must_change_password.sql` — Columna + funciones RPC SECURITY DEFINER
+
+**RLS resuelto:**
+- Policy recursiva causaba error 500 → fix con `get_my_role()` SECURITY DEFINER
+- Policies para UPDATE/INSERT de profiles
+- Funciones `clear_must_change_password()` / `set_must_change_password()` para primer login
+- Secret `SB_SERVICE_ROLE_KEY` en Edge Functions (no `SUPABASE_*` que CLI rechaza)
+
+**Modificado:** App.tsx (rutas), AppSidebar.tsx (sección Control), AppHeader.tsx (ocultar filtros en /usuarios), domain/auth/types.ts (mustChangePassword), profile.queries.ts
+
+### 2. Calendario — Auditoría + Mejoras (01:30–02:30)
+
+**RLS:** `sql/006_calendar_rls.sql` — 8 policies para calendar_events + calendar_categories (shared, todos los autenticados)
+
+**Nuevos campos:** `sql/007_calendar_description_budget.sql`
+- `description TEXT` — contexto del evento
+- `budget NUMERIC` — presupuesto trazable con índice
+- `currency TEXT` (PYG/USD) — preparado multi-moneda
+
+**Refactorizado:**
+- Modal inline del CalendarPage (150 líneas) extraído a `EventFormModal.tsx`
+- Categoría ahora es select dropdown (no radio buttons)
+- Presupuesto con símbolo ₲/$ inline + pill PYG/USD
+- Fechas lado a lado (grid 2 cols)
+
+**Hook mejorado:**
+- `validateDateRange()`, `parseBudgetInput()`, `validateEventForm()` — funciones puras
+- Budget max validation (100B)
+- Empty slug protection en addCategory
+- Stale closure fix en updateCategoryColor (functional updater, deps [])
+- Rollback en update/delete/move con try/catch
+- `categoryHasEvents()` para proteger eliminación
+- Concurrent edit protection (exists check antes de update)
+- Category dedup (23505 duplicate key handling)
+
+### 3. KPIs — UPT activado + Catálogo completo (02:30–03:45)
+
+**UPT activado:**
+- Datos de `v_transacciones_dwh` (nueva tabla, 12K+ filas 2026) verificados vs `vw_ticket_promedio_diario`
+- Unidades de `mv_ventas_mensual` (columna `unidades` agregada a la vista materializada)
+- YoY funcional (prior year data disponible)
+- Format `ratio` (2 decimales) en vez de `number` (redondeaba a 0 decimales)
+- Nota de aproximación removida (bloqueaba render del valor)
+
+**Vista materializada actualizada:**
+```sql
+ALTER → mv_ventas_mensual ahora incluye SUM(v_cantvend) AS unidades
+```
+
+**Catálogo de 50 KPIs visible:**
+- `src/domain/kpis/categories.ts` — 9 categorías con metadata, helpers getPstLabel/getPstBadgeClass
+- Dashboard muestra stats + 9 core cards + 9 secciones con preview 4 KPIs + "Ver todos"
+- Cards bloqueadas con opacity-50 + grayscale + lock icon overlay (estilo FenixBrands)
+- Badge "Fase 2" (púrpura) para los 8 KPIs `next`
+- `KpiCategoryPage.tsx` — Vista por categoría con filtro PST, breadcrumb, stats bar
+
+**Sparklines SVG:**
+- Reutiliza `MiniSparkline` de sales (SVG puro, Catmull-Rom)
+- 6 KPIs con sparkline: Revenue, GM%, AOV, UPT, Markdown, (LfL si hay meses)
+- Color dinámico: verde (YoY positivo), rojo (negativo), brand blue (sin YoY)
+
+### 4. UI/UX estandarización (03:45–04:00)
+
+**Sidebar:**
+- KPIs movido de "Comercial" a "Análisis"
+- Icono barco (ship.svg) para Logística
+- Icono warehouse (warehouse.svg) para Depósitos
+
+**Filtros estandarizados:**
+- Header: solo marca en páginas con filtros in-page
+- In-page: canal + período (ExecutiveFilters) — ahora en: Inicio, Ventas, Acciones, Logística, KPIs, Depósitos
+- Calendario y Usuarios: sin filtros en header
+
+**KPI cards rediseñadas:**
+- Title uppercase tracking-wide
+- Valor + sparkline lado a lado
+- YoY badge en footer (no junto al valor — evita line breaks)
+- Grid 3 columnas (más espacio para cifras largas)
+- whitespace-nowrap en valores
+
+**Console.warn removidos** de profile.queries.ts (producción limpia)
+**Password hardcoded** → env var `DEFAULT_USER_PASSWORD` en Edge Function
+
+### Tests: 762 passing (19 suites)
+
+| Suite | Tests |
+|-------|-------|
+| domain/auth | 43 |
+| domain/kpis/calculations | 45 |
+| domain/kpis/fenix.contract | 101 |
+| domain/kpis/filterSupport | 15 |
+| domain/period | 19 |
+| domain/executive | 38 |
+| domain/actionQueue/waterfall | 116 |
+| domain/actionQueue/grouping | 35 |
+| domain/logistics | 23 |
+| domain/depots | 23 |
+| domain/search/engine | 21 |
+| domain/search/catalog | 16 |
+| domain/users/validation | 47 |
+| api/normalize | 42 |
+| queries/profile | 17 |
+| queries/users | 12 |
+| queries/paginate | 9 |
+| features/users | 34 |
+| features/calendar | 96 |
+
+**Verificación final:** 762 tests | TSC 0 errores | Build OK
+
+---
+
+## Sesión 14/03/2026 04:00–14:00 — Logística↔Calendario + UI Inicio + YoY Tiendas + Top/Bottom SKUs
+
+### 1. Llegadas de Logística en Calendario (04:00–06:00)
+
+**Objetivo:** Conectar logística con calendario. Las ETAs de importación se visualizan como indicadores read-only en el calendario (no son eventos editables).
+
+**Arquitectura:**
+```
+Import table → fetchLogisticsImports (reutiliza query existente, TanStack Query deduplica)
+  → toArrivals() → groupArrivals() (reutiliza domain existente)
+  → groupsToCalendarItems() (NUEVA función pura)
+  → useCalendarArrivals() (NUEVO hook)
+  → CalendarPage integra: toggle + render diferenciado + year view indicators + click → popover
+```
+
+**Archivos creados:**
+
+| Archivo | Propósito |
+|---------|-----------|
+| `src/domain/logistics/calendar.ts` | Funciones puras: `groupsToCalendarItems`, `arrivalsByDay`, `getBrandColor`, `getStatusColor` |
+| `src/domain/logistics/__tests__/calendar.test.ts` | 26 tests: transform, colores, aggregation, edge cases |
+| `src/features/calendar/hooks/useCalendarArrivals.ts` | Hook: reutiliza query logística + transform → FullCalendar events (0 queries nuevas) |
+| `src/features/calendar/components/ArrivalDetailPopover.tsx` | Modal read-only con datos de llegada + "Ver en Logística" → navigate("/logistica") |
+| `src/features/calendar/__tests__/calendarArrivals.test.ts` | 17 tests: pipeline completo, integración, toggle, colores, edge cases |
+
+**Archivos modificados:**
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/features/calendar/CalendarPage.tsx` | Integración completa: toggle "Llegadas" con icono barco SVG + conteo + legend por marca. FullCalendar merge events+arrivals (arrivals: editable=false, display diferenciado con brand color + status border-left). Year view: barras de colores por marca en mini-months. Click en llegada → ArrivalDetailPopover. Arrivals no arrastrables/redimensionables. Import `EventResizeDoneArg` tipado correctamente. |
+
+**Principios de diseño:**
+- Llegadas NO son eventos del calendario (no CRUD, no arrastrar, no redimensionar)
+- Visual diferenciado: barra con icono barco + color de marca + borde de status
+- Datos vienen de la misma query que `/logistica` (TanStack Query deduplica, 0 cost)
+- Toggle de visibilidad con conteo y legend por marca
+- Click abre popover read-only con detalle + link a logística
+
+**Deploy:** `vercel --prod` → https://fenix-brands-one.vercel.app (build OK)
+
+### 2. Fix errores TS pre-existentes (06:00–06:30)
+
+5 errores de `tsc -b` (incluye tests) que existían antes de esta sesión:
+
+| Archivo | Error | Fix |
+|---------|-------|-----|
+| `features/calendar/__tests__/useCalendar.test.ts` | TS2352 cast DbEvent→Record | `as unknown as Record` |
+| `features/kpis/components/KpiCard.tsx` | TS6133 `getYoyIcon` no usada | Eliminada |
+| `features/users/__tests__/useUsers.test.ts` | TS2367 comparación imposible | Tipo explícito `string` |
+| `features/users/__tests__/useUsers.test.ts` | TS2367 role !== "negocio" | Cast `as string` |
+| `queries/__tests__/profile.queries.test.ts` | TS2556 spread args | Tipado `_table: string` en mockFrom |
+
+### 3. Ajustes UI — Página de Inicio (06:30–08:00)
+
+**Card Meta Anual/Mensual — Fix de altura:**
+- **Problema:** Card más alta que los bloques izquierdos (Ventas Netas + vs 2025 + Gráfico)
+- **Causa:** Gauge height=400 + mt-30 (120px) + mt-28 (112px) = ~730px vs ~470px izquierda
+- **Fix:** Gauge height 400→240, margins eliminados, layout flex: título (top) → gauge centrado (flex-1) → footer (mt-auto)
+- Badge "Faltan ₲X" / "Meta superada" movido a esquina superior derecha del título
+- Variable `remaining` muerta eliminada, `channelInsights` no usado eliminado
+
+**InsightBar — Simplificación:**
+- Eliminado efecto de transición (fade in/out, setInterval, rotación)
+- Eliminada barra de canales (`altInsights`)
+- Solo queda barra de marcas fija, sin animación
+- Interface limpiada: eliminados `altInsights`, estilos B2C/B2B muertos, `ROTATE_INTERVAL`
+
+### 4. YoY por Tienda y Zona Mayorista en Ventas (08:00–10:00)
+
+**Objetivo:** "Ver el % año contra año (de las ventas solamente) en las tarjetas por tienda y zonas."
+
+**Implementación:**
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/features/sales/hooks/useSalesAnalytics.ts` | `StoreBreakdownRow` + `prevNeto?: number` y `yoyPct?: number`. `buildStoreBreakdown` recibe PY rows y calcula YoY por tienda con `calcYoY()`. 0 queries nuevas (datos PY ya cacheados via `salesPYQ`). |
+| `src/features/sales/components/StoresTable.tsx` | Badge YoY como primer badge en cards B2B y B2C: `▲ +12.5% vs 2025` verde o `▼ -3.2% vs 2025` rojo. Año dinámico via `useFilters().year - 1`. Solo visible si hay datos del año anterior. |
+| `src/features/sales/components/StoreDetailView.tsx` | Nueva card "vs {priorYear}" en grid KPIs (6 cols). Background verde/rojo contextual. Fallback `—` si no hay datos PY. Año dinámico via `useFilters()`. |
+
+**Lógica YoY:**
+- Mismo período (mismos `activeMonths`), mismos filtros (marca, canal)
+- Agrupado por tienda (cosujd)
+- `calcYoY(netoActual, netoPY)` — fórmula existente en `calculations.ts`
+- Tienda nueva (sin datos PY) → `yoyPct = undefined`, badge no se muestra
+- Año dinámico: `filters.year - 1` (resiliente a cambios de año)
+
+### 5. Top/Bottom SKUs + Peso % (10:00–12:00)
+
+**Objetivo:** "En Top SKUs faltó el peso % del SKU en la venta y el filtro por Top Seller y Bottom Sellers."
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/queries/sales.queries.ts` | `TopSkuRow` + campo `weightPct: number` (0-100). `fetchTopSkus` calcula peso de cada SKU sobre total de ventas del universo. `limit=0` retorna todos (necesario para bottom). |
+| `src/features/sales/components/SkusCard.tsx` | Toggle **Top / Bottom** (pill switch en esquina superior derecha). Top: 20 mejores, Bottom: 20 peores (invertidos). Badge rank rojo para bottom. Nuevo dato `X.X% del total` en brand-500 debajo de unidades. |
+
+### 6. Auditoría + Pulido final (12:00–14:00)
+
+Auditoría completa de todos los cambios de la sesión. Hallazgos corregidos:
+
+| Hallazgo | Severidad | Fix |
+|----------|-----------|-----|
+| Variable `remaining` no usada en ExecutivePage IIFE | Media | Eliminada |
+| `channelInsights` destructurado pero no usado | Media | Eliminado del destructuring |
+| `InsightBarProps.altInsights` tipo muerto + `Omit` innecesario | Baja | Interface simplificada |
+| `handleEventResize` con tipo duck-typed | Media | Import `EventResizeDoneArg` de `@fullcalendar/interaction` |
+| Estilos B2C/B2B muertos en InsightBar `LABEL_STYLES` | Baja | Eliminados |
+
+### Tests: 848 passing (22 suites)
+
+| Suite | Tests |
+|-------|-------|
+| domain/auth | 43 |
+| domain/kpis/calculations | 45 |
+| domain/kpis/fenix.contract | 101 |
+| domain/kpis/filterSupport | 15 |
+| domain/period | 19 |
+| domain/executive | 38 |
+| domain/actionQueue/waterfall | 116 |
+| domain/actionQueue/grouping | 35 |
+| domain/logistics/arrivals | 38 |
+| domain/logistics/calendar | 26 |
+| domain/depots | 23 |
+| domain/search/engine | 21 |
+| domain/search/catalog | 16 |
+| domain/help/guide | 28 |
+| domain/users/validation | 47 |
+| api/normalize | 42 |
+| queries/profile | 17 |
+| queries/users | 17 |
+| queries/paginate | 9 |
+| features/users | 34 |
+| features/calendar/useCalendar | 101 |
+| features/calendar/calendarArrivals | 17 |
+
+**Verificación final:** 848 tests | 22 suites | TSC 0 errores | TSC -b 0 errores | Build OK

@@ -67,6 +67,7 @@ export function CompactActionList({ items, intent, groupMode }: Props) {
             <Th>Producto</Th>
             <Th className="w-14 text-center">Talle</Th>
             <Th className="w-28 text-center">Estado</Th>
+            <Th className="w-20 text-center">Cobertura</Th>
             <UnitsHeader intent={intent} />
             <CounterpartHeader intent={intent} />
           </tr>
@@ -113,7 +114,7 @@ export function CompactActionList({ items, intent, groupMode }: Props) {
                 {item.talle}
               </td>
 
-              {/* Status: stock + MOS + risk — compact diagnosis */}
+              {/* Status: stock + risk */}
               <td className="px-3 py-2.5 text-center">
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-[11px] tabular-nums text-gray-500 dark:text-gray-400">
@@ -121,17 +122,30 @@ export function CompactActionList({ items, intent, groupMode }: Props) {
                   </span>
                   <Badge text={RISK_LABELS[item.risk]} className={RISK_STYLES[item.risk]} />
                 </div>
-                {item.currentMOS > 0 && (
-                  <p className={`mt-0.5 text-[10px] tabular-nums ${
-                    item.currentMOS < 1
-                      ? "font-semibold text-error-600 dark:text-error-400"
-                      : item.currentMOS < 2
-                      ? "font-medium text-warning-600 dark:text-warning-400"
-                      : "text-gray-400 dark:text-gray-500"
-                  }`}>
-                    {item.currentMOS.toFixed(1)} MOS
-                  </p>
-                )}
+              </td>
+
+              {/* Cobertura: MOS (tiendas) / WOI (depósitos) */}
+              <td className="px-3 py-2.5 text-center">
+                {(() => {
+                  if (item.currentMOS <= 0) return <span className="text-[11px] text-gray-300 dark:text-gray-600">—</span>;
+                  const isDepot = item.store === "RETAILS" || item.store === "STOCK";
+                  const value = isDepot ? item.currentMOS * 4.33 : item.currentMOS;
+                  const label = isDepot ? "WOI" : "MOS";
+                  const low = isDepot ? 4.33 : 1;
+                  const mid = isDepot ? 8.66 : 2;
+                  return (
+                    <p className={`text-[11px] font-medium tabular-nums ${
+                      value < low
+                        ? "text-error-600 dark:text-error-400"
+                        : value < mid
+                        ? "text-warning-600 dark:text-warning-400"
+                        : "text-gray-500 dark:text-gray-400"
+                    }`}>
+                      {value.toFixed(1)}
+                      <span className="ml-0.5 text-[9px] font-normal text-gray-400 dark:text-gray-500">{label}</span>
+                    </p>
+                  );
+                })()}
               </td>
 
               {/* Units to move */}

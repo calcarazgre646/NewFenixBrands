@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { LogisticsImport } from "@/queries/logistics.queries";
-import { statusLabel, toArrivals, groupArrivals, computeSummary } from "../arrivals";
+import {
+  statusLabel,
+  toArrivals,
+  groupArrivals,
+  computeSummary,
+  computeBrandPipeline,
+  groupByStatus,
+} from "../arrivals";
 
 function makeImport(overrides: Partial<LogisticsImport> = {}): LogisticsImport {
   return {
@@ -219,5 +226,170 @@ describe("computeSummary", () => {
     const summary = computeSummary(groups, arrivals);
     // Should skip the overdue (Mar 5) and pick the next this_month (Mar 15)
     expect(summary.nextDate).not.toBe("—");
+  });
+
+  it("includes nextDaysUntil for first non-overdue arrival", () => {
+    const { arrivals, groups } = buildData();
+    const summary = computeSummary(groups, arrivals);
+    expect(summary.nextDaysUntil).toBe(5); // Mar 15 - Mar 10 = 5d
+  });
+
+  it("sums totalFobUSD from active arrivals only", () => {
+    const { arrivals, groups } = buildData();
+    const summary = computeSummary(groups, arrivals);
+    // 3 active arrivals (overdue+this_month+next_month), each costUSD=10
+    expect(summary.totalFobUSD).toBe(30);
+  });
+
+  it("counts distinct active brands", () => {
+    const { arrivals, groups } = buildData();
+    const summary = computeSummary(groups, arrivals);
+    // All 3 active arrivals are Martel
+    expect(summary.activeBrands).toBe(1);
+  });
+
+  it("nextDaysUntil is 999 when no non-overdue active arrival exists", () => {
+    const overdueOnly = toArrivals([
+      makeImport({ eta: new Date(2026, 2, 5), quantity: 50 }),
+    ]);
+    const groups = groupArrivals(overdueOnly);
+    const summary = computeSummary(groups, overdueOnly);
+    expect(summary.nextDaysUntil).toBe(999);
+  });
+});
+
+// ─── computeBrandPipeline ───────────────────────────────────────────────────
+
+describe("computeBrandPipeline", () => {
+  it("groups active arrivals by brand with correct metrics", () => {
+    const arrivals = toArrivals([
+      makeImport({ brand: "Martel", quantity: 100, costUSD: 20, eta: new Date(2026, 2, 15) }),
+      makeImport({ brand: "Martel", quantity: 50, costUSD: 15, eta: new Date(2026, 2, 20) }),
+      makeImport({ brand: "Lee", quantity: 80, costUSD: 10, eta: new Date(2026, 3, 5) }),
+    ]);
+    const pipeline = computeBrandPipeline(arrivals);
+    expect(pipeline).toHaveLength(2);
+
+    const martel = pipeline.find(p => p.brandNorm === "martel")!;
+    expect(martel.totalUnits).toBe(150);
+    expect(martel.fobUSD).toBe(35);
+
+    const lee = pipeline.find(p => p.brandNorm === "lee")!;
+    expect(lee.totalUnits).toBe(80);
+    expect(lee.fobUSD).toBe(10);
+  });
+
+  it("excludes past arrivals", () => {
+    const arrivals = toArrivals([
+      makeImport({ brand: "Martel", quantity: 100, eta: new Date(2026, 2, 15) }),
+      makeImport({ brand: "Lee", quantity: 200, eta: new Date(2026, 1, 10) }), // past
+    ]);
+    const pipeline = computeBrandPipeline(arrivals);
+    expect(pipeline).toHaveLength(1);
+    expect(pipeline[0].brandNorm).toBe("martel");
+  });
+
+  it("calculates sharePct correctly", () => {
+    const arrivals = toArrivals([
+      makeImport({ brand: "Martel", quantity: 75, eta: new Date(2026, 2, 15) }),
+      makeImport({ brand: "Lee", quantity: 25, eta: new Date(2026, 3, 5) }),
+    ]);
+    const pipeline = computeBrandPipeline(arrivals);
+    const martel = pipeline.find(p => p.brandNorm === "martel")!;
+    const lee = pipeline.find(p => p.brandNorm === "lee")!;
+    expect(martel.sharePct).toBe(75);
+    expect(lee.sharePct).toBe(25);
+  });
+
+  it("sorts by totalUnits descending", () => {
+    const arrivals = toArrivals([
+      makeImport({ brand: "Lee", quantity: 200, eta: new Date(2026, 3, 5) }),
+      makeImport({ brand: "Martel", quantity: 50, eta: new Date(2026, 2, 15) }),
+      makeImport({ brand: "Wrangler", quantity: 300, eta: new Date(2026, 3, 10) }),
+    ]);
+    const pipeline = computeBrandPipeline(arrivals);
+    expect(pipeline.map(p => p.brandNorm)).toEqual(["wrangler", "lee", "martel"]);
+  });
+
+  it("nextEta skips overdue arrivals", () => {
+    const arrivals = toArrivals([
+      makeImport({ brand: "Martel", quantity: 50, eta: new Date(2026, 2, 5) }),  // overdue
+      makeImport({ brand: "Martel", quantity: 50, eta: new Date(2026, 2, 20) }), // this_month
+    ]);
+    const pipeline = computeBrandPipeline(arrivals);
+    expect(pipeline[0].nextEta).not.toBeNull();
+    // nextDaysUntil should be 10 (Mar 20 - Mar 10)
+    expect(pipeline[0].nextDaysUntil).toBe(10);
+  });
+
+  it("returns empty for all-past arrivals", () => {
+    const arrivals = toArrivals([
+      makeImport({ brand: "Martel", quantity: 50, eta: new Date(2026, 1, 10) }),
+    ]);
+    const pipeline = computeBrandPipeline(arrivals);
+    expect(pipeline).toHaveLength(0);
+  });
+});
+
+// ─── groupByStatus ──────────────────────────────────────────────────────────
+
+describe("groupByStatus", () => {
+  it("partitions groups by status in correct order", () => {
+    const arrivals = toArrivals([
+      makeImport({ eta: new Date(2026, 2, 5), supplier: "A" }),   // overdue
+      makeImport({ eta: new Date(2026, 2, 15), supplier: "B" }),  // this_month
+      makeImport({ eta: new Date(2026, 3, 10), supplier: "C" }),  // next_month
+      makeImport({ eta: new Date(2026, 5, 1), supplier: "D" }),   // upcoming
+    ]);
+    const groups = groupArrivals(arrivals);
+    const sections = groupByStatus(groups);
+
+    expect(sections.map(s => s.status)).toEqual(["overdue", "this_month", "next_month", "upcoming"]);
+  });
+
+  it("omits empty sections", () => {
+    const arrivals = toArrivals([
+      makeImport({ eta: new Date(2026, 2, 15) }),  // this_month only
+    ]);
+    const groups = groupArrivals(arrivals);
+    const sections = groupByStatus(groups);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].status).toBe("this_month");
+  });
+
+  it("sums totalUnits per section", () => {
+    const arrivals = toArrivals([
+      makeImport({ eta: new Date(2026, 2, 15), quantity: 100 }),
+      makeImport({ eta: new Date(2026, 2, 20), quantity: 50, supplier: "B" }),
+    ]);
+    const groups = groupArrivals(arrivals);
+    const sections = groupByStatus(groups);
+    // Both are this_month, different groups (different supplier)
+    expect(sections[0].totalUnits).toBe(150);
+  });
+
+  it("includes past section when past groups exist", () => {
+    const arrivals = toArrivals([
+      makeImport({ eta: new Date(2026, 1, 10) }), // past
+      makeImport({ eta: new Date(2026, 2, 15) }), // this_month
+    ]);
+    const groups = groupArrivals(arrivals);
+    const sections = groupByStatus(groups);
+    const statuses = sections.map(s => s.status);
+    expect(statuses).toContain("this_month");
+    expect(statuses).toContain("past");
+    // past comes after upcoming in order
+    expect(statuses.indexOf("this_month")).toBeLessThan(statuses.indexOf("past"));
+  });
+
+  it("assigns correct labels", () => {
+    const arrivals = toArrivals([
+      makeImport({ eta: new Date(2026, 2, 5) }),   // overdue
+      makeImport({ eta: new Date(2026, 2, 15) }),  // this_month
+    ]);
+    const groups = groupArrivals(arrivals);
+    const sections = groupByStatus(groups);
+    expect(sections[0].label).toBe("Atrasados");
+    expect(sections[1].label).toBe("Este Mes");
   });
 });

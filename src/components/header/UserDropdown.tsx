@@ -1,7 +1,7 @@
 /**
  * FenixBrands - User Dropdown
  *
- * Dropdown del usuario con opción de cerrar sesión.
+ * Dropdown del usuario con rol badge y opción de cerrar sesión.
  */
 
 import { useState } from "react";
@@ -9,10 +9,11 @@ import { Dropdown } from "../ui/dropdown/Dropdown";
 import { useAuth } from "../../context/AuthContext";
 import { useFilters } from "../../context/FilterContext";
 import { useNavigate } from "react-router";
+import { getRoleLabel } from "@/domain/auth/types";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, logout, profile } = useAuth();
   const { resetFilters } = useFilters();
   const navigate = useNavigate();
 
@@ -30,8 +31,8 @@ export default function UserDropdown() {
     navigate("/signin");
   }
 
-  // Get initials from full_name (user_metadata) or email
-  const fullName = user?.user_metadata?.full_name as string | undefined;
+  // Get initials from profile or user_metadata
+  const fullName = profile?.fullName || (user?.user_metadata?.full_name as string | undefined);
   const initials = fullName
     ? fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
     : user?.email?.slice(0, 2).toUpperCase() || "FB";
@@ -83,6 +84,11 @@ export default function UserDropdown() {
           <span className="mt-0.5 block text-theme-xs text-gray-500 dark:text-gray-400">
             {user?.email || ""}
           </span>
+          {profile && (
+            <span className="mt-1.5 inline-flex items-center rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-400">
+              {getRoleLabel(profile.role)}
+            </span>
+          )}
         </div>
 
         <button

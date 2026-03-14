@@ -243,7 +243,7 @@ describe("buildMonthlyRows", () => {
     expect(rows[0].vsLastYear).toBe(1e9);
   });
 
-  it("prorates budget in partial month", () => {
+  it("uses full budget even in partial month (no proration)", () => {
     const rows = buildMonthlyRows({
       monthlyReal: new Map([[2, 3e9]]),
       monthlyBudget: new Map([[2, 6e9]]),
@@ -257,7 +257,9 @@ describe("buildMonthlyRows", () => {
       calendarMonth: 2,
       partialProrata: { month: 2, factor: 0.5 },
     });
-    expect(rows[1].budget).toBe(3e9);
+    // Budget must be the full month value, NOT prorated
+    expect(rows[1].budget).toBe(6e9);
+    expect(rows[1].vsBudget).toBe(3e9 - 6e9);
   });
 
   it("uses budget * 0.90 as lastYear fallback when no PY data", () => {

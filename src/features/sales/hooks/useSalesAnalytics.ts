@@ -61,6 +61,10 @@ export interface StoreBreakdownRow {
   tickets: number;
   aov: number;
   revenuePct: number;
+  /** Ventas netas del mismo período año anterior (undefined si no hay datos PY) */
+  prevNeto?: number;
+  /** % variación año contra año de ventas netas (undefined si no hay datos PY) */
+  yoyPct?: number;
 }
 
 export interface SalesAnalyticsData {
@@ -126,6 +130,7 @@ function buildDayOfWeek(rows: DailyDetailRow[]): DayOfWeekStat[] {
 
 function buildStoreBreakdown(
   salesRows: MonthlySalesRow[],
+  pyRows: MonthlySalesRow[],
   activeMonths: number[],
   brand: string,
   channel: string,
@@ -148,6 +153,15 @@ function buildStoreBreakdown(
     storeAcc.set(r.store, acc);
   }
 
+  // Prior year: mismos meses, mismos filtros, agrupado por tienda
+  const pyAcc = new Map<string, number>();
+  for (const r of pyRows) {
+    if (!activeMonths.includes(r.month)) continue;
+    if (canonical && r.brand !== canonical) continue;
+    if (ch && r.channel !== ch) continue;
+    pyAcc.set(r.store, (pyAcc.get(r.store) ?? 0) + r.neto);
+  }
+
   const ticketsByStore = new Map<string, { tickets: number; sales: number }>();
   for (const t of ticketRows) {
     if (!activeMonths.includes(t.month)) continue;
@@ -165,6 +179,7 @@ function buildStoreBreakdown(
   const rows: StoreBreakdownRow[] = [];
   storeAcc.forEach((v, store) => {
     const tkt = ticketsByStore.get(store.trim().toUpperCase());
+    const prevNeto = pyAcc.get(store) ?? 0;
     rows.push({
       storeCode:   store,
       neto:        v.neto,
@@ -174,6 +189,8 @@ function buildStoreBreakdown(
       tickets:     tkt?.tickets ?? 0,
       aov:         tkt && tkt.tickets > 0 ? tkt.sales / tkt.tickets : 0,
       revenuePct:  totalNeto > 0 ? (v.neto / totalNeto) * 100 : 0,
+      prevNeto:    prevNeto > 0 ? prevNeto : undefined,
+      yoyPct:      prevNeto > 0 ? calcYoY(v.neto, prevNeto) : undefined,
     });
   });
 
@@ -385,28 +402,29 @@ export function useSalesAnalytics({
   const storeBreakdown = useMemo(
     () => buildStoreBreakdown(
       salesCYQ.data ?? [],
+      salesPYQ.data ?? [],
       activeMonths,
       filters.brand,
       filters.channel,
       filteredTickets,
       storeMap,
     ),
-    [salesCYQ.data, activeMonths, filters.brand, filters.channel, filteredTickets, storeMap],
+    [salesCYQ.data, salesPYQ.data, activeMonths, filters.brand, filters.channel, filteredTickets, storeMap],
   );
 
   // Breakdowns separados por canal (para vista "total")
   const storeBreakdownB2C = useMemo(
     () => filters.channel === "total"
-      ? buildStoreBreakdown(salesCYQ.data ?? [], activeMonths, filters.brand, "b2c", filteredTickets, storeMap)
+      ? buildStoreBreakdown(salesCYQ.data ?? [], salesPYQ.data ?? [], activeMonths, filters.brand, "b2c", filteredTickets, storeMap)
       : [],
-    [salesCYQ.data, activeMonths, filters.brand, filters.channel, filteredTickets, storeMap],
+    [salesCYQ.data, salesPYQ.data, activeMonths, filters.brand, filters.channel, filteredTickets, storeMap],
   );
 
   const storeBreakdownB2B = useMemo(
     () => filters.channel === "total"
-      ? buildStoreBreakdown(salesCYQ.data ?? [], activeMonths, filters.brand, "b2b", filteredTickets, storeMap)
+      ? buildStoreBreakdown(salesCYQ.data ?? [], salesPYQ.data ?? [], activeMonths, filters.brand, "b2b", filteredTickets, storeMap)
       : [],
-    [salesCYQ.data, activeMonths, filters.brand, filters.channel, filteredTickets, storeMap],
+    [salesCYQ.data, salesPYQ.data, activeMonths, filters.brand, filters.channel, filteredTickets, storeMap],
   );
 
   // ── Loading states ─────────────────────────────────────────────────────

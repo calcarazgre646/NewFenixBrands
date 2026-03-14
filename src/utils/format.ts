@@ -65,6 +65,13 @@ export function formatRatio(value: number, decimals = 2): string {
   return `${value.toFixed(decimals)}x`;
 }
 
+/** Semanas de cobertura: 9.8 → "9.8", null → "N/A" */
+export function formatWeeks(value: number | null): string {
+  if (value === null) return "N/A";
+  if (!isFinite(value)) return "—";
+  return value.toFixed(1);
+}
+
 /** Días: 45 → "45 días" */
 export function formatDays(value: number): string {
   if (!isFinite(value)) return "—";

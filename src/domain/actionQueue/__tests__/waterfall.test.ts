@@ -987,7 +987,39 @@ describe('computeActionQueue', () => {
     // B2B deficit with no surplus → N4
     const n4 = result.filter(a => a.waterfallLevel === 'central_to_b2b')
     expect(n4.length).toBeGreaterThanOrEqual(1)
-    // B2B can also get N2 from RETAILS if depot has stock (depot shares across modes)
+  })
+
+  // H-05b: B2B mode — RETAILS depot does NOT participate (RETAILS is B2C only)
+  it('HIGH: B2B mode does NOT get N2 from RETAILS depot', () => {
+    const sales = new Map([['MAYORISTA|SKU001', 10]])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'MAYORISTA', units: 0, channel: 'b2b' }),
+        inv({ store: 'RETAILS', units: 500 }),  // RETAILS has plenty of stock
+        inv({ store: 'STOCK', units: 100 }),
+      ], sales),
+      'b2b', null, null, null, null, 0,
+    )
+    // No N2 actions (RETAILS excluded from B2B)
+    const n2 = result.filter(a => a.waterfallLevel === 'depot_to_store')
+    expect(n2).toHaveLength(0)
+    // Should get N4 (central_to_b2b) instead
+    const n4 = result.filter(a => a.waterfallLevel === 'central_to_b2b')
+    expect(n4.length).toBeGreaterThanOrEqual(1)
+  })
+
+  // H-05c: B2C mode still gets N2 from RETAILS depot
+  it('HIGH: B2C mode still gets N2 from RETAILS depot', () => {
+    const sales = new Map([['TIENDA1|SKU001', 10]])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'RETAILS', units: 500 }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    const n2 = result.filter(a => a.waterfallLevel === 'depot_to_store')
+    expect(n2.length).toBeGreaterThanOrEqual(1)
   })
 
   // ─── HIGH: coverMonths calculation ─────────────────────────────────────────

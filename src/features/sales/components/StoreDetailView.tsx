@@ -10,7 +10,8 @@ import ResponsiveChart from "@/components/ui/chart/ResponsiveChart";
 import type { MonthlySalesRow, DailyDetailRow } from "@/queries/sales.queries";
 import type { StoreBreakdownRow } from "../hooks/useSalesAnalytics";
 import { calcGrossMargin, classifyMarginHealth, marginHealthThresholds } from "@/domain/kpis/calculations";
-import { formatPYGShort, formatPYGSuffix, formatPct } from "@/utils/format";
+import { formatPYGShort, formatPYGSuffix, formatPct, formatChange } from "@/utils/format";
+import { useFilters } from "@/context/FilterContext";
 import { MONTH_SHORT } from "@/domain/period/helpers";
 import { brandIdToCanonical } from "@/api/normalize";
 import {
@@ -122,6 +123,8 @@ export function StoreDetailView({
   channelMode?: string;
   brand?: string;
 }) {
+  const { filters: globalFilters } = useFilters();
+  const priorYear = globalFilters.year - 1;
   const isSingleMonth = activeMonths?.length === 1;
 
   const monthly = useMemo(
@@ -288,13 +291,35 @@ export function StoreDetailView({
       </div>
 
       {/* ── KPI cards grid ── */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        {/* Hero: Venta Neta — spans 1 col but larger */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+        {/* Hero: Venta Neta */}
         <div className="rounded-2xl border border-brand-100 bg-brand-50/50 p-4 dark:border-brand-500/20 dark:bg-brand-500/5">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-400/70">Venta Neta</p>
           <p className="mt-1.5 text-xl font-bold tabular-nums text-brand-700 dark:text-brand-300">
             {formatPYGShort(store.neto)}
           </p>
+        </div>
+
+        {/* YoY ventas */}
+        <div className={`rounded-2xl border p-4 ${
+          store.yoyPct != null
+            ? store.yoyPct >= 0
+              ? "border-success-100 bg-success-50/50 dark:border-success-500/20 dark:bg-success-500/5"
+              : "border-error-100 bg-error-50/50 dark:border-error-500/20 dark:bg-error-500/5"
+            : "border-gray-200 dark:border-gray-700"
+        }`}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">vs {priorYear}</p>
+          {store.yoyPct != null ? (
+            <p className={`mt-1.5 text-xl font-bold tabular-nums ${
+              store.yoyPct >= 0
+                ? "text-success-600 dark:text-success-400"
+                : "text-error-600 dark:text-error-400"
+            }`}>
+              {store.yoyPct >= 0 ? "▲" : "▼"} {formatChange(store.yoyPct)}
+            </p>
+          ) : (
+            <p className="mt-1.5 text-xl font-bold tabular-nums text-gray-400 dark:text-gray-500">&mdash;</p>
+          )}
         </div>
 
         <div className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">

@@ -181,7 +181,10 @@ export function computeActionQueue(
   };
 
   for (const r of operationalRows) addToSkuMap(r);
-  for (const r of retailRows)      addToDepotMap(retailMap, r);
+  // RETAILS depot solo aplica a B2C (es depósito de tiendas retail, no mayorista)
+  if (mode === "b2c") {
+    for (const r of retailRows) addToDepotMap(retailMap, r);
+  }
   for (const r of stockRows)       addToDepotMap(stockMap, r);
 
   // -- 3. Generate actions
@@ -269,9 +272,23 @@ export function computeActionQueue(
       counterparts: CounterpartStore[],
       recommended: string,
     ): ActionItemFull => {
-      const currentStock = storeData.find(s => s.store === store)?.qty ?? 0;
-      const histAvg = salesHistory.get(salesHistoryKey(store, sku)) ?? 0;
-      // MOS = current stock / average monthly sales. 0 if no sales history.
+      const isDepot = store === RETAILS_DEPOT || store === STOCK_DEPOT;
+      const currentStock = isDepot
+        ? (store === RETAILS_DEPOT ? depotRetails : depotStock)
+        : (storeData.find(s => s.store === store)?.qty ?? 0);
+
+      // Para depósitos: demanda = suma de avg mensual de todas las tiendas que abastece
+      // Para tiendas: demanda = avg mensual de esa tienda
+      let histAvg: number;
+      if (isDepot) {
+        let totalDemand = 0;
+        for (const sd of storeData) {
+          totalDemand += salesHistory.get(salesHistoryKey(sd.store, sku)) ?? 0;
+        }
+        histAvg = totalDemand;
+      } else {
+        histAvg = salesHistory.get(salesHistoryKey(store, sku)) ?? 0;
+      }
       const currentMOS = histAvg > 0 ? currentStock / histAvg : 0;
       return {
         id: nextId(),
@@ -366,7 +383,8 @@ export function computeActionQueue(
     }
 
     // -- LEVEL 3: STOCK central → RETAILS (one action per SKU, only unmet deficit)
-    if (unmetDeficit > 0 && depotStock > 0) {
+    // Solo aplica a B2C — en B2B el flujo es directo STOCK → B2B (N4)
+    if (mode === "b2c" && unmetDeficit > 0 && depotStock > 0) {
       const fromStock = Math.min(depotStock, unmetDeficit);
       const item = makeItem(
         RETAILS_DEPOT, "critical", "resupply_depot", "central_to_depot",
@@ -374,8 +392,6 @@ export function computeActionQueue(
         [{ store: STOCK_DEPOT, units: fromStock }],
         `Trasladar desde STOCK → RETAILS (${fromStock} u.) para cubrir ${deficitStores.length} tiendas`,
       );
-      // Override currentStock: RETAILS isn't in storeData, use actual depot inventory
-      item.currentStock = depotRetails;
       actions.push(item);
     }
 

@@ -1,14 +1,18 @@
 /**
  * features/sales/components/SkusCard.tsx
  *
- * Top SKUs ranked list with brand badges and metrics.
+ * Top/Bottom SKUs ranked list with brand badges, weight %, and metrics.
+ * Filtro local: "Top Sellers" (mayor venta) vs "Bottom Sellers" (menor venta).
  */
-import { useState, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { TopSkuRow } from "@/queries/sales.queries";
-import { formatPYGShort } from "@/utils/format";
+import { formatPYGShort, formatPct } from "@/utils/format";
 import { Card } from "@/components/ui/card/Card";
 import { brandColor } from "./salesAnalytics.constants";
 import { LazyLoadPrompt, SectionLabel } from "./salesAnalytics.shared";
+
+type SkuMode = "top" | "bottom";
+const SKU_DISPLAY_LIMIT = 20;
 
 export function SkusCard({
   data,
@@ -21,6 +25,15 @@ export function SkusCard({
   onRequestLoad: () => void;
   filteredStoreName?: string | null;
 }) {
+  const [mode, setMode] = useState<SkuMode>("top");
+
+  const displayed = useMemo(() => {
+    if (data.length === 0) return [];
+    if (mode === "top") return data.slice(0, SKU_DISPLAY_LIMIT);
+    // Bottom: take last N, reverse so worst is #1
+    return data.slice(-SKU_DISPLAY_LIMIT).reverse();
+  }, [data, mode]);
+
   // Lazy load prompt
   if (data.length === 0 && !isLoading) {
     return (
@@ -43,24 +56,53 @@ export function SkusCard({
 
   return (
     <Card padding="lg" className="flex h-full flex-col">
+      {/* Header: label + store badge left, toggle right */}
       <div className="mb-4 flex items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
-          Top SKUs
-        </p>
-        {filteredStoreName && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.22-.53l4.72-4.72M2.46 15l4.72-4.72a.75.75 0 00.22-.53V2.25" />
-            </svg>
-            {filteredStoreName}
-          </span>
+        <div className="flex items-center gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+            {mode === "top" ? "Top Sellers" : "Bottom Sellers"}
+          </p>
+          {filteredStoreName && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
+              <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.22-.53l4.72-4.72M2.46 15l4.72-4.72a.75.75 0 00.22-.53V2.25" />
+              </svg>
+              {filteredStoreName}
+            </span>
+          )}
+        </div>
+        {!isLoading && data.length > 0 && (
+          <div className="flex shrink-0 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-800">
+            <button
+              type="button"
+              onClick={() => setMode("top")}
+              className={`rounded-md px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+                mode === "top"
+                  ? "bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white"
+                  : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+              }`}
+            >
+              Top
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("bottom")}
+              className={`rounded-md px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+                mode === "bottom"
+                  ? "bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white"
+                  : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+              }`}
+            >
+              Bottom
+            </button>
+          </div>
         )}
       </div>
       {isLoading ? (
         <SkuLoadingFeed />
       ) : (
         <div className="-mb-2 flex flex-1 flex-col gap-1.5 overflow-y-auto">
-          {data.map((sku, i) => {
+          {displayed.map((sku, i) => {
             const colors = brandColor(sku.brand);
             const name = sku.description !== sku.sku ? sku.description : (sku.skuComercial || sku.sku);
             const code = sku.skuComercial || sku.sku;
@@ -71,7 +113,11 @@ export function SkusCard({
                 className="flex items-start gap-3 rounded-xl border border-gray-100 px-3.5 py-3 transition-colors hover:border-gray-200 hover:bg-gray-50/50 dark:border-gray-700/50 dark:hover:border-gray-600 dark:hover:bg-white/[0.02]"
               >
                 {/* Rank */}
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-[11px] font-bold tabular-nums text-gray-400 dark:bg-gray-700 dark:text-gray-500">
+                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold tabular-nums ${
+                  mode === "bottom"
+                    ? "bg-error-50 text-error-400 dark:bg-error-500/10 dark:text-error-500"
+                    : "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
+                }`}>
                   {i + 1}
                 </div>
 
@@ -98,6 +144,11 @@ export function SkusCard({
                   <p className="mt-0.5 text-[11px] tabular-nums text-gray-400 dark:text-gray-500">
                     {Math.round(sku.units).toLocaleString("es-PY")} uds
                   </p>
+                  {sku.weightPct > 0 && (
+                    <p className="mt-0.5 text-[10px] font-semibold tabular-nums text-brand-500 dark:text-brand-400">
+                      {formatPct(sku.weightPct)} del total
+                    </p>
+                  )}
                 </div>
               </div>
             );
@@ -111,12 +162,12 @@ export function SkusCard({
 // ─── Transparent loading feed ────────────────────────────────────────────────
 
 const SKU_LOADING_MESSAGES = [
-  "Consultando ranking de productos…",
-  "Agregando ventas por SKU…",
-  "Calculando unidades y neto por producto…",
-  "Ordenando por facturación descendente…",
-  "Resolviendo descripciones comerciales…",
-  "Preparando top 20 SKUs…",
+  "Consultando ranking de productos\u2026",
+  "Agregando ventas por SKU\u2026",
+  "Calculando unidades y neto por producto\u2026",
+  "Ordenando por facturaci\u00F3n descendente\u2026",
+  "Resolviendo descripciones comerciales\u2026",
+  "Preparando ranking de SKUs\u2026",
 ];
 
 function SkuLoadingFeed() {
@@ -172,7 +223,7 @@ function SkuLoadingFeed() {
               style={{ animation: "aq-fade-in 0.3s ease-out both" }}
             >
               <span className={`font-mono text-[10px] ${isLatest ? "text-brand-500" : "text-gray-300 dark:text-gray-600"}`}>
-                {isLatest ? "›" : "✓"}
+                {isLatest ? "\u203A" : "\u2713"}
               </span>
               <span className={`font-mono text-[11px] ${
                 isLatest ? "text-gray-600 dark:text-gray-300" : "text-gray-300 dark:text-gray-600"

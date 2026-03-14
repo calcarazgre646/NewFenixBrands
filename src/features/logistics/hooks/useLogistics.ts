@@ -6,14 +6,27 @@
  *
  * Marca: viene del filtro global (useFilters) — consistente con Inicio/Ventas/Acciones.
  * showPast: único filtro local (toggle para ver embarques pasados).
+ * expanded: estado interactivo de grupos expandidos (absorbe del page).
  */
 import { useMemo, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchLogisticsImports } from "@/queries/logistics.queries";
 import { logisticsKeys } from "@/queries/keys";
 import { useFilters } from "@/context/FilterContext";
-import { toArrivals, groupArrivals, computeSummary } from "@/domain/logistics/arrivals";
-import type { LogisticsArrival, LogisticsGroup, LogisticsSummary } from "@/domain/logistics/types";
+import {
+  toArrivals,
+  groupArrivals,
+  computeSummary,
+  computeBrandPipeline,
+  groupByStatus,
+} from "@/domain/logistics/arrivals";
+import type {
+  LogisticsArrival,
+  LogisticsGroup,
+  LogisticsSummary,
+  BrandPipelineDetail,
+  StatusSection,
+} from "@/domain/logistics/types";
 
 const STALE_15MIN = 15 * 60 * 1000;
 const GC_30MIN    = 30 * 60 * 1000;
@@ -22,12 +35,19 @@ export interface LogisticsData {
   arrivals:    LogisticsArrival[];
   groups:      LogisticsGroup[];
   summary:     LogisticsSummary;
+  pipeline:    BrandPipelineDetail[];
+  sections:    StatusSection[];
   showPast:    boolean;
   togglePast:  () => void;
   isLoading:   boolean;
   error:       string | null;
   /** Total de items con status "past" (no incluye overdue) */
   hiddenPastCount: number;
+  /** Set de group keys expandidos */
+  expanded:    Set<string>;
+  toggleGroup: (key: string) => void;
+  expandAll:   () => void;
+  collapseAll: () => void;
 }
 
 export function useLogistics(): LogisticsData {
@@ -37,6 +57,18 @@ export function useLogistics(): LogisticsData {
 
   const [showPast, setShowPast] = useState(false);
   const togglePast = useCallback(() => setShowPast(p => !p), []);
+
+  // ── Expanded state (absorbe del page) ────────────────────────────────────
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggleGroup = useCallback((key: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const importsQ = useQuery({
@@ -68,18 +100,35 @@ export function useLogistics(): LogisticsData {
     });
   }, [allArrivals, globalBrand, showPast]);
 
-  // ── Group + summary ────────────────────────────────────────────────────────
-  const groups  = useMemo(() => groupArrivals(filtered), [filtered]);
-  const summary = useMemo(() => computeSummary(groups, filtered), [groups, filtered]);
+  // ── Group + summary + pipeline + sections ──────────────────────────────────
+  const groups   = useMemo(() => groupArrivals(filtered), [filtered]);
+  const summary  = useMemo(() => computeSummary(groups, filtered), [groups, filtered]);
+  const pipeline = useMemo(() => computeBrandPipeline(filtered), [filtered]);
+  const sections = useMemo(() => groupByStatus(groups), [groups]);
+
+  // ── Expand/collapse all (depends on groups) ────────────────────────────────
+  const expandAll = useCallback(() => {
+    setExpanded(new Set(groups.map(g => g.key)));
+  }, [groups]);
+
+  const collapseAll = useCallback(() => {
+    setExpanded(new Set());
+  }, []);
 
   return {
     arrivals: filtered,
     groups,
     summary,
+    pipeline,
+    sections,
     showPast,
     togglePast,
     isLoading: importsQ.isLoading,
     error: importsQ.error?.message ?? null,
     hiddenPastCount,
+    expanded,
+    toggleGroup,
+    expandAll,
+    collapseAll,
   };
 }

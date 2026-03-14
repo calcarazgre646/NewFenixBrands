@@ -39,4 +39,28 @@ export interface LogisticsSummary {
   overdueCount: number;
   byBrand:      Record<string, number>;
   byOrigin:     Record<string, number>;
+  /** Dias hasta la proxima llegada (no overdue) */
+  nextDaysUntil: number;
+  /** Suma de costUSD de activos */
+  totalFobUSD:   number;
+  /** Cantidad de marcas distintas activas */
+  activeBrands:  number;
+}
+
+export interface BrandPipelineDetail {
+  brand:        string;
+  brandNorm:    string;
+  orderCount:   number;
+  totalUnits:   number;
+  fobUSD:       number;
+  nextEta:      string | null;
+  nextDaysUntil: number;
+  sharePct:     number;
+}
+
+export interface StatusSection {
+  status:     ArrivalStatus;
+  label:      string;
+  groups:     LogisticsGroup[];
+  totalUnits: number;
 }

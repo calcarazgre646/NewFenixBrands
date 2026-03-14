@@ -99,6 +99,24 @@ export const salesHistoryKeys = {
     ["salesHistory", "byStore", skus.sort().join(","), months] as const,
 };
 
+// ─── Depósitos & Cobertura ────────────────────────────────────────────────────
+export const depotKeys = {
+  all: ["depots"] as const,
+  coverage: () => ["depots", "coverage"] as const,
+};
+
+// ─── Usuarios (gestión) ──────────────────────────────────────────────────────
+export const usersKeys = {
+  all: ["users"] as const,
+  list: () => ["users", "list"] as const,
+};
+
+// ─── Profile ─────────────────────────────────────────────────────────────────
+export const profileKeys = {
+  all: ["profile"] as const,
+  detail: (userId: string) => ["profile", userId] as const,
+};
+
 // ─── Cache durations ──────────────────────────────────────────────────────────
 // 30 min staleTime: dato cambia ~cada 6h, 30 min es conservador.
 // 60 min gcTime: mantener en memoria tras unmount.

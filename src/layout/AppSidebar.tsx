@@ -2,8 +2,9 @@
  * layout/AppSidebar.tsx
  *
  * Sidebar de navegación principal.
+ * Items filtrados según permisos del usuario.
  */
-import { useCallback, useState, useEffect, useRef } from "react";
+import { useCallback, useState, useEffect, useRef, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import {
   BoltIcon,
@@ -13,32 +14,62 @@ import {
   CalenderIcon,
   AngleLeftIcon,
   AngleRightIcon,
-  BoxIcon,
+  ShipIcon,
+  WarehouseIcon,
+  GroupIcon,
 } from "@/icons";
 import { useSidebar } from "@/context/SidebarContext";
 import { useAuth } from "@/context/AuthContext";
 import { useFilters } from "@/context/FilterContext";
+import { getRoleLabel, type Permissions } from "@/domain/auth/types";
 
-// Secciones principales del sidebar
-const MAIN_NAV = [
-  { path: "/",          label: "Inicio",             icon: <BoltIcon /> },
-  { path: "/ventas",    label: "Ventas",               icon: <DollarLineIcon /> },
-  { path: "/acciones",  label: "Centro de Acciones",    icon: <ListIcon /> },
-  { path: "/logistica", label: "Logística / ETAs",    icon: <BoxIcon /> },
+// ─── Definición de items de navegación con permisos ─────────────────────────
+interface NavItem {
+  path:    string;
+  label:   string;
+  icon:    React.ReactNode;
+  allowed: (p: Permissions) => boolean;
+}
+
+const ALL_MAIN_NAV: NavItem[] = [
+  { path: "/",          label: "Inicio",              icon: <BoltIcon />,       allowed: (p) => p.canViewExecutive },
+  { path: "/ventas",    label: "Ventas",              icon: <DollarLineIcon />, allowed: (p) => p.canViewSales },
+  { path: "/acciones",  label: "Centro de Acciones",  icon: <ListIcon />,       allowed: (p) => p.canViewActions },
+  { path: "/logistica", label: "Logística / ETAs",    icon: <ShipIcon />,      allowed: (p) => p.canViewLogistics },
+  { path: "/depositos", label: "Depósitos",           icon: <WarehouseIcon />,  allowed: (p) => p.canViewDepots },
 ];
 
-const ANALYSIS_NAV = [
-  { path: "/calendario", label: "Calendario",     icon: <CalenderIcon /> },
+const ALL_ANALYSIS_NAV: NavItem[] = [
+  { path: "/kpis",      label: "KPIs",       icon: <BoltIcon />,    allowed: (p) => p.canViewKpis },
+  { path: "/calendario", label: "Calendario", icon: <CalenderIcon />, allowed: (p) => p.canViewCalendar },
+];
+
+const ALL_CONTROL_NAV: NavItem[] = [
+  { path: "/usuarios", label: "Usuarios", icon: <GroupIcon />, allowed: (p) => p.canManageUsers },
 ];
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered, toggleSidebar } = useSidebar();
-  const { user, logout } = useAuth();
+  const { user, logout, permissions, profile } = useAuth();
   const { resetFilters } = useFilters();
   const navigate = useNavigate();
   const location = useLocation();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Filtrar items de nav según permisos
+  const mainNav = useMemo(
+    () => ALL_MAIN_NAV.filter((item) => item.allowed(permissions)),
+    [permissions]
+  );
+  const analysisNav = useMemo(
+    () => ALL_ANALYSIS_NAV.filter((item) => item.allowed(permissions)),
+    [permissions]
+  );
+  const controlNav = useMemo(
+    () => ALL_CONTROL_NAV.filter((item) => item.allowed(permissions)),
+    [permissions]
+  );
 
   // Close user menu on click outside or Escape
   useEffect(() => {
@@ -66,7 +97,7 @@ const AppSidebar: React.FC = () => {
 
   const showLabel = isExpanded || isHovered || isMobileOpen;
 
-  const fullName = user?.user_metadata?.full_name as string | undefined;
+  const fullName = profile?.fullName || (user?.user_metadata?.full_name as string | undefined);
   const initials = fullName
     ? fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
     : user?.email?.slice(0, 2).toUpperCase() || "FB";
@@ -120,42 +151,67 @@ const AppSidebar: React.FC = () => {
           <div className="flex flex-col gap-4">
 
             {/* ── Comercial ─── */}
-            <div>
-              <h2 className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
-                {showLabel ? "Comercial" : <HorizontaLDots className="size-6" />}
-              </h2>
-              <ul className="flex flex-col gap-2">
-                {MAIN_NAV.map(({ path, label, icon }) => (
-                  <li key={path}>
-                    <Link to={path} className={`menu-item group ${isActive(path) ? "menu-item-active" : "menu-item-inactive"}`}>
-                      <span className={`menu-item-icon-size ${isActive(path) ? "menu-item-icon-active" : "menu-item-icon-inactive"}`}>
-                        {icon}
-                      </span>
-                      {showLabel && <span className="menu-item-text">{label}</span>}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {mainNav.length > 0 && (
+              <div>
+                <h2 className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
+                  {showLabel ? "Comercial" : <HorizontaLDots className="size-6" />}
+                </h2>
+                <ul className="flex flex-col gap-2">
+                  {mainNav.map(({ path, label, icon }) => (
+                    <li key={path}>
+                      <Link to={path} className={`menu-item group ${isActive(path) ? "menu-item-active" : "menu-item-inactive"}`}>
+                        <span className={`menu-item-icon-size ${isActive(path) ? "menu-item-icon-active" : "menu-item-icon-inactive"}`}>
+                          {icon}
+                        </span>
+                        {showLabel && <span className="menu-item-text">{label}</span>}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* ── Análisis ─── */}
-            <div>
-              <h2 className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
-                {showLabel ? "Análisis" : <HorizontaLDots className="size-6" />}
-              </h2>
-              <ul className="flex flex-col gap-2">
-                {ANALYSIS_NAV.map(({ path, label, icon }) => (
-                  <li key={path}>
-                    <Link to={path} className={`menu-item group ${location.pathname.startsWith(path) ? "menu-item-active" : "menu-item-inactive"}`}>
-                      <span className={`menu-item-icon-size ${location.pathname.startsWith(path) ? "menu-item-icon-active" : "menu-item-icon-inactive"}`}>
-                        {icon}
-                      </span>
-                      {showLabel && <span className="menu-item-text">{label}</span>}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {analysisNav.length > 0 && (
+              <div>
+                <h2 className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
+                  {showLabel ? "Análisis" : <HorizontaLDots className="size-6" />}
+                </h2>
+                <ul className="flex flex-col gap-2">
+                  {analysisNav.map(({ path, label, icon }) => (
+                    <li key={path}>
+                      <Link to={path} className={`menu-item group ${location.pathname.startsWith(path) ? "menu-item-active" : "menu-item-inactive"}`}>
+                        <span className={`menu-item-icon-size ${location.pathname.startsWith(path) ? "menu-item-icon-active" : "menu-item-icon-inactive"}`}>
+                          {icon}
+                        </span>
+                        {showLabel && <span className="menu-item-text">{label}</span>}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* ── Control ─── */}
+            {controlNav.length > 0 && (
+              <div>
+                <h2 className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
+                  {showLabel ? "Control" : <HorizontaLDots className="size-6" />}
+                </h2>
+                <ul className="flex flex-col gap-2">
+                  {controlNav.map(({ path, label, icon }) => (
+                    <li key={path}>
+                      <Link to={path} className={`menu-item group ${isActive(path) ? "menu-item-active" : "menu-item-inactive"}`}>
+                        <span className={`menu-item-icon-size ${isActive(path) ? "menu-item-icon-active" : "menu-item-icon-inactive"}`}>
+                          {icon}
+                        </span>
+                        {showLabel && <span className="menu-item-text">{label}</span>}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
           </div>
         </nav>
@@ -182,7 +238,7 @@ const AppSidebar: React.FC = () => {
                   {displayName}
                 </span>
                 <span className="block truncate text-[11px] text-gray-400 dark:text-gray-500">
-                  {user?.email || ""}
+                  {profile ? getRoleLabel(profile.role) : user?.email || ""}
                 </span>
               </span>
               <svg

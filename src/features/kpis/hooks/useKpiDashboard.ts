@@ -64,6 +64,7 @@ import {
   calcMarkdownDependency,
   calcReturnsRate,
   calcAOV,
+  calcUPT,
 } from "@/domain/kpis/calculations";
 import type { KpiUnit } from "@/utils/format";
 import { checkKpiAvailability } from "@/domain/kpis/filterSupport";
@@ -83,6 +84,8 @@ export interface KpiCardData {
   error?: string;
   /** Aviso sobre limitación de datos (p.ej. UPT aproximado por filtro de marca) */
   note?: string;
+  /** Datos mensuales para sparkline (1 valor por mes activo) */
+  sparkline?: number[];
 }
 
 export interface UseKpiDashboardResult {
@@ -315,14 +318,14 @@ export function useKpiDashboard(): UseKpiDashboardResult {
     const months   = activeMonths.length || 1; // guard /0 en GMROI/rotación
 
     // ── Agregar ventas ─────────────────────────────────────────────────────
-    let currNeto = 0, currCogs = 0, currBruto = 0, currDcto = 0;
-    for (const r of currRows) { currNeto += r.neto; currCogs += r.cogs; currBruto += r.bruto; currDcto += r.dcto; }
+    let currNeto = 0, currCogs = 0, currBruto = 0, currDcto = 0, currUnitsMonthly = 0;
+    for (const r of currRows) { currNeto += r.neto; currCogs += r.cogs; currBruto += r.bruto; currDcto += r.dcto; currUnitsMonthly += r.units; }
 
     let currClosedNeto = 0;
     for (const r of currClosedRows) { currClosedNeto += r.neto; }
 
-    let prevNeto = 0, prevCogs = 0, prevBruto = 0, prevDcto = 0;
-    for (const r of prevRows) { prevNeto += r.neto; prevCogs += r.cogs; prevBruto += r.bruto; prevDcto += r.dcto; }
+    let prevNeto = 0, prevCogs = 0, prevBruto = 0, prevDcto = 0, prevUnitsMonthly = 0;
+    for (const r of prevRows) { prevNeto += r.neto; prevCogs += r.cogs; prevBruto += r.bruto; prevDcto += r.dcto; prevUnitsMonthly += r.units; }
 
     // ── Tickets (filtrado en memoria por canal y tienda) ───────────────────
     const storeMap = new Map<string, string>();
@@ -336,7 +339,7 @@ export function useKpiDashboard(): UseKpiDashboardResult {
     let prevTotalTickets = 0, prevTotalSales = 0;
     for (const t of filteredPrevTickets) { prevTotalTickets += t.tickets; prevTotalSales += t.totalSales; }
 
-    // ── Detalle diario → unidades (UPT) y devoluciones ────────────────────
+    // ── Detalle diario → devoluciones ──────────────────────────────────────
     let positiveNeto = 0, absNegativeNeto = 0;
     for (const r of daily) {
       if (r.neto > 0)  positiveNeto    += r.neto;
@@ -349,6 +352,9 @@ export function useKpiDashboard(): UseKpiDashboardResult {
     const inventoryTurnover  = calcInventoryTurnover(currCogs, invValue, months);
     const aov                = calcAOV(totalSales, totalTickets);
     const prevAov            = calcAOV(prevTotalSales, prevTotalTickets);
+    const upt                = calcUPT(currUnitsMonthly, totalTickets);
+    const prevUpt            = calcUPT(prevUnitsMonthly, prevTotalTickets);
+    const uptYoY             = calcYoY(upt, prevUpt);
     const returnsRate        = calcReturnsRate(absNegativeNeto, positiveNeto);
     const markdownDep        = calcMarkdownDependency(currDcto, currBruto);
 
@@ -442,6 +448,34 @@ export function useKpiDashboard(): UseKpiDashboardResult {
     const ticketsError = ticketsQ.error ? "Error al cargar tickets"          : undefined;
     const dailyError   = dailyQ.error   ? "Error al cargar detalle diario"   : undefined;
 
+    // ── Sparklines mensuales ────────────────────────────────────────────────
+    const sortedMonths = [...activeMonths].sort((a, b) => a - b);
+    const monthlyNeto = sortedMonths.map((m) =>
+      currRows.filter((r) => r.month === m).reduce((s, r) => s + r.neto, 0));
+    const monthlyGM = sortedMonths.map((m) => {
+      const rows = currRows.filter((r) => r.month === m);
+      const n = rows.reduce((s, r) => s + r.neto, 0);
+      const c = rows.reduce((s, r) => s + r.cogs, 0);
+      return calcGrossMargin(n, c);
+    });
+    const monthlyAOV = sortedMonths.map((m) => {
+      const tix = filteredTickets.filter((t) => t.month === m);
+      const sales = tix.reduce((s, t) => s + t.totalSales, 0);
+      const tickets = tix.reduce((s, t) => s + t.tickets, 0);
+      return calcAOV(sales, tickets);
+    });
+    const monthlyUPT = sortedMonths.map((m) => {
+      const units = currRows.filter((r) => r.month === m).reduce((s, r) => s + r.units, 0);
+      const tickets = filteredTickets.filter((t) => t.month === m).reduce((s, t) => s + t.tickets, 0);
+      return calcUPT(units, tickets);
+    });
+    const monthlyMarkdown = sortedMonths.map((m) => {
+      const rows = currRows.filter((r) => r.month === m);
+      const d = rows.reduce((s, r) => s + r.dcto, 0);
+      const b = rows.reduce((s, r) => s + r.bruto, 0);
+      return calcMarkdownDependency(d, b);
+    });
+
     // ── Disponibilidad por filtros (arquitectural — catálogo) ──────────────
     const filterCtx = { brand: filters.brand, channel: filters.channel, store: filters.store };
     const avail = (id: string) => checkKpiAvailability(id, filterCtx);
@@ -450,7 +484,7 @@ export function useKpiDashboard(): UseKpiDashboardResult {
       {
         id: "revenue", title: "Ventas Netas",
         value: currNeto, unit: "currency", yoyPct: revenueYoY, positiveDirection: "up",
-        isLoading: salesLoading, error: salesError,
+        isLoading: salesLoading, error: salesError, sparkline: monthlyNeto,
       },
       {
         id: "lfl", title: "Crecimiento YoY",
@@ -460,7 +494,7 @@ export function useKpiDashboard(): UseKpiDashboardResult {
       {
         id: "gross_margin", title: "Margen Bruto",
         value: grossMarginPct, unit: "percent", yoyPct: grossMarginYoY, positiveDirection: "up",
-        isLoading: salesLoading, error: salesError,
+        isLoading: salesLoading, error: salesError, sparkline: monthlyGM,
       },
       {
         id: "gmroi", title: "GMROI",
@@ -474,7 +508,7 @@ export function useKpiDashboard(): UseKpiDashboardResult {
       },
       {
         id: "aov", title: "Ticket Promedio",
-        value: aov, unit: "currency", yoyPct: aovYoY, positiveDirection: "up",
+        value: aov, unit: "currency", yoyPct: aovYoY, positiveDirection: "up", sparkline: monthlyAOV,
         isLoading: aovLoading,
         error: ticketsError ?? (
           !aovLoading && totalTickets === 0 && !ticketsError
@@ -484,8 +518,13 @@ export function useKpiDashboard(): UseKpiDashboardResult {
       },
       {
         id: "upt", title: "Unidades por Ticket",
-        value: 0, unit: "number", yoyPct: null, positiveDirection: "up",
-        isLoading: false, error: "Dato no disponible — se necesita vista con items por factura",
+        value: upt, unit: "ratio", yoyPct: uptYoY, positiveDirection: "up", sparkline: monthlyUPT,
+        isLoading: aovLoading,
+        error: ticketsError ?? (
+          !aovLoading && totalTickets === 0 && !ticketsError
+            ? "Sin datos de tickets para este filtro"
+            : undefined
+        ),
       },
       {
         id: "returns_rate", title: "Tasa de Devoluciones",
@@ -495,7 +534,7 @@ export function useKpiDashboard(): UseKpiDashboardResult {
       {
         id: "markdown_dependency", title: "Dependencia de Ofertas",
         value: markdownDep, unit: "percent", yoyPct: markdownYoY, positiveDirection: "down",
-        isLoading: salesLoading, error: salesError,
+        isLoading: salesLoading, error: salesError, sparkline: monthlyMarkdown,
       },
     ];
 

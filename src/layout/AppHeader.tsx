@@ -8,7 +8,7 @@
  * usando TanStack Query's queryClient.getQueryCache() — no hay polling manual.
  */
 import { useState } from "react";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { useSidebar } from "@/context/SidebarContext";
 import { useScrollDirection } from "@/hooks/useScrollDirection";
 import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
@@ -22,9 +22,10 @@ const AppHeader: React.FC = () => {
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
   const { filters } = useFilters();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const scrollDir = useScrollDirection();
-  const hideFilters = pathname === "/calendario";
-  const hasInPageFilters = pathname === "/" || pathname === "/ventas" || pathname === "/acciones" || pathname === "/logistica";
+  const hideFilters = pathname === "/calendario" || pathname === "/usuarios" || pathname === "/ayuda";
+  const hasInPageFilters = pathname === "/" || pathname === "/ventas" || pathname === "/acciones" || pathname === "/logistica" || pathname === "/depositos" || pathname.startsWith("/kpis");
 
   // Header visible when: at top, scrolling up, or mobile menu is open
   const isVisible = scrollDir !== "down" || isMenuOpen || isMobileOpen;
@@ -97,6 +98,19 @@ const AppHeader: React.FC = () => {
 
         {/* Acciones derecha — desktop */}
         <div className="hidden lg:flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => navigate("/ayuda")}
+            aria-label="Ayuda"
+            title="Guía de uso"
+            className={`flex h-10 w-10 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-brand-600 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-brand-400 ${
+              pathname === "/ayuda" ? "bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400" : ""
+            }`}
+          >
+            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.94 6.94a.75.75 0 11-1.061-1.061 3 3 0 112.871 5.026v.345a.75.75 0 01-1.5 0v-.5c0-.72.57-1.172 1.081-1.287A1.5 1.5 0 108.94 6.94zM10 15a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+            </svg>
+          </button>
           <ThemeToggleButton />
           <NotificationDropdown />
         </div>
@@ -108,6 +122,16 @@ const AppHeader: React.FC = () => {
           <GlobalSearch />
           {!hideFilters && <FilterBar filters={filters} compact={false} brandOnly={hasInPageFilters} />}
           <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+            <button
+              type="button"
+              onClick={() => { setMenuOpen(false); navigate("/ayuda"); }}
+              aria-label="Ayuda"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-brand-600 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-brand-400"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.94 6.94a.75.75 0 11-1.061-1.061 3 3 0 112.871 5.026v.345a.75.75 0 01-1.5 0v-.5c0-.72.57-1.172 1.081-1.287A1.5 1.5 0 108.94 6.94zM10 15a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+              </svg>
+            </button>
             <ThemeToggleButton />
             <NotificationDropdown />
           </div>

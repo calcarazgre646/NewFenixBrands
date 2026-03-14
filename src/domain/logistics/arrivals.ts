@@ -17,6 +17,8 @@ import type {
   LogisticsGroup,
   LogisticsSummary,
   ArrivalStatus,
+  BrandPipelineDetail,
+  StatusSection,
 } from "./types";
 
 // ─── Status helpers ──────────────────────────────────────────────────────────
@@ -157,6 +159,8 @@ export function computeSummary(
     byOrigin[origin]              = (byOrigin[origin]   ?? 0) + a.quantity;
   }
 
+  const brands = new Set(active.map(a => a.brandNorm));
+
   return {
     activeOrders: activeGroups.length,
     totalUnits:   active.reduce((s, a) => s + a.quantity, 0),
@@ -164,5 +168,77 @@ export function computeSummary(
     overdueCount,
     byBrand,
     byOrigin,
+    nextDaysUntil: next ? next.daysUntil : 999,
+    totalFobUSD:   active.reduce((s, a) => s + a.costUSD, 0),
+    activeBrands:  brands.size,
   };
+}
+
+// ─── Brand pipeline ─────────────────────────────────────────────────────────
+
+export function computeBrandPipeline(
+  arrivals: LogisticsArrival[],
+): BrandPipelineDetail[] {
+  const active = arrivals.filter(a => a.status !== "past");
+  const totalUnitsAll = active.reduce((s, a) => s + a.quantity, 0);
+
+  const byBrand = new Map<string, LogisticsArrival[]>();
+  for (const a of active) {
+    const bucket = byBrand.get(a.brandNorm) ?? [];
+    bucket.push(a);
+    byBrand.set(a.brandNorm, bucket);
+  }
+
+  return [...byBrand.entries()]
+    .map(([brandNorm, rows]) => {
+      const totalUnits = rows.reduce((s, r) => s + r.quantity, 0);
+      const fobUSD     = rows.reduce((s, r) => s + r.costUSD, 0);
+      const orders     = new Set(rows.map(r => [r.brandNorm, r.supplier, r.etaKey].join("|||")));
+      const nonOverdue = rows
+        .filter(r => r.status !== "overdue" && r.eta != null)
+        .sort((a, b) => a.eta!.getTime() - b.eta!.getTime());
+      const next = nonOverdue[0] ?? null;
+
+      return {
+        brand:        rows[0].brand,
+        brandNorm,
+        orderCount:   orders.size,
+        totalUnits,
+        fobUSD,
+        nextEta:      next ? next.dateLabel : null,
+        nextDaysUntil: next ? next.daysUntil : 999,
+        sharePct:     totalUnitsAll > 0 ? Math.round((totalUnits / totalUnitsAll) * 100) : 0,
+      };
+    })
+    .sort((a, b) => b.totalUnits - a.totalUnits);
+}
+
+// ─── Group by status ────────────────────────────────────────────────────────
+
+const STATUS_ORDER: ArrivalStatus[] = ["overdue", "this_month", "next_month", "upcoming", "past"];
+
+const STATUS_LABELS: Record<ArrivalStatus, string> = {
+  overdue:    "Atrasados",
+  this_month: "Este Mes",
+  next_month: "Próximo Mes",
+  upcoming:   "Futuro",
+  past:       "Pasados",
+};
+
+export function groupByStatus(groups: LogisticsGroup[]): StatusSection[] {
+  const map = new Map<ArrivalStatus, LogisticsGroup[]>();
+  for (const g of groups) {
+    const bucket = map.get(g.status) ?? [];
+    bucket.push(g);
+    map.set(g.status, bucket);
+  }
+
+  return STATUS_ORDER
+    .filter(s => map.has(s))
+    .map(status => ({
+      status,
+      label:      STATUS_LABELS[status],
+      groups:     map.get(status)!,
+      totalUnits: map.get(status)!.reduce((s, g) => s + g.totalUnits, 0),
+    }));
 }
