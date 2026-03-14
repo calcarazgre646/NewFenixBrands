@@ -5,7 +5,6 @@
  * Patrón de diseño: MonthlyPerformanceTable (ExecutivePage).
  */
 import { formatNumber, formatPYGCompact, formatWeeks } from "@/utils/format";
-import { Card } from "@/components/ui/card/Card";
 import type { DepotSkuRow } from "@/domain/depots/types";
 
 interface Props {
