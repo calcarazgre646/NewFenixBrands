@@ -32,7 +32,6 @@ export interface ActionQueueFilters {
 export type LoadingPhase =
   | "idle"
   | "fetching-inventory"
-  | "processing-records"
   | "fetching-history"
   | "computing-waterfall"
   | "done";
@@ -107,6 +106,7 @@ export function useActionQueue(): ActionQueueData {
     enabled: uniqueSkuList.length > 0,
     staleTime: STALE_30MIN,
     gcTime: GC_60MIN,
+    retry: 1, // Consistent with inventoryQ — fail fast, don't mask Supabase issues
   });
 
   // ── Total stock per store (all SKUs, for occupancy display) ───────────────
@@ -122,19 +122,40 @@ export function useActionQueue(): ActionQueueData {
   // ── Run waterfall algorithm ────────────────────────────────────────────────
   // IMPORTANT: Wait for sales history before computing. Running without history
   // produces wrong deficit/surplus classification that flickers when history loads.
+  const [waterfallError, setWaterfallError] = useState<string | null>(null);
+  const [waterfallRan, setWaterfallRan] = useState(false);
   const items = useMemo(() => {
-    if (records.length === 0) return [];
-    if (!historyQ.data && historyQ.isLoading) return [];
+    if (records.length === 0) { setWaterfallRan(false); return []; }
+    if (!historyQ.data && historyQ.isLoading) { setWaterfallRan(false); return []; }
     const history: SalesHistoryMap = historyQ.data ?? new Map();
-    return computeActionQueue(
-      { inventory: records, salesHistory: history },
-      channel,
-      brand,
-      null,
-      null,
-      null,
-    );
-  }, [records, historyQ.data, historyQ.isLoading, channel, brand]);
+    try {
+      const t0 = performance.now();
+      const result = computeActionQueue(
+        { inventory: records, salesHistory: history },
+        channel,
+        brand,
+        null,
+        null,
+        null,
+      );
+      const elapsed = performance.now() - t0;
+      if (import.meta.env.DEV) {
+        console.info(
+          `[waterfall] ${records.length} rows → ${result.length} actions (${result.filter(a => a.paretoFlag).length} pareto) in ${elapsed.toFixed(1)}ms`,
+        );
+      }
+      // Clear any previous waterfall error on success
+      if (waterfallError) setWaterfallError(null);
+      setWaterfallRan(true);
+      return result;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[waterfall] computation error:", msg);
+      setWaterfallError(`Error en cálculo: ${msg}`);
+      setWaterfallRan(true);
+      return [];
+    }
+  }, [records, historyQ.data, historyQ.isLoading, channel, brand]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived stats ──────────────────────────────────────────────────────────
   const { totalItems, paretoCount, criticalCount, lowCount, overstockCount, uniqueSkus } =
@@ -159,21 +180,22 @@ export function useActionQueue(): ActionQueueData {
     }, [items]);
 
   // ── Loading progress (granular phases for transparent loading UX) ─────────
+  // Phase 2 ("processing-records") removed: useMemo is synchronous, so
+  // records→skus happens in the same render — the phase was never visible.
+  // Phase 4 ("computing-waterfall") now uses waterfallRan flag to distinguish
+  // "waterfall returned 0 actions" (done) from "waterfall hasn't run yet".
   const loadingProgress: LoadingProgress = useMemo(() => {
     if (inventoryQ.isLoading) {
       return { phase: "fetching-inventory", inventoryRows: 0, uniqueSkus: 0, totalActions: 0 };
     }
-    if (records.length > 0 && uniqueSkuList.length === 0) {
-      return { phase: "processing-records", inventoryRows: records.length, uniqueSkus: 0, totalActions: 0 };
-    }
     if (historyQ.isLoading && uniqueSkuList.length > 0) {
       return { phase: "fetching-history", inventoryRows: records.length, uniqueSkus: uniqueSkuList.length, totalActions: 0 };
     }
-    if (records.length > 0 && historyQ.data && items.length === 0 && !historyQ.isLoading) {
+    if (records.length > 0 && !waterfallRan) {
       return { phase: "computing-waterfall", inventoryRows: records.length, uniqueSkus: uniqueSkuList.length, totalActions: 0 };
     }
     return { phase: "done", inventoryRows: records.length, uniqueSkus: uniqueSkuList.length, totalActions: items.length };
-  }, [inventoryQ.isLoading, records.length, uniqueSkuList.length, historyQ.isLoading, historyQ.data, items.length]);
+  }, [inventoryQ.isLoading, records.length, uniqueSkuList.length, historyQ.isLoading, waterfallRan, items.length]);
 
   return {
     items,
@@ -188,7 +210,7 @@ export function useActionQueue(): ActionQueueData {
     setChannel,
     isLoading: inventoryQ.isLoading || (historyQ.isLoading && records.length > 0),
     isHistoryLoading: historyQ.isLoading,
-    error: inventoryQ.error?.message ?? historyQ.error?.message ?? null,
+    error: inventoryQ.error?.message ?? historyQ.error?.message ?? waterfallError ?? null,
     loadingProgress,
   };
 }

@@ -58,14 +58,16 @@ function actionRow(item: ActionItemFull, idx: number, showStore: boolean): strin
   const riskBg = RISK_BG[item.risk];
   const riskColor = RISK_COLOR[item.risk];
 
-  const isDepot = item.store === "RETAILS" || item.store === "STOCK";
-  const coverValue = isDepot ? item.currentMOS * 4.33 : item.currentMOS;
-  const coverLabel = isDepot ? "WOI" : "MOS";
-  const mosStyle = coverValue < (isDepot ? 4.33 : 1)
+  const coverValue = item.currentMOS * 4.33; // Always in weeks (WOI)
+  const coverLabel = "WOI";
+  // Thresholds in weeks from item's coverWeeks (13 for B2C stores, 12/24 for depots/B2B)
+  const lowThreshold = item.coverWeeks;           // 1× target
+  const midThreshold = item.coverWeeks * 2;       // 2× target
+  const mosStyle = coverValue < lowThreshold
     ? "color:#DC2626;font-weight:700;"
-    : coverValue < (isDepot ? 8.66 : 2)
+    : coverValue < midThreshold
     ? "color:#D97706;font-weight:600;"
-    : coverValue > (isDepot ? 26 : 6)
+    : coverValue > item.coverWeeks * 4
     ? "color:#2563EB;"
     : "";
 
@@ -89,7 +91,7 @@ function actionRow(item: ActionItemFull, idx: number, showStore: boolean): strin
     </td>
     <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:14px;font-weight:700;color:#111827;text-align:center;">${item.suggestedUnits}</td>
     <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;color:#6B7280;">${item.historicalAvg > 0 ? item.historicalAvg.toFixed(1) : "—"}</td>
-    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;${mosStyle}">${coverValue > 0 ? `${coverValue.toFixed(1)} ${coverLabel}` : "—"}</td>
+    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;${mosStyle}">${coverValue > 0 ? `${coverValue.toFixed(1)} ${coverLabel}` : item.historicalAvg > 0 ? `0.0 ${coverLabel}` : "—"}</td>
     <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;color:#374151;">${esc(item.recommendedAction)}${counterparts}</td>
   </tr>`;
 }
@@ -222,5 +224,6 @@ ${sections.map(s => sectionBlock(s, showStore)).join("")}
   a.href = url;
   a.download = `acciones-${safeName}-${channel}-${dateStr}.html`;
   a.click();
-  URL.revokeObjectURL(url);
+  // Defer revoke to ensure download completes before releasing the blob URL
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

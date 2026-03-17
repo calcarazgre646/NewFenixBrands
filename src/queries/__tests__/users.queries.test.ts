@@ -1,7 +1,7 @@
 /**
  * Tests para queries/users.queries.ts
  *
- * Mock de Supabase client para testear fetch + update + create + delete.
+ * Mock de Supabase client + fetch para testear fetch + update + create + delete.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
@@ -15,13 +15,11 @@ import {
 
 let selectResult: { data: unknown[] | null; error: { message: string } | null } = { data: null, error: null };
 let updateResult: { error: { message: string } | null } = { error: null };
-let invokeResult: { data: unknown; error: { message: string } | null } = { data: null, error: null };
 
 const mockSelect = vi.fn();
 const mockOrder = vi.fn();
 const mockUpdate = vi.fn();
 const mockEq = vi.fn();
-const mockInvoke = vi.fn();
 
 vi.mock("@/api/client", () => ({
   authClient: {
@@ -38,14 +36,23 @@ vi.mock("@/api/client", () => ({
         },
       };
     }),
-    functions: {
-      invoke: (...args: unknown[]) => {
-        mockInvoke(...args);
-        return Promise.resolve(invokeResult);
-      },
+    auth: {
+      getSession: () => Promise.resolve({
+        data: { session: { access_token: "mock-token-123" } },
+      }),
     },
   },
 }));
+
+// ─── Mock import.meta.env ───────────────────────────────────────────────────
+
+vi.stubEnv("VITE_SUPABASE_URL", "https://test.supabase.co");
+vi.stubEnv("VITE_SUPABASE_ANON_KEY", "mock-anon-key");
+
+// ─── Mock fetch ─────────────────────────────────────────────────────────────
+
+const mockFetch = vi.fn();
+vi.stubGlobal("fetch", mockFetch);
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -57,8 +64,13 @@ function setUpdateResult(error: { message: string } | null = null) {
   updateResult = { error };
 }
 
-function setInvokeResult(data: unknown, error: { message: string } | null = null) {
-  invokeResult = { data, error };
+function setFetchResult(status: number, body: unknown) {
+  mockFetch.mockResolvedValueOnce({
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: status === 200 ? "OK" : "Error",
+    json: () => Promise.resolve(body),
+  });
 }
 
 beforeEach(() => {
@@ -203,8 +215,8 @@ describe("updateProfile", () => {
 // ─── createUser ─────────────────────────────────────────────────────────────
 
 describe("createUser", () => {
-  it("invokes Edge Function with correct payload", async () => {
-    setInvokeResult({ id: "new-uuid", email: "nuevo@fenix.com" });
+  it("calls fetch with correct payload and headers", async () => {
+    setFetchResult(200, { id: "new-uuid", email: "nuevo@fenix.com" });
 
     const result = await createUser({
       email: "nuevo@fenix.com",
@@ -214,35 +226,32 @@ describe("createUser", () => {
       cargo: "Vendedor",
     });
 
-    expect(mockInvoke).toHaveBeenCalledWith("manage-user", {
-      body: {
-        action: "create",
-        email: "nuevo@fenix.com",
-        fullName: "Nuevo Usuario",
-        role: "negocio",
-        channelScope: "b2c",
-        cargo: "Vendedor",
-      },
+    expect(mockFetch).toHaveBeenCalledWith(
+      "https://test.supabase.co/functions/v1/manage-user",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          Authorization: "Bearer mock-token-123",
+        }),
+      }),
+    );
+
+    const sentBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(sentBody).toEqual({
+      action: "create",
+      email: "nuevo@fenix.com",
+      fullName: "Nuevo Usuario",
+      role: "negocio",
+      channelScope: "b2c",
+      cargo: "Vendedor",
     });
+
     expect(result).toEqual({ id: "new-uuid", email: "nuevo@fenix.com" });
   });
 
-  it("throws on transport error (Edge Function unreachable)", async () => {
-    setInvokeResult(null, { message: "Function not found" });
-
-    await expect(
-      createUser({
-        email: "test@test.com",
-        fullName: "Test",
-        role: "negocio",
-        channelScope: null,
-        cargo: null,
-      }),
-    ).rejects.toThrow("createUser: Function not found");
-  });
-
-  it("throws on application error (email already exists)", async () => {
-    setInvokeResult({ error: "El email ya está registrado" });
+  it("throws real error message on non-2xx (email already exists)", async () => {
+    setFetchResult(400, { error: "El email ya está registrado" });
 
     await expect(
       createUser({
@@ -255,8 +264,8 @@ describe("createUser", () => {
     ).rejects.toThrow("El email ya está registrado");
   });
 
-  it("throws on permission denied", async () => {
-    setInvokeResult({ error: "Sin permisos" });
+  it("throws real error message on 403 (permission denied)", async () => {
+    setFetchResult(403, { error: "Sin permisos" });
 
     await expect(
       createUser({
@@ -269,8 +278,36 @@ describe("createUser", () => {
     ).rejects.toThrow("Sin permisos");
   });
 
+  it("throws real error message on 500 (server config)", async () => {
+    setFetchResult(500, { error: "Configuración del servidor incompleta" });
+
+    await expect(
+      createUser({
+        email: "test@test.com",
+        fullName: "Test",
+        role: "negocio",
+        channelScope: null,
+        cargo: null,
+      }),
+    ).rejects.toThrow("Configuración del servidor incompleta");
+  });
+
+  it("throws on application error in body (2xx with error field)", async () => {
+    setFetchResult(200, { error: "Profile update failed" });
+
+    await expect(
+      createUser({
+        email: "test@test.com",
+        fullName: "Test",
+        role: "negocio",
+        channelScope: null,
+        cargo: null,
+      }),
+    ).rejects.toThrow("Profile update failed");
+  });
+
   it("sends null channelScope and cargo correctly", async () => {
-    setInvokeResult({ id: "uuid-2", email: "ger@test.com" });
+    setFetchResult(200, { id: "uuid-2", email: "ger@test.com" });
 
     await createUser({
       email: "ger@test.com",
@@ -280,47 +317,39 @@ describe("createUser", () => {
       cargo: null,
     });
 
-    expect(mockInvoke).toHaveBeenCalledWith("manage-user", {
-      body: {
-        action: "create",
-        email: "ger@test.com",
-        fullName: "Gerente",
-        role: "gerencia",
-        channelScope: null,
-        cargo: null,
-      },
-    });
+    const sentBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(sentBody.channelScope).toBeNull();
+    expect(sentBody.cargo).toBeNull();
   });
 });
 
 // ─── deleteUser ─────────────────────────────────────────────────────────────
 
 describe("deleteUser", () => {
-  it("invokes Edge Function with correct payload", async () => {
-    setInvokeResult({ success: true });
+  it("calls fetch with correct payload", async () => {
+    setFetchResult(200, { success: true });
 
     await deleteUser("target-uuid");
 
-    expect(mockInvoke).toHaveBeenCalledWith("manage-user", {
-      body: { action: "delete", userId: "target-uuid" },
-    });
+    const sentBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(sentBody).toEqual({ action: "delete", userId: "target-uuid" });
   });
 
-  it("throws on transport error", async () => {
-    setInvokeResult(null, { message: "Network error" });
-
-    await expect(deleteUser("uuid")).rejects.toThrow("deleteUser: Network error");
-  });
-
-  it("throws on application error (user not found)", async () => {
-    setInvokeResult({ error: "Usuario no encontrado" });
+  it("throws real error on user not found", async () => {
+    setFetchResult(400, { error: "Usuario no encontrado" });
 
     await expect(deleteUser("nonexistent")).rejects.toThrow("Usuario no encontrado");
   });
 
-  it("throws on permission denied", async () => {
-    setInvokeResult({ error: "Sin permisos" });
+  it("throws real error on permission denied", async () => {
+    setFetchResult(403, { error: "Sin permisos" });
 
     await expect(deleteUser("uuid")).rejects.toThrow("Sin permisos");
+  });
+
+  it("falls back to status text when body has no error field", async () => {
+    setFetchResult(502, {});
+
+    await expect(deleteUser("uuid")).rejects.toThrow("Error 502");
   });
 });

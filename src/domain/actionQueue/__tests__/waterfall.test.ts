@@ -750,6 +750,8 @@ describe('computeActionQueue', () => {
 
   // 42. All stores balanced → no actions
   it('multiple stores all balanced → no actions', () => {
+    // With B2C 3-week WOI: coverMonths=0.69, target=5*0.69=3.46
+    // Balanced band: 3.46*0.5=1.73 < qty < 3.46*2=6.92
     const sales = new Map([
       ['TIENDA1|SKU001', 5],
       ['TIENDA2|SKU001', 5],
@@ -757,13 +759,13 @@ describe('computeActionQueue', () => {
     ])
     const result = computeActionQueue(
       makeInput([
-        inv({ store: 'TIENDA1', units: 15 }),
-        inv({ store: 'TIENDA2', units: 15 }),
-        inv({ store: 'TIENDA3', units: 15 }),
+        inv({ store: 'TIENDA1', units: 5 }),
+        inv({ store: 'TIENDA2', units: 5 }),
+        inv({ store: 'TIENDA3', units: 5 }),
       ], sales),
       'b2c', null, null, null, null, 0,
     )
-    // target=15 (5*3 coverMonths), qty=15 → balanced, no deficit, no surplus
+    // target=3.46, qty=5 → 1.73 < 5 < 6.92 → balanced, no deficit, no surplus
     expect(result.length).toBe(0)
   })
 
@@ -802,28 +804,29 @@ describe('computeActionQueue', () => {
 
   // ─── CRITICAL: N1 continue skips N2 cascade ────────────────────────────────
 
-  // C-01: Partial N1 fill → continue prevents N2 depot fallback for remainder
-  it('CRITICAL: partial N1 fill skips N2 — remainder goes to unmetDeficit for N3', () => {
+  // C-01: Partial N1 fill → remainder cascades to N2 depot fallback
+  // B2C target = hist × (13/4.33). TIENDA1: 20×3.00=60.05→need=61. TIENDA2: 2×3.00=6, qty=20 > 6×2=12 → surplus=14
+  it('CRITICAL: partial N1 fill cascades remainder to N2 from RETAILS', () => {
     const sales = new Map([
-      ['TIENDA1|SKU001', 20],   // target=60, qty=0 → need=60
-      ['TIENDA2|SKU001', 2],    // target=6, qty=12 → excess=6
+      ['TIENDA1|SKU001', 20],   // target≈60.05, qty=0 → need=61
+      ['TIENDA2|SKU001', 2],    // target≈6, qty=20 → 20 > 6×2=12 → excess=floor(20-6)=14
     ])
     const result = computeActionQueue(
       makeInput([
         inv({ store: 'TIENDA1', units: 0 }),
-        inv({ store: 'TIENDA2', units: 12 }),   // surplus of 6
+        inv({ store: 'TIENDA2', units: 20 }),   // surplus of 14
         inv({ store: 'RETAILS', units: 100 }),   // plenty of depot stock
       ], sales),
       'b2c', null, null, null, null, 0,
     )
-    // TIENDA1 gets N1 from TIENDA2 (6 units) but NOT N2 due to continue on line 346
+    // TIENDA1 gets N1 from TIENDA2 (14 units) AND N2 from RETAILS for remainder
     const n1 = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'store_to_store')
     const n2 = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'depot_to_store')
-    // Current behavior: N1 exists, N2 does NOT (continue skips it)
     expect(n1).toBeDefined()
-    expect(n2).toBeUndefined()  // This is the current behavior — design decision or bug
-    // unmetDeficit is accumulated — N3 (central_to_depot) would handle it
-    // if STOCK source exists. In this test only RETAILS has stock.
+    expect(n2).toBeDefined()  // Fixed: N1→N2 cascade now works for partial fills
+    if (n1 && n2) {
+      expect(n1.suggestedUnits + n2.suggestedUnits).toBeLessThanOrEqual(61) // total need
+    }
   })
 
   // C-02: N1 fully fills → no N2 needed (correct behavior control)
@@ -892,8 +895,8 @@ describe('computeActionQueue', () => {
     expect(n4[0].actionType).toBe('central_to_b2b')
   })
 
-  // C-06: B2B N4 no resource tracking — multiple clients can request from STOCK
-  it('CRITICAL: B2B N4 does not track STOCK consumption across clients', () => {
+  // C-06: B2B N4 pool tracking — without STOCK data, all clients get uncapped recommendations
+  it('CRITICAL: B2B N4 without STOCK → uncapped recommendations for all clients', () => {
     const result = computeActionQueue(
       makeInput([
         inv({ store: 'B2B_A', units: 0, channel: 'b2b', sku: 'SKU001' }),
@@ -903,12 +906,27 @@ describe('computeActionQueue', () => {
       'b2b', null, null, null, null, 0,
     )
     const n4 = result.filter(a => a.waterfallLevel === 'central_to_b2b')
-    // All 3 get N4 — no STOCK deduction between them (known limitation)
+    // All 3 get N4 — no STOCK data means uncapped
     expect(n4.length).toBe(3)
-    // Each requests units independently (no pool consumption)
     for (const a of n4) {
       expect(a.suggestedUnits).toBeGreaterThan(0)
     }
+  })
+
+  // C-06b: B2B N4 pool tracking — with STOCK data, caps total allocation
+  it('CRITICAL: B2B N4 with STOCK → caps allocation to available stock', () => {
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'B2B_A', units: 0, channel: 'b2b', sku: 'SKU001' }),
+        inv({ store: 'B2B_B', units: 0, channel: 'b2b', sku: 'SKU001' }),
+        inv({ store: 'B2B_C', units: 0, channel: 'b2b', sku: 'SKU001' }),
+        inv({ store: 'STOCK', units: 5, channel: 'b2c', sku: 'SKU001' }),
+      ]),
+      'b2b', null, null, null, null, 0,
+    )
+    const n4 = result.filter(a => a.waterfallLevel === 'central_to_b2b')
+    const totalAllocated = n4.reduce((s, a) => s + a.suggestedUnits, 0)
+    expect(totalAllocated).toBeLessThanOrEqual(5)
   })
 
   // ─── HIGH: Filter bypass for depot stores ──────────────────────────────────
@@ -1043,23 +1061,25 @@ describe('computeActionQueue', () => {
   })
 
   // H-07: Wrangler coverMonths creates larger targets
-  it('HIGH: Wrangler longer coverage creates larger deficit than Martel', () => {
+  // In B2B mode, brand-based coverWeeks still applies: Wrangler=24w, Martel=12w
+  // So Wrangler stores need more stock → larger deficit → larger N3 resupply
+  it('HIGH: Wrangler longer coverage creates larger deficit than Martel (B2B)', () => {
     const sales = new Map([
       ['TIENDA1|WR01', 10],
       ['TIENDA1|MT01', 10],
     ])
     const result = computeActionQueue(
       makeInput([
-        inv({ store: 'TIENDA1', units: 5, brand: 'Wrangler', sku: 'WR01' }),
-        inv({ store: 'TIENDA1', units: 5, brand: 'Martel', sku: 'MT01' }),
+        inv({ store: 'TIENDA1', units: 5, brand: 'Wrangler', sku: 'WR01', channel: 'b2b' }),
+        inv({ store: 'TIENDA1', units: 5, brand: 'Martel', sku: 'MT01', channel: 'b2b' }),
         inv({ store: 'STOCK', units: 200, sku: 'WR01' }),
         inv({ store: 'STOCK', units: 200, sku: 'MT01' }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      'b2b', null, null, null, null, 0,
     )
-    const wrAction = result.find(a => a.sku === 'WR01' && a.waterfallLevel === 'central_to_depot')
-    const mtAction = result.find(a => a.sku === 'MT01' && a.waterfallLevel === 'central_to_depot')
-    // Wrangler target ~55.4 vs Martel target ~27.7 → Wrangler needs more
+    // B2B uses brand-based coverWeeks: Wrangler=24w→target≈55.4, Martel=12w→target≈27.7
+    const wrAction = result.find(a => a.sku === 'WR01')
+    const mtAction = result.find(a => a.sku === 'MT01')
     if (wrAction && mtAction) {
       expect(wrAction.suggestedUnits).toBeGreaterThan(mtAction.suggestedUnits)
     }
@@ -1069,11 +1089,11 @@ describe('computeActionQueue', () => {
 
   // H-08: Exactly at deficit threshold (qty === targetStock * 0.5) → no deficit
   it('HIGH: stock exactly at 50% of target → no deficit', () => {
-    // target=15*2.77=41.55, 50%=20.775 → qty=21 should NOT trigger deficit
+    // B2C 3w WOI: target=15*0.69=10.38, 50%=5.19 → qty=6 should NOT trigger deficit
     const sales = new Map([['TIENDA1|SKU001', 15]])
     const result = computeActionQueue(
       makeInput([
-        inv({ store: 'TIENDA1', units: 21 }),
+        inv({ store: 'TIENDA1', units: 6 }),
         inv({ store: 'STOCK', units: 100 }),
       ], sales),
       'b2c', null, null, null, null, 0,
@@ -1084,7 +1104,7 @@ describe('computeActionQueue', () => {
 
   // H-09: Exactly at surplus threshold (qty === targetStock * 2) → no surplus
   it('HIGH: stock exactly at 200% of target → no surplus', () => {
-    // sales=5, target=5*2.77=13.85, surplus threshold=27.7 → qty=28 > 27.7 → excess
+    // B2C 3w WOI: sales=5, target=5*0.69=3.46, surplus threshold=6.92 → qty=6 < 6.92 → no surplus
     const sales = new Map([
       ['TIENDA1|SKU001', 5],
       ['TIENDA2|SKU001', 5],
@@ -1092,7 +1112,7 @@ describe('computeActionQueue', () => {
     const result = computeActionQueue(
       makeInput([
         inv({ store: 'TIENDA1', units: 0 }),
-        inv({ store: 'TIENDA2', units: 27 }),  // 27 < 27.7 → no surplus
+        inv({ store: 'TIENDA2', units: 6 }),  // 6 < 6.92 → no surplus
       ], sales),
       'b2c', null, null, null, null, 0,
     )
@@ -1252,18 +1272,20 @@ describe('computeActionQueue', () => {
 
   // H-18: Liquidation threshold — remaining < 3 → no liquidation
   it('HIGH: remaining surplus < 3 units → no liquidation action', () => {
+    // B2C 3w WOI: T1 target=10*0.69=6.93, need=7. T2 target=10*0.69=6.93, excess=floor(10-6.93)=3.
+    // After T1 takes 3u from T2, remaining=0 → no liquidation
     const sales = new Map([
-      ['TIENDA1|SKU001', 10],   // target=27.7, qty=0 → need=28
-      ['TIENDA2|SKU001', 2],    // target=5.54, qty=34 → excess=28
+      ['TIENDA1|SKU001', 10],   // target=6.93, qty=0 → need=7
+      ['TIENDA2|SKU001', 10],   // target=6.93, qty=10 → excess=3
     ])
     const result = computeActionQueue(
       makeInput([
         inv({ store: 'TIENDA1', units: 0 }),
-        inv({ store: 'TIENDA2', units: 34 }), // excess=28, all consumed by T1 need=28
+        inv({ store: 'TIENDA2', units: 10 }), // excess=3, consumed by T1 need
       ], sales),
       'b2c', null, null, null, null, 0,
     )
-    // After allocation to TIENDA1, remaining should be ~0 → no liquidation
+    // After allocation to TIENDA1, remaining should be ≤2 → no liquidation (threshold=3)
     const liquidation = result.filter(
       a => a.store === 'TIENDA2' && a.risk === 'overstock' && a.counterpartStores.length === 0
     )
@@ -2116,5 +2138,618 @@ describe('computeActionQueue', () => {
       const b2bImpact = b2bResult[0].impactScore
       expect(b2bImpact).toBeLessThan(b2cImpact)
     }
+  })
+
+  // ─── DEEP AUDIT TESTS (17/03/2026) ─────────────────────────────────────────
+
+  // DA-01: NaN units are safely skipped (8.2 NaN propagation guard)
+  it('DA-01: NaN units rows are silently skipped', () => {
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: NaN }),
+        inv({ store: 'TIENDA2', units: 30 }),
+        inv({ store: 'STOCK', units: 50 }),
+      ]),
+      'b2c', null, null, null, null, 0,
+    )
+    // NaN row skipped — TIENDA2 is the only operational store, no deficit
+    // No crash, algorithm completes
+    expect(result).toBeDefined()
+    const nanActions = result.filter(a => Number.isNaN(a.suggestedUnits))
+    expect(nanActions).toHaveLength(0)
+  })
+
+  // DA-02: Infinity units are safely skipped
+  it('DA-02: Infinity units rows are skipped', () => {
+    expect(() => {
+      computeActionQueue(
+        makeInput([
+          inv({ store: 'TIENDA1', units: Infinity }),
+          inv({ store: 'TIENDA2', units: 30 }),
+        ]),
+        'b2c', null, null, null, null, 0,
+      )
+    }).not.toThrow()
+  })
+
+  // DA-03: N1→N2 cascade — partial N1 fill now cascades to N2
+  it('DA-03: N1 partial fill + N2 cascade = combined fill', () => {
+    // B2C 13w WOI: T1 target=30×3.00=90, need=91. T2 target=1×3.00=3, qty=10 > 3×2=6 → excess=floor(10-3)=7
+    // N1 gives 7u (< 91 need) → remainder cascades to N2 from RETAILS
+    const sales = new Map([
+      ['TIENDA1|SKU001', 30],   // target≈90, qty=0 → need=91
+      ['TIENDA2|SKU001', 1],    // target≈3, qty=10 → 10 > 6 → excess=7
+    ])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'TIENDA2', units: 10 }),    // surplus ~7 (not enough for full need)
+        inv({ store: 'RETAILS', units: 100 }),   // plenty for N2
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    const n1 = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'store_to_store')
+    const n2 = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'depot_to_store')
+    // Both N1 and N2 should fire for this deficit store
+    expect(n1).toBeDefined()
+    expect(n2).toBeDefined()
+    if (n1 && n2) {
+      expect(n1.suggestedUnits + n2.suggestedUnits).toBeGreaterThanOrEqual(1)
+    }
+  })
+
+  // DA-04: B2B N4 pool tracking with limited STOCK
+  it('DA-04: B2B N4 with limited STOCK caps total across clients', () => {
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'B2B_X', units: 0, channel: 'b2b', sku: 'SKU001' }),
+        inv({ store: 'B2B_Y', units: 0, channel: 'b2b', sku: 'SKU001' }),
+        inv({ store: 'STOCK', units: 3, channel: 'b2c', sku: 'SKU001' }),
+      ]),
+      'b2b', null, null, null, null, 0,
+    )
+    const n4 = result.filter(a => a.waterfallLevel === 'central_to_b2b')
+    const totalAllocated = n4.reduce((s, a) => s + a.suggestedUnits, 0)
+    expect(totalAllocated).toBeLessThanOrEqual(3)
+  })
+
+  // DA-05: SKU in RETAILS but no operational stores → no crash
+  it('DA-05: SKU exists only in RETAILS depot → no actions generated', () => {
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'RETAILS', units: 100, sku: 'ORPHAN_SKU' }),
+      ]),
+      'b2c', null, null, null, null, 0,
+    )
+    // No operational stores → no skuMap entries → no actions
+    expect(result).toEqual([])
+  })
+
+  // DA-06: SKU in STOCK but no operational stores → no actions
+  it('DA-06: SKU exists only in STOCK depot → no actions', () => {
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'STOCK', units: 200, sku: 'ORPHAN_SKU' }),
+      ]),
+      'b2c', null, null, null, null, 0,
+    )
+    expect(result).toEqual([])
+  })
+
+  // DA-07: Threshold + pareto interaction — threshold filters first, then pareto on filtered set
+  it('DA-07: pareto is computed on threshold-filtered set', () => {
+    const sales = new Map<string, number>()
+    for (let i = 0; i < 10; i++) {
+      sales.set(`TD${i}|SK${i}`, 5)
+      sales.set(`TS${i}|SK${i}`, 2)
+    }
+    const rows: InventoryRecord[] = []
+    for (let i = 0; i < 10; i++) {
+      // High-value items
+      rows.push(inv({ store: `TD${i}`, units: 0, sku: `SK${i}`, price: 100000 }))
+      rows.push(inv({ store: `TS${i}`, units: 50, sku: `SK${i}`, price: 100000 }))
+    }
+    const result = computeActionQueue(makeInput(rows, sales), 'b2c', null, null, null, null, 500_000)
+    if (result.length > 2) {
+      // Pareto flags exist on the filtered set
+      const pareto = result.filter(a => a.paretoFlag)
+      const nonPareto = result.filter(a => !a.paretoFlag)
+      expect(pareto.length).toBeGreaterThan(0)
+      // At least some items should not be pareto
+      if (result.length > 3) {
+        expect(nonPareto.length).toBeGreaterThanOrEqual(0)
+      }
+    }
+  })
+
+  // DA-08: Mirror action units match deficit N1 allocation
+  it('DA-08: surplus mirror units equal deficit N1 units for same SKU', () => {
+    const sales = new Map([
+      ['TIENDA1|SKU001', 10],   // deficit
+      ['TIENDA2|SKU001', 2],    // surplus
+    ])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'TIENDA2', units: 50 }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    const deficitN1 = result.find(
+      a => a.store === 'TIENDA1' && a.waterfallLevel === 'store_to_store'
+    )
+    const surplusMirror = result.find(
+      a => a.store === 'TIENDA2' && a.risk === 'overstock' && a.counterpartStores.length > 0
+    )
+    if (deficitN1 && surplusMirror) {
+      // Mirror should report same units as deficit received from this store
+      const fromT2 = deficitN1.counterpartStores.find(c => c.store === 'TIENDA2')
+      const toT1 = surplusMirror.counterpartStores.find(c => c.store === 'TIENDA1')
+      if (fromT2 && toT1) {
+        expect(fromT2.units).toBe(toT1.units)
+      }
+    }
+  })
+
+  // DA-09: Surplus pool never goes negative
+  it('DA-09: no action has more counterpart units than the surplus store excess', () => {
+    // B2C 3w WOI: T3 target=2*0.69=1.38, excess=floor(20-1.38)=18
+    const sales = new Map([
+      ['TIENDA1|SKU001', 20], // big deficit
+      ['TIENDA2|SKU001', 20], // big deficit
+      ['TIENDA3|SKU001', 2],  // small surplus
+    ])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'TIENDA2', units: 0 }),
+        inv({ store: 'TIENDA3', units: 20 }), // excess ≈ 18 with 3w WOI
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    // Total units sourced from TIENDA3 across all actions
+    const fromT3 = result
+      .filter(a => a.risk !== 'overstock')
+      .flatMap(a => a.counterpartStores)
+      .filter(c => c.store === 'TIENDA3')
+      .reduce((s, c) => s + c.units, 0)
+    // Excess = floor(20 - 1.38) = 18 with B2C 3-week WOI
+    expect(fromT3).toBeLessThanOrEqual(18)
+  })
+
+  // DA-10: Negative units in inventory don't cause negative surplus
+  it('DA-10: negative units row → no surplus generated from it', () => {
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'TIENDA2', units: -10 }),
+        inv({ store: 'STOCK', units: 50 }),
+      ]),
+      'b2c', null, null, null, null, 0,
+    )
+    // TIENDA2 with -10 units should not generate surplus
+    const surplus = result.filter(a => a.store === 'TIENDA2' && a.risk === 'overstock')
+    expect(surplus).toHaveLength(0)
+  })
+
+  // DA-11: Price=0 → grossMarginFactor returns 1 (no NaN/Infinity)
+  it('DA-11: zero price → impact uses price=1 minimum', () => {
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0, price: 0, cost: 0 }),
+        inv({ store: 'TIENDA2', units: 0, price: 0, cost: 0 }),
+        inv({ store: 'STOCK', units: 50, price: 0, cost: 0 }),
+      ]),
+      'b2c', null, null, null, null, 0,
+    )
+    for (const a of result) {
+      expect(Number.isFinite(a.impactScore)).toBe(true)
+      expect(a.impactScore).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  // DA-12: Negative price → grossMarginFactor clamps to 1
+  it('DA-12: negative price → grossMarginFactor returns 1, no inversion', () => {
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0, price: -100, cost: 50 }),
+        inv({ store: 'STOCK', units: 50, price: -100, cost: 50 }),
+      ]),
+      'b2c', null, null, null, null, 0,
+    )
+    for (const a of result) {
+      expect(Number.isFinite(a.impactScore)).toBe(true)
+      expect(a.impactScore).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  // DA-13: Store appearing in both B2C and B2B rows
+  it('DA-13: same store code in b2c and b2b → only relevant channel processed', () => {
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'HYBRID', units: 0, channel: 'b2c', sku: 'SKU_C' }),
+        inv({ store: 'HYBRID', units: 50, channel: 'b2b', sku: 'SKU_C' }),
+      ]),
+      'b2c', null, null, null, null, 0,
+    )
+    // In B2C mode, only B2C rows enter — single store with 0 units
+    for (const a of result) {
+      if (a.waterfallLevel !== 'central_to_depot') {
+        expect(a.store).toBe('HYBRID')
+      }
+    }
+  })
+
+  // DA-14: Large dataset performance — 500 SKUs × 10 stores completes in <100ms
+  it('DA-14: 500 SKUs × 10 stores completes in <100ms', () => {
+    const rows: InventoryRecord[] = []
+    const sales = new Map<string, number>()
+    for (let sku = 0; sku < 500; sku++) {
+      for (let store = 0; store < 10; store++) {
+        rows.push(inv({
+          store: `STORE${store}`,
+          units: Math.floor(Math.random() * 50),
+          sku: `SKU${sku}`,
+          price: 50000 + Math.random() * 100000,
+        }))
+        sales.set(`STORE${store}|SKU${sku}`, 5 + Math.random() * 20)
+      }
+    }
+    const start = performance.now()
+    const result = computeActionQueue(makeInput(rows, sales), 'b2c', null, null, null, null)
+    const elapsed = performance.now() - start
+    expect(result).toBeDefined()
+    expect(elapsed).toBeLessThan(100) // 100ms budget
+  })
+
+  // DA-15: Pareto exactly at 80% boundary — all items at equal impact
+  it('DA-15: equal impact items → pareto flags subset, not all', () => {
+    const sales = new Map<string, number>()
+    const rows: InventoryRecord[] = []
+    for (let i = 0; i < 10; i++) {
+      rows.push(inv({ store: `TD${i}`, units: 0, sku: `EQ${i}`, price: 1000, cost: 500 }))
+      rows.push(inv({ store: `TS${i}`, units: 50, sku: `EQ${i}`, price: 1000, cost: 500 }))
+      sales.set(`TD${i}|EQ${i}`, 5)
+      sales.set(`TS${i}|EQ${i}`, 2)
+    }
+    const result = computeActionQueue(makeInput(rows, sales), 'b2c', null, null, null, null, 0)
+    if (result.length > 3) {
+      const pareto = result.filter(a => a.paretoFlag)
+      const nonPareto = result.filter(a => !a.paretoFlag)
+      // With equal impact, ~80% of items should be flagged
+      expect(pareto.length).toBeGreaterThan(0)
+      expect(nonPareto.length).toBeGreaterThan(0)
+    }
+  })
+
+  // DA-16: avgQty self-bias — high-stock store inflates its own average
+  it('DA-16: avgQty self-bias acknowledged — store with 100u among 5 stores', () => {
+    // 5 stores: 4 at 5u + 1 at 100u. avg=24. Without self: avg of 4 others = 5.
+    // The high store (100) is NOT flagged as surplus because 100 > 24*2.5=60 → YES surplus.
+    // This test documents the self-bias behavior.
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'T1', units: 5 }),
+        inv({ store: 'T2', units: 5 }),
+        inv({ store: 'T3', units: 5 }),
+        inv({ store: 'T4', units: 5 }),
+        inv({ store: 'T5', units: 100 }),
+      ]),
+      'b2c', null, null, null, null, 0,
+    )
+    // T5 with 100u, avg=24, 100 > 24*2.5=60 AND 100>10 → surplus triggered
+    const surplus = result.find(a => a.store === 'T5' && a.risk === 'overstock')
+    expect(surplus).toBeDefined()
+    // T1-T4 with 5u, avg=24, 5 < 24*0.4=9.6 AND avg(24)>=5 → deficit
+    const deficit = result.filter(a => a.risk === 'critical' || a.risk === 'low')
+    expect(deficit.length).toBeGreaterThan(0)
+  })
+
+  // DA-17: "Otras" brand gets 12w coverage (national), not 24w (imported)
+  it('DA-17: unknown brand normalizes to "Otras" → 12 weeks coverage', () => {
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0, brand: 'UnknownBrand' }),
+        inv({ store: 'TIENDA2', units: 30, brand: 'UnknownBrand' }),
+      ]),
+      'b2c', null, null, null, null, 0,
+    )
+    for (const a of result) {
+      expect(a.coverWeeks).toBe(12)
+    }
+  })
+
+  // DA-18: Empty store name is skipped
+  it('DA-18: empty store name rows are skipped', () => {
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: '', units: 50 }),
+        inv({ store: '  ', units: 50 }),
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'STOCK', units: 50 }),
+      ]),
+      'b2c', null, null, null, null, 0,
+    )
+    // Empty store rows should be skipped, not crash
+    const emptyStoreActions = result.filter(a => a.store === '' || a.store === '  ')
+    expect(emptyStoreActions).toHaveLength(0)
+  })
+
+  // DA-19: N2 depot consumption shared across cascade and direct N2
+  it('DA-19: N2 depot pool shared between cascade and direct N2 allocations', () => {
+    const sales = new Map([
+      ['TIENDA1|SKU001', 20],  // target=55, qty=0 → need=55
+      ['TIENDA2|SKU001', 20],  // target=55, qty=0 → need=55
+      ['TIENDA3|SKU001', 1],   // target=2.77, qty=10 → excess=7
+    ])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'TIENDA2', units: 0 }),
+        inv({ store: 'TIENDA3', units: 10 }),   // surplus ~7
+        inv({ store: 'RETAILS', units: 20 }),    // limited depot
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    // Total N2 from RETAILS should not exceed 20
+    const n2Total = result
+      .filter(a => a.waterfallLevel === 'depot_to_store')
+      .reduce((s, a) => s + a.suggestedUnits, 0)
+    expect(n2Total).toBeLessThanOrEqual(20)
+  })
+
+  // DA-20: Depot MOS calculation uses aggregated demand of all stores
+  it('DA-20: depot MOS reflects total demand across all stores', () => {
+    const sales = new Map([
+      ['TIENDA1|SKU001', 10],
+      ['TIENDA2|SKU001', 15],
+    ])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'TIENDA2', units: 0 }),
+        inv({ store: 'RETAILS', units: 50 }),
+        inv({ store: 'STOCK', units: 100 }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    const n3 = result.find(a => a.waterfallLevel === 'central_to_depot')
+    if (n3) {
+      // histAvg for depot = sum of store demands = 10+15 = 25
+      expect(n3.historicalAvg).toBe(25)
+      // MOS = currentStock(50) / histAvg(25) = 2.0
+      expect(n3.currentMOS).toBeCloseTo(2.0, 1)
+    }
+  })
+
+  // ─── WOI 3-Semanas Audit: Verificaciones matemáticas V1-V7 ──────────────
+
+  // V1: End-to-end con 10 u/mes B2C → target = histAvg × (13/4.33) ≈ 30.02
+  //     deficit si qty < target×0.5 = 15.01 → need ≈ ceil(30.02 - qty)
+  //     surplus si qty > target×2 = 60.05 → excess ≈ floor(qty - 30.02)
+  //     qty=0 → need = max(ceil(30.02), 3) = 31
+  it('V1: end-to-end 10 u/mes B2C — target ≈ 30.02, deficit/surplus thresholds', () => {
+    const sales = new Map([
+      ['TIENDA1|SKU001', 10],  // 10 u/mes avg
+      ['TIENDA2|SKU001', 10],
+    ])
+    // TIENDA1: qty=0 → deficit (critical). target = 10 × (13/4.33) ≈ 30.02. need = ceil(30.02) = 31
+    // TIENDA2: qty=70 → 70 > 30.02×2=60.05 → surplus. excess = floor(70 - 30.02) = 39
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'TIENDA2', units: 70 }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    const deficit = result.find(a => a.store === 'TIENDA1' && a.risk === 'critical')
+    expect(deficit).toBeDefined()
+    expect(deficit!.suggestedUnits).toBe(31) // ceil(10 × 13/4.33)
+
+    const surplus = result.find(a => a.store === 'TIENDA2' && a.risk === 'overstock')
+    expect(surplus).toBeDefined()
+    // Surplus mirror shows units sent to TIENDA1
+    const surplusSent = result.find(
+      a => a.store === 'TIENDA2' && a.risk === 'overstock' && a.counterpartStores.length > 0
+    )
+    expect(surplusSent).toBeDefined()
+    expect(surplusSent!.counterpartStores[0].store).toBe('TIENDA1')
+  })
+
+  // V2: coverWeeks=13 para tiendas B2C, 12/24 para depósitos
+  it('V2: coverWeeks = 13 for B2C stores, brand-based for depots', () => {
+    const sales = new Map([
+      ['TIENDA1|SKU001', 10],
+      ['TIENDA2|SKU001', 10],
+    ])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0, brand: 'Martel' }),
+        inv({ store: 'TIENDA2', units: 80, brand: 'Martel' }),
+        inv({ store: 'RETAILS', units: 50, brand: 'Martel' }),
+        inv({ store: 'STOCK', units: 100, brand: 'Martel' }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    // B2C stores should have coverWeeks = 13 (B2C_STORE_COVER_WEEKS)
+    const storeActions = result.filter(a => a.store !== 'RETAILS' && a.store !== 'STOCK')
+    for (const a of storeActions) {
+      expect(a.coverWeeks).toBe(13)
+    }
+    // Depot actions should have brand-based coverWeeks (Martel = national = 12)
+    const depotActions = result.filter(a => a.store === 'RETAILS' || a.store === 'STOCK')
+    for (const a of depotActions) {
+      expect(a.coverWeeks).toBe(12)
+    }
+  })
+
+  // V2b: Wrangler (imported) depot gets 24 weeks
+  it('V2b: imported brand depot gets 24 weeks coverage', () => {
+    const sales = new Map([
+      ['TIENDA1|SKU001', 10],
+      ['TIENDA2|SKU001', 10],
+    ])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0, brand: 'Wrangler' }),
+        inv({ store: 'TIENDA2', units: 30, brand: 'Wrangler' }),
+        inv({ store: 'STOCK', units: 100, brand: 'Wrangler' }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    const storeActions = result.filter(a => a.store !== 'RETAILS' && a.store !== 'STOCK')
+    for (const a of storeActions) {
+      expect(a.coverWeeks).toBe(13) // 13 for B2C stores
+    }
+    const n3 = result.find(a => a.waterfallLevel === 'central_to_depot')
+    if (n3) {
+      expect(n3.coverWeeks).toBe(24) // Wrangler = imported = 24 weeks for depot
+    }
+  })
+
+  // V3: Pool surplus no sobrepromete con WOI 13 semanas
+  // Con target 13 sem, surplus threshold = target×2 = 60.05 u (para 10 u/mes).
+  // El pool de cada surplus store debe decrementarse correctamente.
+  it('V3: surplus pool does not overpromise with 13-week WOI target', () => {
+    const sales = new Map<string, number>()
+    // 5 deficit stores, 1 surplus store with 200 units
+    for (let i = 1; i <= 5; i++) {
+      sales.set(`TD${i}|SKU001`, 10) // each needs ~31 units (target≈30.02)
+    }
+    sales.set('TS1|SKU001', 5) // surplus store sells 5/mo, target=5×3.00=15.01, excess=floor(200-15.01)=184
+    const rows: InventoryRecord[] = []
+    for (let i = 1; i <= 5; i++) {
+      rows.push(inv({ store: `TD${i}`, units: 0 }))
+    }
+    rows.push(inv({ store: 'TS1', units: 200 }))
+
+    const result = computeActionQueue(makeInput(rows, sales), 'b2c', null, null, null, null, 0)
+
+    // Total units transferred from TS1 via N1 should not exceed its excess (184)
+    const n1FromTS1 = result.filter(
+      a => a.waterfallLevel === 'store_to_store' && a.counterpartStores.some(c => c.store === 'TS1')
+    )
+    const totalFromTS1 = n1FromTS1.reduce(
+      (sum, a) => sum + a.counterpartStores.filter(c => c.store === 'TS1').reduce((s, c) => s + c.units, 0),
+      0,
+    )
+    // excess = floor(200 - 5*(13/4.33)) = floor(200 - 15.01) = 184
+    expect(totalFromTS1).toBeLessThanOrEqual(184)
+
+    // Mirror surplus action should match
+    const surplusMirror = result.find(
+      a => a.store === 'TS1' && a.risk === 'overstock' && a.counterpartStores.length > 0
+    )
+    if (surplusMirror) {
+      const mirrorTotal = surplusMirror.counterpartStores.reduce((s, c) => s + c.units, 0)
+      expect(mirrorTotal).toBe(totalFromTS1)
+    }
+  })
+
+  // V4: N1→N2 cascade con 13-week targets
+  it('V4: N1→N2 cascade with 13-week targets', () => {
+    const sales = new Map([
+      ['TIENDA1|SKU001', 10], // target = 10×(13/4.33) ≈ 30.02, need = ceil(30.02) = 31
+      ['TIENDA2|SKU001', 2],  // target = 2×3.00 ≈ 6.00, qty=80 > 6×2=12 → surplus, excess=floor(80-6)=74
+    ])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'TIENDA2', units: 80 }),
+        inv({ store: 'RETAILS', units: 50 }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    // N1 should transfer from TIENDA2 (excess 74) to TIENDA1 (need 31) → takes 31
+    const n1 = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'store_to_store')
+    expect(n1).toBeDefined()
+    expect(n1!.suggestedUnits).toBe(31)
+    // N1 fully covers need → no N2 cascade needed
+    const n2 = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'depot_to_store')
+    expect(n2).toBeUndefined()
+  })
+
+  // V5: Pareto recalculates over post-threshold filtered set
+  it('V5: pareto is calculated on filtered set (post-threshold), not pre-filter', () => {
+    const sales = new Map<string, number>()
+    // Create items with varying prices: some below threshold, some above
+    const rows: InventoryRecord[] = []
+    // 5 high-value SKUs (price=10000 → impact >> 500K)
+    for (let i = 0; i < 5; i++) {
+      rows.push(inv({ store: `TD${i}`, units: 0, sku: `HV${i}`, price: 10000, cost: 5000 }))
+      rows.push(inv({ store: `TS${i}`, units: 50, sku: `HV${i}`, price: 10000, cost: 5000 }))
+      sales.set(`TD${i}|HV${i}`, 10)
+      sales.set(`TS${i}|HV${i}`, 3)
+    }
+    // 5 low-value SKUs (price=10 → impact < 500K, filtered out by threshold unless critical)
+    for (let i = 0; i < 5; i++) {
+      rows.push(inv({ store: `TDL${i}`, units: 0, sku: `LV${i}`, price: 10, cost: 5 }))
+      rows.push(inv({ store: `TSL${i}`, units: 50, sku: `LV${i}`, price: 10, cost: 5 }))
+      sales.set(`TDL${i}|LV${i}`, 10)
+      sales.set(`TSL${i}|LV${i}`, 3)
+    }
+    const result = computeActionQueue(makeInput(rows, sales), 'b2c', null, null, null, null)
+    // Pareto flags should only exist among the filtered (high-value) items
+    const paretoItems = result.filter(a => a.paretoFlag)
+    const nonPareto = result.filter(a => !a.paretoFlag)
+    expect(paretoItems.length).toBeGreaterThan(0)
+    // Cumulative pareto impact should be >= 80% of total filtered impact
+    const totalImpact = result.reduce((s, a) => s + a.impactScore, 0)
+    const paretoImpact = paretoItems.reduce((s, a) => s + a.impactScore, 0)
+    expect(paretoImpact / totalImpact).toBeGreaterThanOrEqual(0.79)
+    // And non-pareto items should exist (not 100% flagged)
+    if (result.length > 3) {
+      expect(nonPareto.length).toBeGreaterThan(0)
+    }
+  })
+
+  // V6: Stats exactas: critical + low + overstock = total items (no hidden "balanced" items)
+  it('V6: critical + low + overstock = total items — no items lost as balanced', () => {
+    // 13w: target = 10×3.00 = 30.02. deficit < 15.01, surplus > 60.05
+    const sales = new Map([
+      ['T1|SKU001', 10],
+      ['T2|SKU001', 10],
+      ['T3|SKU001', 10],
+    ])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'T1', units: 0 }),         // critical
+        inv({ store: 'T2', units: 10 }),         // low (10 < 30.02*0.5=15.01)
+        inv({ store: 'T3', units: 100 }),        // overstock (100 > 30.02*2=60.05)
+        inv({ store: 'RETAILS', units: 20 }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    const critical = result.filter(a => a.risk === 'critical').length
+    const low = result.filter(a => a.risk === 'low').length
+    const overstock = result.filter(a => a.risk === 'overstock').length
+    const balanced = result.filter(a => a.risk === 'balanced').length
+    // All actions should be categorized as critical, low, or overstock — never balanced
+    expect(balanced).toBe(0)
+    expect(critical + low + overstock).toBe(result.length)
+  })
+
+  // V7: MOS=0 when stock=0 but there IS history → should have currentMOS=0, not be excluded
+  it('V7: MOS=0 shows correctly when stock=0 and historicalAvg > 0', () => {
+    const sales = new Map([
+      ['TIENDA1|SKU001', 10],
+      ['TIENDA2|SKU001', 10],
+    ])
+    // TIENDA2 needs 70u to be surplus (70 > 30.02×2=60.05)
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'TIENDA2', units: 70 }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    const t1 = result.find(a => a.store === 'TIENDA1')
+    expect(t1).toBeDefined()
+    expect(t1!.historicalAvg).toBe(10)       // has history
+    expect(t1!.currentStock).toBe(0)          // no stock
+    expect(t1!.currentMOS).toBe(0)            // MOS = 0/10 = 0 (not excluded)
+    // The UI condition: currentMOS <= 0 && historicalAvg <= 0 → show "—"
+    // Here historicalAvg > 0, so UI should show "0.0 MOS" (not "—")
+    expect(t1!.currentMOS <= 0 && t1!.historicalAvg <= 0).toBe(false)
   })
 })

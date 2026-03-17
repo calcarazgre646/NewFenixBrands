@@ -18,10 +18,11 @@ export type Role = "super_user" | "gerencia" | "negocio";
  * - null    → no aplica (super_user / gerencia)
  * - 'total' → ve todos los canales (pero solo páginas permitidas)
  * - 'b2c'   → solo datos de canal B2C
+ * - 'b2b'   → todo B2B (Mayoristas + UTP)
  * - 'b2b_mayoristas' → solo datos B2B Mayoristas
  * - 'b2b_utp'        → solo datos B2B UTP/Uniformes
  */
-export type ChannelScope = "b2c" | "b2b_mayoristas" | "b2b_utp" | "total" | null;
+export type ChannelScope = "b2c" | "b2b" | "b2b_mayoristas" | "b2b_utp" | "total" | null;
 
 // ─── Profile ────────────────────────────────────────────────────────────────────
 

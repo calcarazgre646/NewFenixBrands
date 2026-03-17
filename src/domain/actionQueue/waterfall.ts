@@ -36,6 +36,16 @@ const PARETO_TARGET        = 0.80;
 const SURPLUS_LIQUIDATE_RATIO = 0.60;
 
 /**
+ * WOI objetivo para tiendas B2C: 13 semanas.
+ * Actualizado por Rodrigo (17/03/2026) — antes era 3 semanas.
+ *
+ * El coverWeeks por marca (12/24 de getCoverWeeks) sigue usándose para:
+ *   - Cálculo de cobertura de depósitos (RETAILS/STOCK abastan múltiples tiendas)
+ *   - Cálculo de cobertura de tiendas B2B (12w nacional, 24w importado)
+ */
+const B2C_STORE_COVER_WEEKS = 13;
+
+/**
  * Minimum impact score for an action to be included.
  * Actions below this threshold are noise — moving 1-3 units of cheap SKUs.
  * Gs. 500,000 ≈ $70 USD. Filters out ~60-80% of trivial actions.
@@ -123,6 +133,8 @@ export function computeActionQueue(
   for (const r of inventory) {
     const store = r.store.trim().toUpperCase();
     if (!store) continue;
+    // Guard: skip rows with NaN/undefined units (corrupt ERP data)
+    if (!Number.isFinite(r.units)) continue;
 
     // Depot stores must always pass — they provide context for N2/N3 regardless of filters
     if (store === RETAILS_DEPOT) { retailRows.push(r); continue; }
@@ -207,9 +219,11 @@ export function computeActionQueue(
     const cost        = Math.max(...stores.map(([, v]) => v.cost), 0);
     // B2B uses wholesale price for impact — retail price inflates B2B priority artificially
     const effectivePrice = mode === "b2b" ? priceMay : price;
-    const coverWeeks = getCoverWeeks(brand);
-    // Convert weekly coverage to monthly: 12 weeks = ~3 months, 24 weeks = ~6 months
-    const coverMonths = coverWeeks / 4.33;
+    const brandCoverWeeks = getCoverWeeks(brand);
+    // B2C stores: 13 weeks target (Rodrigo 17/03/2026)
+    // B2B stores: brand-based coverage (12w national, 24w imported)
+    const storeCoverWeeks = mode === "b2c" ? B2C_STORE_COVER_WEEKS : brandCoverWeeks;
+    const storeCoverMonths = storeCoverWeeks / 4.33;
 
     const totalQty = stores.reduce((s, [, v]) => s + v.qty, 0);
     const avgQty   = stores.length > 0 ? totalQty / stores.length : 0;
@@ -217,7 +231,7 @@ export function computeActionQueue(
     const depotStock   = stockMap.get(key)  ?? 0;
 
     // -- Per-store targets using 6m historical average (spec cliente)
-    // Target stock = avg_monthly_sales × coverMonths
+    // B2C: Target stock = avg_monthly_sales × storeCoverMonths (3 semanas)
     // MOS (Months of Stock) = current_stock / avg_monthly_sales
     const storeData: Classified[] = [];
 
@@ -230,7 +244,7 @@ export function computeActionQueue(
       let excess = 0;
 
       if (hist && hist > 0) {
-        const targetStock = hist * coverMonths;
+        const targetStock = hist * storeCoverMonths;
         if (qty < targetStock * 0.5) {
           need = Math.max(Math.ceil(targetStock - qty), MIN_STOCK_ABS);
         } else if (qty > targetStock * 2) {
@@ -305,7 +319,7 @@ export function computeActionQueue(
         currentStock,
         suggestedUnits: suggested,
         historicalAvg: histAvg,
-        coverWeeks,
+        coverWeeks: isDepot ? brandCoverWeeks : storeCoverWeeks,
         currentMOS,
         risk,
         waterfallLevel,
@@ -359,6 +373,18 @@ export function computeActionQueue(
           transferUnits, transferUnits, counterparts,
           `Mover desde ${counterparts[0].store} (${counterparts[0].units} u.)`,
         ));
+        // N1 partially filled — cascade remainder to N2 (RETAILS depot)
+        if (toFill > 0 && remainingDepot > 0) {
+          const fromDepot = Math.min(remainingDepot, toFill);
+          remainingDepot -= fromDepot;
+          actions.push(makeItem(
+            deficit.store, risk, "restock_from_depot", "depot_to_store",
+            fromDepot, fromDepot,
+            [{ store: RETAILS_DEPOT, units: fromDepot }],
+            `Mover desde deposito RETAILS (${fromDepot} u.)`,
+          ));
+          toFill -= fromDepot;
+        }
         if (toFill > 0) unmetDeficit += toFill;
         continue;
       }
@@ -423,16 +449,22 @@ export function computeActionQueue(
       }
     }
 
-    // -- B2B: direct from STOCK (no RETAILS buffer)
+    // -- B2B: direct from STOCK (no RETAILS buffer) — with pool tracking
+    // When STOCK has inventory, cap allocations so total doesn't exceed available.
+    // When STOCK has 0 (or no data), still generate recommendations uncapped.
     if (mode === "b2b" && deficitStores.length > 0 && surplusStores.length === 0) {
+      let remainingStock = depotStock > 0 ? depotStock : Infinity;
       for (const deficit of deficitStores) {
         if (deficit.need < 1) continue;
+        const units = Math.min(deficit.need, remainingStock);
+        if (units < 1) continue;
+        if (remainingStock !== Infinity) remainingStock -= units;
         actions.push(makeItem(
           deficit.store, deficit.qty === 0 ? "critical" : "low",
           "central_to_b2b", "central_to_b2b",
-          deficit.need, deficit.need,
-          [{ store: STOCK_DEPOT, units: deficit.need }],
-          `Reponer desde STOCK central (${deficit.need} u.) directo a ${deficit.store}`,
+          units, units,
+          [{ store: STOCK_DEPOT, units }],
+          `Reponer desde STOCK central (${units} u.) directo a ${deficit.store}`,
         ));
       }
     }

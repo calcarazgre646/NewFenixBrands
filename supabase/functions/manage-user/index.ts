@@ -11,7 +11,7 @@
  *   supabase secrets set SB_SERVICE_ROLE_KEY=<key>
  *   supabase functions deploy manage-user
  */
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -110,11 +110,14 @@ Deno.serve(async (req) => {
 // ─── Create ──────────────────────────────────────────────────────────────────
 
 async function handleCreate(
-  // deno-lint-ignore no-explicit-any
-  client: any,
+  client: SupabaseClient,
   body: { email: string; fullName: string; role: string; channelScope: string | null; cargo: string | null },
 ) {
-  const { email, fullName, role, channelScope, cargo } = body;
+  const { email, fullName, role, cargo } = body;
+  // Guard: JSON "null" string → real null (prevents storing 'null'/'NULL' as text)
+  const channelScope = body.channelScope && body.channelScope !== "null" && body.channelScope !== "NULL"
+    ? body.channelScope
+    : null;
 
   if (!email || !fullName) {
     return jsonError("Email y nombre son requeridos");
@@ -165,8 +168,7 @@ async function handleCreate(
 // ─── Delete ──────────────────────────────────────────────────────────────────
 
 async function handleDelete(
-  // deno-lint-ignore no-explicit-any
-  client: any,
+  client: SupabaseClient,
   body: { userId: string },
 ) {
   const { userId } = body;

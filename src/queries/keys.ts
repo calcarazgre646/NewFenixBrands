@@ -49,8 +49,8 @@ export const salesKeys = {
 // ─── Inventario ───────────────────────────────────────────────────────────────
 export const inventoryKeys = {
   all: ["inventory"] as const,
-  list: (channel?: string, brand?: string) =>
-    ["inventory", "list", channel ?? "all", brand ?? "all"] as const,
+  list: () =>
+    ["inventory", "list"] as const,
   value: () =>
     ["inventory", "value"] as const,
 };
@@ -96,8 +96,19 @@ export const calendarKeys = {
 export const salesHistoryKeys = {
   all: ["salesHistory"] as const,
   byStore: (skus: string[], months: number) =>
-    ["salesHistory", "byStore", skus.sort().join(","), months] as const,
+    ["salesHistory", "byStore", skus.length, simpleHash(skus), months] as const,
 };
+
+/** Fast hash for query key dedup — avoids 10KB+ string comparisons in TanStack Query */
+function simpleHash(arr: string[]): number {
+  let h = 0;
+  for (const s of arr) {
+    for (let i = 0; i < s.length; i++) {
+      h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    }
+  }
+  return h;
+}
 
 // ─── Depósitos & Cobertura ────────────────────────────────────────────────────
 export const depotKeys = {

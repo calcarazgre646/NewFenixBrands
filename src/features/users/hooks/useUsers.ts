@@ -89,17 +89,26 @@ export function useUsers() {
 
   // ── Edit state ─────────────────────────────────────────────────────────────
   const [editingProfile, setEditingProfile] = useState<UserProfileRow | null>(null);
-  const openEdit = useCallback((profile: UserProfileRow) => setEditingProfile(profile), []);
+  const openEdit = useCallback((profile: UserProfileRow) => {
+    updateMutation.reset();
+    setEditingProfile(profile);
+  }, [updateMutation]);
   const closeEdit = useCallback(() => setEditingProfile(null), []);
 
   // ── Create state ───────────────────────────────────────────────────────────
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const openCreate = useCallback(() => setCreateModalOpen(true), []);
+  const openCreate = useCallback(() => {
+    createMutation.reset();
+    setCreateModalOpen(true);
+  }, [createMutation]);
   const closeCreate = useCallback(() => setCreateModalOpen(false), []);
 
   // ── Delete state ───────────────────────────────────────────────────────────
   const [deletingProfile, setDeletingProfile] = useState<UserProfileRow | null>(null);
-  const openDelete = useCallback((profile: UserProfileRow) => setDeletingProfile(profile), []);
+  const openDelete = useCallback((profile: UserProfileRow) => {
+    deleteMutation.reset();
+    setDeletingProfile(profile);
+  }, [deleteMutation]);
   const closeDelete = useCallback(() => setDeletingProfile(null), []);
 
   // ── Permissions ────────────────────────────────────────────────────────────

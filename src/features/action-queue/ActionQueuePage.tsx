@@ -179,7 +179,11 @@ export default function ActionQueuePage() {
 
       {/* ═══ TIER 1: Stats row — uses design-system StatCard ═══ */}
       <div className="exec-anim-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard label="Total Acciones" value={String(totalItems)} />
+        <StatCard
+          label="Total Acciones"
+          value={String(totalItems)}
+          sub={showParetoOnly && visibleCount < totalItems ? `${visibleCount} visibles` : undefined}
+        />
         <StatCard label="SKUs Únicos" value={String(uniqueSkus)} />
         <StatCard
           label="Pareto 80%"

@@ -124,15 +124,17 @@ export function CompactActionList({ items, intent, groupMode }: Props) {
                 </div>
               </td>
 
-              {/* Cobertura: MOS (tiendas) / WOI (depósitos) */}
+              {/* Cobertura: WOI (Weeks of Inventory) */}
               <td className="px-3 py-2.5 text-center">
                 {(() => {
-                  if (item.currentMOS <= 0) return <span className="text-[11px] text-gray-300 dark:text-gray-600">—</span>;
-                  const isDepot = item.store === "RETAILS" || item.store === "STOCK";
-                  const value = isDepot ? item.currentMOS * 4.33 : item.currentMOS;
-                  const label = isDepot ? "WOI" : "MOS";
-                  const low = isDepot ? 4.33 : 1;
-                  const mid = isDepot ? 8.66 : 2;
+                  // Show "—" only when there's no history to compute WOI.
+                  // WOI=0 with history means stock=0 — show "0.0 WOI" so operators see the zero.
+                  if (item.currentMOS <= 0 && item.historicalAvg <= 0) return <span className="text-[11px] text-gray-300 dark:text-gray-600">—</span>;
+                  const value = item.currentMOS * 4.33; // Always show in weeks (WOI)
+                  const label = "WOI";
+                  // Thresholds in weeks from item's coverWeeks (13 for B2C stores, 12/24 for depots/B2B)
+                  const low = item.coverWeeks;           // 1× target in weeks
+                  const mid = item.coverWeeks * 2;       // 2× target in weeks
                   return (
                     <p className={`text-[11px] font-medium tabular-nums ${
                       value < low

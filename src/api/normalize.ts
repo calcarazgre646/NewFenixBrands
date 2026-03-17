@@ -142,7 +142,7 @@ export const EXCLUDED_STORES = new Set([
   "E-COMMERCE",  // canal virtual, sin lógica de inventario físico
   "PRODUCTO",    // clasificación interna, no es punto de venta
   "SHOPSANLO",   // tienda cerrada
-  "M-AGUSTIN", "M-EDGAR", "M-EMILIO", "M-JUAN", "M-SALABERRY", "M-SILVIO", // vendedores B2B (futuro: integrar como agentes)
+  "M-AGUSTIN", "M-EDGAR", "M-EMILIO", "M-GAMARRA", "M-JUAN", "M-SALABERRY", "M-SILVIO", // vendedores B2B (futuro: integrar como agentes)
 ]);
 
 export function classifyStore(cosujd: string): "b2c" | "b2b" | "excluded" {

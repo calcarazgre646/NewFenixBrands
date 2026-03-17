@@ -104,32 +104,35 @@ LEFT JOIN "Dim_maestro_comercial" d
 -- Esta vista pre-agrega por (tienda, sku, talle) y normaliza nombres.
 -- Incluye tipo_articulo de Dim_maestro_comercial para categorias correctas.
 
+-- NOTA: GROUP BY solo por (store, sku, talle) + MAX() para atributos descriptivos.
+-- El ERP puede tener el mismo SKU+talle+tienda con descripciones ligeramente diferentes.
+-- Si el GROUP BY incluye esos campos, genera duplicados que chocan con el UNIQUE INDEX.
+-- Fix: sql/008_fix_mv_stock_tienda_duplicates.sql (17/03/2026)
 CREATE MATERIALIZED VIEW IF NOT EXISTS mv_stock_tienda AS
 SELECT
-  UPPER(TRIM(f.e_sucursal))  AS store,
-  TRIM(f.e_sku)              AS sku,
-  TRIM(f.e_talle)            AS talle,
-  TRIM(f.e_descrip)          AS description,
-  TRIM(f.e_rubro)            AS rubro,
-  TRIM(f.e_marca)            AS brand,
+  UPPER(TRIM(f.e_sucursal))   AS store,
+  TRIM(f.e_sku)               AS sku,
+  TRIM(f.e_talle)             AS talle,
+  MAX(TRIM(f.e_descrip))      AS description,
+  MAX(TRIM(f.e_rubro))        AS rubro,
+  MAX(TRIM(f.e_marca))        AS brand,
   -- Priorizar tipo_articulo de la dimension (mas preciso que e_lineapr)
-  COALESCE(
+  MAX(COALESCE(
     NULLIF(TRIM(d.tipo_articulo), ''),
     NULLIF(TRIM(f.e_lineapr), ''),
     'Sin categoria'
-  )                           AS lineapr,
-  TRIM(f.e_tipoart)          AS tipo_articulo,
+  ))                            AS lineapr,
+  MAX(TRIM(f.e_tipoart))      AS tipo_articulo,
   -- SKU Comercial de Dim_maestro_comercial (ej: "MACA004428")
   -- Instruccion Rodrigo 25/02: "Todo analisis de SKU sobre SKU Comercial"
-  TRIM(d."codigo_unico_final") AS sku_comercial,
-  SUM(f.e_cantid)            AS units,
-  MAX(f.e_precio)            AS price,
-  MAX(f.e_precmay)           AS price_may,
-  MAX(f.e_costo)             AS cost,
-  SUM(f.e_valor)             AS value,
-  TRIM(f.e_estcomer)         AS est_comercial,
-  TRIM(f.e_carryov)          AS carry_over,
-  f.e_tpitem                 AS tpitem
+  MAX(TRIM(d."codigo_unico_final")) AS sku_comercial,
+  SUM(f.e_cantid)             AS units,
+  MAX(f.e_precio)             AS price,
+  MAX(f.e_precmay)            AS price_may,
+  MAX(f.e_costo)              AS cost,
+  SUM(f.e_valor)              AS value,
+  MAX(TRIM(f.e_estcomer))     AS est_comercial,
+  MAX(TRIM(f.e_carryov))      AS carry_over
 FROM fjdexisemp f
 LEFT JOIN (
   SELECT DISTINCT ON ("SKU-I", talla)
@@ -145,17 +148,7 @@ WHERE f.e_cantid > 0
 GROUP BY
   UPPER(TRIM(f.e_sucursal)),
   TRIM(f.e_sku),
-  TRIM(f.e_talle),
-  TRIM(f.e_descrip),
-  TRIM(f.e_rubro),
-  TRIM(f.e_marca),
-  TRIM(d.tipo_articulo),
-  TRIM(f.e_lineapr),
-  TRIM(f.e_tipoart),
-  TRIM(d."codigo_unico_final"),
-  TRIM(f.e_estcomer),
-  TRIM(f.e_carryov),
-  f.e_tpitem
+  TRIM(f.e_talle)
 ;
 
 -- Indice para la vista materializada

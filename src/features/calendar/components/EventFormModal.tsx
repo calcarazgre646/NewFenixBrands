@@ -155,7 +155,7 @@ export function EventFormModal({
               {category && (
                 <label className="flex h-[34px] w-[34px] shrink-0 cursor-pointer items-center justify-center rounded-lg border border-gray-300 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700" title="Cambiar color">
                   <span className="block h-4 w-4 rounded-full" style={{ backgroundColor: selectedCatColor }} />
-                  <input type="color" value={selectedCatColor} onChange={(e) => onChangeCategoryColor(category, e.target.value)} className="sr-only" />
+                  <input type="color" aria-label="Cambiar color de categoría" value={selectedCatColor} onChange={(e) => onChangeCategoryColor(category, e.target.value)} className="sr-only" />
                 </label>
               )}
               <button type="button" onClick={() => setAddingCat(true)} title="Nueva categoría"
@@ -167,7 +167,7 @@ export function EventFormModal({
             <div className="space-y-2">
               <div className="flex gap-2">
                 <input type="text" value={newCatLabel} onChange={(e) => setNewCatLabel(e.target.value)}
-                  placeholder="Nombre de categoría" autoFocus className={`${INPUT_CLS}flex-1`} />
+                  placeholder="Nombre de categoría" className={`${INPUT_CLS}flex-1`} />
                 <button type="button" onClick={handleAddCategory} disabled={!newCatLabel.trim()}
                   className="shrink-0 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50">
                   Crear

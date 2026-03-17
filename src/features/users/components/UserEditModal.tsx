@@ -26,7 +26,7 @@ interface UserEditModalProps {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const ALL_ROLES: Role[] = ["super_user", "gerencia", "negocio"];
-const ALL_SCOPES = ["b2c", "b2b_mayoristas", "b2b_utp", "total"] as const;
+const ALL_SCOPES = ["b2c", "b2b", "b2b_mayoristas", "b2b_utp", "total"] as const;
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -69,8 +69,12 @@ export function UserEditModal({
       return;
     }
 
-    await onSave(profile.id, updates);
-    onClose();
+    try {
+      await onSave(profile.id, updates);
+      onClose();
+    } catch {
+      // Error se muestra via updateError prop (TanStack Query mutation state)
+    }
   }
 
   const selfEditTooltip = "No podés modificar tu propia cuenta";

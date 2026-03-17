@@ -23,8 +23,12 @@ export function UserDeleteDialog({
   onClose,
 }: UserDeleteDialogProps) {
   async function handleDelete() {
-    await onConfirm(profile.id);
-    onClose();
+    try {
+      await onConfirm(profile.id);
+      onClose();
+    } catch {
+      // Error se muestra via deleteError prop (TanStack Query mutation state)
+    }
   }
 
   return (

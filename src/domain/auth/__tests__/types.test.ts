@@ -119,6 +119,28 @@ describe("derivePermissions", () => {
     });
   });
 
+  describe("negocio — b2b scope (both Mayoristas + UTP)", () => {
+    const p = derivePermissions(makeProfile({ role: "negocio", channelScope: "b2b" }));
+
+    it("can view ventas, acciones, logistica, calendario", () => {
+      expect(p.canViewSales).toBe(true);
+      expect(p.canViewActions).toBe(true);
+      expect(p.canViewLogistics).toBe(true);
+      expect(p.canViewCalendar).toBe(true);
+    });
+
+    it("cannot view executive, kpis, depositos", () => {
+      expect(p.canViewExecutive).toBe(false);
+      expect(p.canViewKpis).toBe(false);
+      expect(p.canViewDepots).toBe(false);
+    });
+
+    it("channel IS locked to b2b", () => {
+      expect(p.isChannelLocked).toBe(true);
+      expect(p.lockedChannel).toBe("b2b");
+    });
+  });
+
   describe("negocio — total scope (Edgar Carvallo case)", () => {
     const p = derivePermissions(makeProfile({ role: "negocio", channelScope: "total" }));
 
@@ -282,7 +304,7 @@ describe("derivePermissions — security invariants", () => {
   });
 
   it("negocio can never see executive pages regardless of scope", () => {
-    const scopes = ["b2c", "b2b_mayoristas", "b2b_utp", "total"] as const;
+    const scopes = ["b2c", "b2b", "b2b_mayoristas", "b2b_utp", "total"] as const;
     for (const scope of scopes) {
       const p = derivePermissions(makeProfile({ role: "negocio", channelScope: scope }));
       expect(p.canViewExecutive).toBe(false);
@@ -313,6 +335,7 @@ describe("derivePermissions — security invariants", () => {
     expect(derivePermissions(makeProfile({ role: "negocio", channelScope: "b2c" })).isChannelLocked).toBe(true);
     expect(derivePermissions(makeProfile({ role: "negocio", channelScope: "b2b_mayoristas" })).isChannelLocked).toBe(true);
     expect(derivePermissions(makeProfile({ role: "negocio", channelScope: "b2b_utp" })).isChannelLocked).toBe(true);
+    expect(derivePermissions(makeProfile({ role: "negocio", channelScope: "b2b" })).isChannelLocked).toBe(true);
 
     // negocio with total: NOT locked
     expect(derivePermissions(makeProfile({ role: "negocio", channelScope: "total" })).isChannelLocked).toBe(false);
@@ -333,7 +356,7 @@ describe("getDefaultRoute — edge cases", () => {
   });
 
   it("negocio with all channel scopes → /ventas", () => {
-    for (const scope of ["b2c", "b2b_mayoristas", "b2b_utp", "total"] as const) {
+    for (const scope of ["b2c", "b2b", "b2b_mayoristas", "b2b_utp", "total"] as const) {
       const p = derivePermissions(makeProfile({ role: "negocio", channelScope: scope }));
       expect(getDefaultRoute(p)).toBe("/ventas");
     }

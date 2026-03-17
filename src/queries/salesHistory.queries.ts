@@ -36,9 +36,11 @@ export async function fetchSalesHistory(skus: string[]): Promise<SalesHistoryMap
   const calYear  = getCalendarYear();
   const calMonth = getCalendarMonth();
 
-  // Construir filtros de year/month para los ultimos 6 meses
+  // Construir filtros de year/month para los ultimos 6 meses CERRADOS.
+  // Excluir el mes actual (parcial) para evitar subestimar el promedio:
+  // Ej: Marzo con 17 días dividido por 6 meses subestima el target ~45%.
   const validPeriods: Array<{ year: number; month: number }> = [];
-  for (let i = 0; i < HISTORY_MONTHS; i++) {
+  for (let i = 1; i <= HISTORY_MONTHS; i++) {
     let m = calMonth - i;
     let y = calYear;
     if (m <= 0) { m += 12; y -= 1; }
@@ -79,7 +81,7 @@ export async function fetchSalesHistory(skus: string[]): Promise<SalesHistoryMap
     for (let yi = 0; yi < yearResults.length; yi++) {
       const year = yearEntries[yi][0];
       for (const r of yearResults[yi]) {
-        const store = trimStr(r.store);
+        const store = trimStr(r.store).toUpperCase();
         const sku   = trimStr(r.sku);
         const key   = `${store}|${sku}`;
         const monthKey = `${year}-${r.month}`;

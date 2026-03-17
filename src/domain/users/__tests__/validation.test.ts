@@ -186,7 +186,7 @@ describe("validateCreateUser", () => {
   });
 
   it("accepts negocio with valid channel scopes", () => {
-    for (const scope of ["b2c", "b2b_mayoristas", "b2b_utp", "total"] as const) {
+    for (const scope of ["b2c", "b2b", "b2b_mayoristas", "b2b_utp", "total"] as const) {
       const result = validateCreateUser({
         ...validInput,
         role: "negocio",
@@ -230,6 +230,7 @@ describe("validateCreateUser", () => {
 describe("getChannelScopeLabel", () => {
   it.each([
     ["b2c", "B2C"],
+    ["b2b", "B2B (Mayoristas + UTP)"],
     ["b2b_mayoristas", "B2B Mayoristas"],
     ["b2b_utp", "B2B UTP"],
     ["total", "Total"],

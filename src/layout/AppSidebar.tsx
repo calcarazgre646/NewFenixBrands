@@ -128,8 +128,8 @@ const AppSidebar: React.FC = () => {
             </>
           ) : (
             <>
-              <img src="/images/logo/logo-icon.svg" alt="FenixBrands" className="h-8 w-8 object-contain dark:hidden" />
-              <img src="/images/logo/logo-icon-dark.svg" alt="FenixBrands" className="h-8 w-8 object-contain hidden dark:block" />
+              <img src="/images/logo/GH.png" alt="FenixBrands" className="h-8 w-8 object-contain dark:hidden" />
+              <img src="/images/logo/GH2.png" alt="FenixBrands" className="h-8 w-8 object-contain hidden dark:block" />
             </>
           )}
         </Link>

@@ -1,0 +1,11 @@
+# ─── Supabase Edge Functions Configuration ───────────────────────────────────
+#
+# Este archivo garantiza que los deploys futuros mantengan la configuración
+# correcta sin depender de flags manuales en la CLI.
+
+[functions.manage-user]
+# La función hace su propia verificación de JWT internamente
+# (auth.getUser(token) + chequeo de role=super_user).
+# El gateway NO debe verificar el JWT porque rechaza tokens válidos
+# de sesión con "Invalid JWT", bloqueando la creación de usuarios.
+verify_jwt = false

@@ -80,45 +80,67 @@ export async function updateProfile(
   if (error) throw new Error(`updateProfile: ${error.message}`);
 }
 
+// ─── Edge Function helpers ───────────────────────────────────────────────────
+
+/**
+ * Invoca la Edge Function manage-user con fetch directo.
+ * Supabase JS functions.invoke() envuelve errores non-2xx en un mensaje genérico
+ * que pierde el detalle real. Con fetch controlamos la respuesta completa.
+ */
+async function invokeManageUser(
+  payload: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+  const { data: { session } } = await authClient.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error("No hay sesión activa. Iniciá sesión de nuevo.");
+  }
+
+  const res = await fetch(
+    `${supabaseUrl}/functions/v1/manage-user`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const msg = body?.error ?? body?.message ?? `Error ${res.status}`;
+    throw new Error(msg);
+  }
+
+  if (body?.error) throw new Error(body.error);
+
+  return body;
+}
+
 // ─── Create (via Edge Function) ──────────────────────────────────────────────
 
 export async function createUser(
   data: CreateUserData,
 ): Promise<{ id: string; email: string }> {
-  const { data: result, error } = await authClient.functions.invoke(
-    "manage-user",
-    {
-      body: {
-        action: "create",
-        email: data.email,
-        fullName: data.fullName,
-        role: data.role,
-        channelScope: data.channelScope,
-        cargo: data.cargo,
-      },
-    },
-  );
+  const result = await invokeManageUser({
+    action: "create",
+    email: data.email,
+    fullName: data.fullName,
+    role: data.role,
+    channelScope: data.channelScope,
+    cargo: data.cargo,
+  });
 
-  if (error) throw new Error(`createUser: ${error.message}`);
-
-  const body = result as Record<string, unknown> | null;
-  if (body?.error) throw new Error(body.error as string);
-
-  return body as { id: string; email: string };
+  return result as { id: string; email: string };
 }
 
 // ─── Delete (via Edge Function) ──────────────────────────────────────────────
 
 export async function deleteUser(userId: string): Promise<void> {
-  const { data: result, error } = await authClient.functions.invoke(
-    "manage-user",
-    {
-      body: { action: "delete", userId },
-    },
-  );
-
-  if (error) throw new Error(`deleteUser: ${error.message}`);
-
-  const body = result as Record<string, unknown> | null;
-  if (body?.error) throw new Error(body.error as string);
+  await invokeManageUser({ action: "delete", userId });
 }

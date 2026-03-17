@@ -123,20 +123,30 @@ export function ActionGroupCard({ group, mode, channel, defaultExpanded = false,
 
   const clusterInfo = group.cluster ? CLUSTER_STYLES[group.cluster] : null;
 
-  // WOI general del grupo: promedio ponderado de MOS (por stock) convertido a semanas.
+  // WOI general del grupo: promedio ponderado de MOS convertido a semanas.
+  // Incluye items con stock=0 pero con historial (MOS=0 → bajan el WOI real del grupo).
   // Excluye depósitos (RETAILS/STOCK) — su MOS es semántica diferente (demanda red vs tienda individual).
   const groupWOI = useMemo(() => {
-    let totalStock = 0;
+    // Collect items with meaningful data (have history OR have stock)
+    const relevant = group.items.filter(
+      (item) =>
+        item.store !== "RETAILS" &&
+        item.store !== "STOCK" &&
+        (item.currentMOS > 0 || item.historicalAvg > 0),
+    );
+    if (relevant.length === 0) return null;
+
+    // Weighted average by stock. Items with stock=0 contribute MOS=0 weighted by their historicalAvg
+    // so they pull the group WOI down (reflecting "we sell this but have nothing").
+    let totalWeight = 0;
     let weightedMOS = 0;
-    for (const item of group.items) {
-      if (item.currentMOS > 0 && item.currentStock > 0
-        && item.store !== "RETAILS" && item.store !== "STOCK") {
-        weightedMOS += item.currentMOS * item.currentStock;
-        totalStock += item.currentStock;
-      }
+    for (const item of relevant) {
+      const weight = item.currentStock > 0 ? item.currentStock : item.historicalAvg;
+      weightedMOS += item.currentMOS * weight;
+      totalWeight += weight;
     }
-    if (totalStock === 0) return null;
-    const avgMOS = weightedMOS / totalStock;
+    if (totalWeight === 0) return null;
+    const avgMOS = weightedMOS / totalWeight;
     return avgMOS * 4.33;
   }, [group.items]);
 
@@ -181,18 +191,23 @@ export function ActionGroupCard({ group, mode, channel, defaultExpanded = false,
             <MiniStat value={group.criticalCount} label="sin stock" color="bg-error-50 text-error-700 dark:bg-error-500/10 dark:text-error-400" />
             <MiniStat value={group.lowCount} label="bajo" color="bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-400" />
             <MiniStat value={group.overstockCount} label="exceso" color="bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400" />
-            {groupWOI !== null && (
-              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
-                groupWOI < 4.33
-                  ? "bg-error-50 text-error-700 dark:bg-error-500/10 dark:text-error-400"
-                  : groupWOI < 8.66
-                  ? "bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-400"
-                  : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
-              }`}>
-                {groupWOI.toFixed(1)}
-                <span className="font-normal opacity-70">WOI</span>
-              </span>
-            )}
+            {groupWOI !== null && (() => {
+              // B2C: 13 semanas (Rodrigo 17/03/2026). B2B: brand-based (12/24).
+              const wTarget = channel === "b2c" ? 13 : (group.items[0]?.coverWeeks ?? 12);
+              return (
+                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
+                  groupWOI < wTarget
+                    ? "bg-error-50 text-error-700 dark:bg-error-500/10 dark:text-error-400"
+                    : groupWOI < wTarget * 2
+                    ? "bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-400"
+                    : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+                }`}>
+                  {groupWOI.toFixed(1)}
+                  <span className="font-normal opacity-70">WOI</span>
+                  <span className="font-normal text-gray-400 dark:text-gray-500">obj: {wTarget} sem</span>
+                </span>
+              );
+            })()}
           </div>
 
           {mode === "store" && group.timeRestriction && group.timeRestriction !== "—" && (
@@ -264,6 +279,7 @@ export function ActionGroupCard({ group, mode, channel, defaultExpanded = false,
               key={section.intent}
               section={section}
               groupMode={mode}
+              channel={channel}
             />
           ))}
         </div>
@@ -272,14 +288,76 @@ export function ActionGroupCard({ group, mode, channel, defaultExpanded = false,
   );
 }
 
+// ─── Section diagnosis ──────────────────────────────────────────────────────
+
+function buildSectionDiagnosis(section: ActionSection, channel: "b2c" | "b2b"): string | null {
+  const items = section.items;
+  if (items.length === 0) return null;
+
+  // B2C: 13 semanas (Rodrigo 17/03/2026). B2B: coverWeeks de la marca (12/24).
+  const wTarget = channel === "b2c" ? 13 : (items[0]?.coverWeeks ?? 12);
+
+  const criticalCount = items.filter(i => i.risk === "critical").length;
+  const lowCount = items.filter(i => i.risk === "low").length;
+  const overstockCount = items.filter(i => i.risk === "overstock").length;
+
+  // Compute weighted average WOI for store items (exclude depots)
+  const storeItems = items.filter(
+    i => i.store !== "RETAILS" && i.store !== "STOCK" && (i.currentMOS > 0 || i.historicalAvg > 0),
+  );
+  let avgWOI: number | null = null;
+  if (storeItems.length > 0) {
+    let totalWeight = 0;
+    let weightedMOS = 0;
+    for (const item of storeItems) {
+      const w = item.currentStock > 0 ? item.currentStock : item.historicalAvg;
+      weightedMOS += item.currentMOS * w;
+      totalWeight += w;
+    }
+    if (totalWeight > 0) avgWOI = (weightedMOS / totalWeight) * 4.33;
+  }
+
+  const { intent } = section;
+
+  // Deficit intents: receive_transfer, receive_depot, resupply_depot
+  if (intent === "receive_transfer" || intent === "receive_depot" || intent === "resupply_depot") {
+    const parts: string[] = [];
+    if (criticalCount > 0) parts.push(`${criticalCount} SKU${criticalCount > 1 ? "s" : ""} sin stock`);
+    if (lowCount > 0) parts.push(`${lowCount} con stock bajo`);
+    if (avgWOI !== null) {
+      parts.push(`cobertura prom. ${avgWOI.toFixed(1)} sem (obj: ${wTarget})`);
+    }
+    return parts.length > 0 ? parts.join(", ") : null;
+  }
+
+  // Surplus intents: redistribute, ship_b2b
+  if (intent === "redistribute" || intent === "ship_b2b") {
+    if (avgWOI !== null && avgWOI > wTarget) {
+      const multiple = avgWOI / wTarget;
+      if (multiple >= 2) {
+        return `Stock para ${Math.round(avgWOI)} sem promedio — ${Math.round(multiple)}× más del objetivo`;
+      }
+      return `Cobertura prom. ${avgWOI.toFixed(1)} sem — por encima del objetivo de ${wTarget}`;
+    }
+    if (overstockCount > 0) {
+      return `${overstockCount} SKU${overstockCount > 1 ? "s" : ""} con excedente a redistribuir`;
+    }
+    return null;
+  }
+
+  return null;
+}
+
 // ─── Section card (work order) ───────────────────────────────────────────────
 
 function SectionCard({
   section,
   groupMode,
+  channel,
 }: {
   section: ActionSection;
   groupMode: GroupByMode;
+  channel: "b2c" | "b2b";
 }) {
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(0);
@@ -292,6 +370,8 @@ function SectionCard({
     return section.items.slice(start, start + PAGE_SIZE);
   }, [section.items, page]);
 
+  const diagnosis = useMemo(() => buildSectionDiagnosis(section, channel), [section, channel]);
+
   return (
     <div className="border-t border-gray-100 first:border-t-0 last:overflow-hidden last:rounded-b-2xl dark:border-gray-700/50">
       {/* Section header */}
@@ -302,19 +382,26 @@ function SectionCard({
       >
         <IntentIcon intent={section.intent} className={style.color} />
         <div className="min-w-0 flex-1">
-          <span className={`text-xs font-bold ${style.color}`}>
-            {section.label}
-          </span>
-          <span className="ml-2 text-[11px] text-gray-500 dark:text-gray-400">
-            {section.items.length} {section.items.length === 1 ? "acción" : "acciones"}
-            <span className="mx-1 text-gray-300 dark:text-gray-600">·</span>
-            {section.totalUnits.toLocaleString("es-PY")} u.
-          </span>
-          {section.criticalCount > 0 && (
-            <Badge
-              text={`${section.criticalCount} sin stock`}
-              className="ml-2 bg-error-100 text-error-700 dark:bg-error-500/15 dark:text-error-400"
-            />
+          <div>
+            <span className={`text-xs font-bold ${style.color}`}>
+              {section.label}
+            </span>
+            <span className="ml-2 text-[11px] text-gray-500 dark:text-gray-400">
+              {section.items.length} {section.items.length === 1 ? "acción" : "acciones"}
+              <span className="mx-1 text-gray-300 dark:text-gray-600">·</span>
+              {section.totalUnits.toLocaleString("es-PY")} u.
+            </span>
+            {section.criticalCount > 0 && (
+              <Badge
+                text={`${section.criticalCount} sin stock`}
+                className="ml-2 bg-error-100 text-error-700 dark:bg-error-500/15 dark:text-error-400"
+              />
+            )}
+          </div>
+          {diagnosis && (
+            <p className="mt-0.5 text-[10px] italic text-gray-500 dark:text-gray-400">
+              {diagnosis}
+            </p>
           )}
         </div>
         <ChevronIcon open={open} className="h-4 w-4 text-gray-400" />

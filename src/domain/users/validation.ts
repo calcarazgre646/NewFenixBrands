@@ -91,6 +91,7 @@ export function validateCreateUser(input: CreateUserInput): ValidationResult {
 export function getChannelScopeLabel(scope: ChannelScope): string {
   switch (scope) {
     case "b2c":            return "B2C";
+    case "b2b":            return "B2B (Mayoristas + UTP)";
     case "b2b_mayoristas": return "B2B Mayoristas";
     case "b2b_utp":        return "B2B UTP";
     case "total":          return "Total";

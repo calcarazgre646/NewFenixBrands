@@ -23,7 +23,7 @@ interface UserCreateModalProps {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const ALL_ROLES: Role[] = ["super_user", "gerencia", "negocio"];
-const ALL_SCOPES = ["b2c", "b2b_mayoristas", "b2b_utp", "total"] as const;
+const ALL_SCOPES = ["b2c", "b2b", "b2b_mayoristas", "b2b_utp", "total"] as const;
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -65,8 +65,12 @@ export function UserCreateModal({
       return;
     }
 
-    await onSave(input);
-    onClose();
+    try {
+      await onSave(input);
+      onClose();
+    } catch {
+      // Error se muestra via createError prop (TanStack Query mutation state)
+    }
   }
 
   const displayError = localError || createError;
