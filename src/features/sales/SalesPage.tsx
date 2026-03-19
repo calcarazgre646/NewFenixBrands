@@ -24,7 +24,7 @@ import { useFilters } from "@/context/FilterContext";
 import { formatPYG, formatPYGSuffix, formatPct, formatChange } from "@/utils/format";
 import { classifyMarginHealth } from "@/domain/kpis/calculations";
 import { Card } from "@/components/ui/card/Card";
-import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
+import { Skeleton } from "@/components/ui/skeleton/Skeleton";
 import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
 import { ExecutiveFilters } from "@/features/executive/components/ExecutiveFilters";
 
@@ -65,7 +65,38 @@ export default function SalesPage() {
     isStoresLoading,
   } = useSalesAnalytics({ activeMonths, enableSkus, enableBehavior, selectedStoreOverride: selectedStore });
 
-  if (dashLoading) return <PageSkeleton />;
+  if (dashLoading) return (
+    <div className="animate-pulse space-y-6 p-4 sm:p-6">
+      {/* Filtros + Data Freshness Tag */}
+      <div className="flex items-center justify-between">
+        <Skeleton variant="text" width="120px" height="1.5rem" />
+        <Skeleton variant="text" width="200px" height="2rem" />
+      </div>
+
+      {/* Grid 4 columnas: Ventas + 2 mini stacked + Margen + AOV */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Skeleton variant="card" height="7rem" />
+        <div className="flex flex-col gap-2">
+          <Skeleton variant="card" height="3.25rem" />
+          <Skeleton variant="card" height="3.25rem" />
+        </div>
+        <Skeleton variant="card" height="7rem" />
+        <Skeleton variant="card" height="7rem" />
+      </div>
+
+      {/* Marcas card */}
+      <Skeleton variant="card" height="10rem" />
+
+      {/* Tiendas table */}
+      <Skeleton variant="card" height="14rem" />
+
+      {/* Comportamiento + SKUs (2 columnas) */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <Skeleton variant="card" height="12rem" />
+        <Skeleton variant="card" height="12rem" />
+      </div>
+    </div>
+  );
 
   if (dashError || !metrics) {
     return (

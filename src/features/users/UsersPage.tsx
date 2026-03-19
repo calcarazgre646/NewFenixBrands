@@ -5,7 +5,7 @@
  * Lista, crea, edita y elimina usuarios.
  */
 import { PageHeader } from "@/components/ui/page-header/PageHeader";
-import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
+import { Skeleton } from "@/components/ui/skeleton/Skeleton";
 import { EmptyState } from "@/components/ui/empty-state/EmptyState";
 import { GroupIcon, PencilIcon, PlusIcon, TrashBinIcon } from "@/icons";
 import { getRoleLabel } from "@/domain/auth/types";
@@ -71,7 +71,48 @@ export default function UsersPage() {
     deleteError,
   } = useUsers();
 
-  if (isLoading) return <PageSkeleton />;
+  if (isLoading) return (
+    <div className="animate-pulse space-y-6">
+      {/* Header: título + badge + botón */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Skeleton variant="text" width="140px" height="1.75rem" />
+          <Skeleton variant="circle" className="h-6 w-10 !rounded-full" />
+        </div>
+        <Skeleton variant="text" width="130px" height="2rem" className="!rounded-lg" />
+      </div>
+
+      {/* Filtros: 2 selects */}
+      <div className="flex gap-3">
+        <Skeleton variant="text" width="140px" height="2rem" className="!rounded-lg" />
+        <Skeleton variant="text" width="140px" height="2rem" className="!rounded-lg" />
+      </div>
+
+      {/* Tabla */}
+      <div className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-800">
+        {/* Header de tabla */}
+        <div className="flex gap-4 border-b border-gray-200 px-4 py-3 dark:border-gray-800">
+          <Skeleton variant="text" width="20%" height="0.875rem" />
+          <Skeleton variant="text" width="12%" height="0.875rem" />
+          <Skeleton variant="text" width="10%" height="0.875rem" />
+          <Skeleton variant="text" width="15%" height="0.875rem" />
+          <Skeleton variant="text" width="10%" height="0.875rem" />
+          <Skeleton variant="text" width="12%" height="0.875rem" />
+        </div>
+        {/* Filas */}
+        {Array.from({ length: 6 }, (_, i) => (
+          <div key={i} className="flex items-center gap-4 border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+            <Skeleton variant="text" width="20%" height="0.875rem" />
+            <Skeleton variant="text" width="12%" height="1.25rem" className="!rounded-full" />
+            <Skeleton variant="text" width="10%" height="0.875rem" />
+            <Skeleton variant="text" width="15%" height="0.875rem" />
+            <Skeleton variant="text" width="10%" height="1.25rem" className="!rounded-full" />
+            <Skeleton variant="text" width="12%" height="0.875rem" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   if (error) {
     return (
