@@ -26,7 +26,7 @@ import { MonthlyPerformanceTable } from "./components/MonthlyPerformanceTable";
 import { MONTH_SHORT, MONTH_FULL } from "@/domain/period/helpers";
 import { formatPYGSuffix, formatCompact, formatChange } from "@/utils/format";
 import { StatCard } from "@/components/ui/stat-card/StatCard";
-import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
+import { Skeleton } from "@/components/ui/skeleton/Skeleton";
 import { Card } from "@/components/ui/card/Card";
 import { DataFreshnessTag } from "./components/DataFreshnessTag";
 
@@ -228,7 +228,42 @@ export default function ExecutivePage() {
     return periodLabel;
   }, [isYtdView, lastDataDay, calendarMonth, periodLabel]);
 
-  if (isLoading) return <PageSkeleton />;
+  if (isLoading) return (
+    <div className="animate-pulse space-y-6 p-4 sm:p-6">
+      {/* Filtros + Data Freshness Tag */}
+      <div className="flex items-center justify-between">
+        <Skeleton variant="text" width="120px" height="1.5rem" />
+        <Skeleton variant="text" width="200px" height="2rem" />
+      </div>
+
+      {/* Grid 3 columnas: 2 metric cards + gauge alto */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.2fr]">
+        {/* Ventas Netas */}
+        <Skeleton variant="card" height="7rem" />
+        {/* vs Año Anterior */}
+        <Skeleton variant="card" height="7rem" />
+        {/* Gauge card (tall, spans 2 rows on lg) */}
+        <div className="sm:col-span-2 lg:col-span-1 lg:row-span-2">
+          <Skeleton variant="card" height="100%" className="min-h-[20rem]" />
+        </div>
+        {/* Chart area (spans 2 cols) */}
+        <div className="sm:col-span-2 lg:col-span-2">
+          <Skeleton variant="card" height="280px" />
+        </div>
+      </div>
+
+      {/* 4 KPI Scorecards */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Skeleton variant="card" height="6rem" />
+        <Skeleton variant="card" height="6rem" />
+        <Skeleton variant="card" height="6rem" />
+        <Skeleton variant="card" height="6rem" />
+      </div>
+
+      {/* Tabla mensual placeholder */}
+      <Skeleton variant="card" height="16rem" />
+    </div>
+  );
 
   if (error || !metrics) {
     return (
