@@ -26,6 +26,9 @@ dist-ssr/
 .DS_Store
 Thumbs.db
 
+# Coverage
+coverage/
+
 # TypeScript
 *.tsbuildinfo
 .vercel
