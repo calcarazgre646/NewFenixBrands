@@ -224,7 +224,11 @@ export default function GlobalSearch() {
         />
         <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
           <kbd className="inline-flex items-center gap-0.5 rounded-lg border border-gray-200 bg-gray-50 px-[7px] py-[4.5px] text-xs -tracking-[0.2px] text-gray-500 dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-400">
-            <span>⌘</span><span>K</span>
+            {/Mac|iPhone|iPad/.test(navigator.userAgent) ? (
+              <><span>⌘</span><span>K</span></>
+            ) : (
+              <><span>Ctrl</span><span>K</span></>
+            )}
           </kbd>
         </div>
       </div>

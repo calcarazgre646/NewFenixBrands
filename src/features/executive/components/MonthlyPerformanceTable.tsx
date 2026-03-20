@@ -161,6 +161,7 @@ export function MonthlyPerformanceTable({ rows, highlightMonth, lastDataDay, cal
             {rows.map((row) => (
               <tr
                 key={row.month}
+                data-empty={!row.hasRealData ? "" : undefined}
                 className={`transition-colors duration-[var(--duration-fast)] hover:bg-gray-25 dark:hover:bg-white/[0.02] ${
                   highlightMonth === row.month
                     ? "bg-brand-50/60 dark:bg-brand-500/10"

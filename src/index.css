@@ -985,3 +985,215 @@ span.flatpickr-weekday,
 .simplebar-scrollbar.simplebar-visible:before {
   @apply opacity-100;
 }
+
+/* MOBILE OVERRIDES — solo max-width:639px, desktop intacto */
+@media (max-width: 639px) {
+
+  /* Menos espacio vertical entre secciones */
+  .space-y-6 > :not(:first-child) {
+    margin-block-start: 12px !important;
+    margin-block-end: 0 !important;
+    margin-top: 12px !important;
+  }
+
+  /* Filtros — en fila, botones se expanden, select queda compacto */
+  .exec-anim-1 > div {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+  .exec-anim-1 > div > div {
+    width: 100% !important;
+    display: flex !important;
+    gap: 8px !important;
+  }
+  .exec-anim-1 > div > div > div:first-child {
+    display: flex !important;
+    flex: 1 !important;
+  }
+  /* #1 — Botones filtro 44px touch target */
+  .exec-anim-1 > div > div > div:first-child button {
+    flex: 1 !important;
+    min-height: 44px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+  }
+  .exec-anim-1 > div > div > div:last-child {
+    flex: 0 0 auto !important;
+  }
+  .exec-anim-1 > div > div > div:last-child select {
+    min-height: 44px !important;
+    font-size: 14px !important;
+    padding-left: 12px !important;
+    padding-right: 28px !important;
+  }
+
+  /* Grid de arriba — menos gap */
+  .exec-anim-1 + div {
+    gap: 8px !important;
+  }
+
+  /* Cards métricas — menos padding */
+  .exec-anim-2 > * {
+    padding: 16px !important;
+  }
+  /* #2 — Número primero, label abajo (metric cards top) */
+  .exec-anim-2 > * > :first-child {
+    order: 2 !important;
+    font-size: 11px !important;
+    margin-top: 4px !important;
+    margin-bottom: 0 !important;
+  }
+  .exec-anim-2 > * > div {
+    order: 1 !important;
+    margin-top: 0 !important;
+  }
+
+  /* Badge YoY — sacar de absolute para que no se superponga */
+  .exec-anim-2 > * > span {
+    position: static !important;
+    display: inline-flex !important;
+    margin-top: 6px !important;
+  }
+
+  /* Gauge — chart más compacto */
+  .exec-anim-2 .apexcharts-canvas {
+    max-height: 150px !important;
+    height: 150px !important;
+  }
+  .exec-anim-2 .apexcharts-canvas svg {
+    height: 150px !important;
+    max-height: 150px !important;
+  }
+  .exec-anim-2 .apexcharts-datalabel-value {
+    font-size: 24px !important;
+  }
+
+  /* Chart de área — menos padding, matar min-height inline de ApexCharts */
+  .exec-anim-3 > * {
+    padding: 10px !important;
+  }
+  .exec-anim-3 div {
+    min-height: 0 !important;
+  }
+  .exec-anim-3 .apexcharts-canvas {
+    max-height: 200px !important;
+    height: 200px !important;
+  }
+  .exec-anim-3 .apexcharts-canvas svg {
+    max-height: 200px !important;
+    height: 200px !important;
+  }
+  /* #5 — Leyenda del chart más compacta */
+  .exec-anim-3 .apexcharts-legend {
+    padding: 0 !important;
+    gap: 4px !important;
+  }
+  .exec-anim-3 .apexcharts-legend-series {
+    margin: 0 4px !important;
+  }
+  .exec-anim-3 .apexcharts-legend-text {
+    font-size: 10px !important;
+  }
+  .exec-anim-3 .apexcharts-legend-marker {
+    width: 8px !important;
+    height: 8px !important;
+    margin-right: 3px !important;
+  }
+
+  /* Insight bar — una columna en mobile */
+  .exec-anim-8 > * > div {
+    grid-template-columns: 1fr !important;
+  }
+  .exec-anim-8 > * > div > * {
+    border-left-width: 0 !important;
+    border-right-width: 0 !important;
+    border-bottom: 1px solid var(--color-gray-200);
+    padding: 8px 12px !important;
+  }
+  .exec-anim-8 > * > div > *:last-child {
+    border-bottom: 0;
+  }
+  .dark .exec-anim-8 > * > div > * {
+    border-bottom-color: var(--color-gray-700);
+  }
+
+  /* KPIs — mismo tamaño, gap compacto */
+  div:has(> .exec-anim-4) {
+    gap: 8px !important;
+  }
+  /* Todas las cards misma altura */
+  .exec-anim-4,
+  .exec-anim-5,
+  .exec-anim-6,
+  .exec-anim-7 {
+    display: flex !important;
+  }
+  .exec-anim-4 > *,
+  .exec-anim-5 > *,
+  .exec-anim-6 > *,
+  .exec-anim-7 > * {
+    padding: 12px !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  /* Valor — más chico para que ₲ 36.309.931.655 entre */
+  .exec-anim-4 > * > p,
+  .exec-anim-5 > * > p,
+  .exec-anim-6 > * > p,
+  .exec-anim-7 > * > p {
+    font-size: 14px !important;
+    line-height: 18px !important;
+  }
+  /* #2 — Número primero, label abajo (KPI stat cards) */
+  .exec-anim-4 > * > div:first-child,
+  .exec-anim-5 > * > div:first-child,
+  .exec-anim-6 > * > div:first-child,
+  .exec-anim-7 > * > div:first-child {
+    order: 2 !important;
+  }
+  .exec-anim-4 > * > div:first-child > p:first-child,
+  .exec-anim-5 > * > div:first-child > p:first-child,
+  .exec-anim-6 > * > div:first-child > p:first-child,
+  .exec-anim-7 > * > div:first-child > p:first-child {
+    order: 2 !important;
+    font-size: 10px !important;
+    margin-top: 2px !important;
+  }
+  .exec-anim-4 > * > div:first-child > p:nth-child(2),
+  .exec-anim-5 > * > div:first-child > p:nth-child(2),
+  .exec-anim-6 > * > div:first-child > p:nth-child(2),
+  .exec-anim-7 > * > div:first-child > p:nth-child(2) {
+    order: 1 !important;
+  }
+
+  /* Brand chips (Todas/Martel/Wrangler/Lee) — ancho completo en mobile */
+  header .border-t > div > div button {
+    flex: 1 !important;
+    min-height: 44px !important;
+    font-size: 14px !important;
+    justify-content: center !important;
+  }
+
+  /* Tabla performance — ocultar meses vacíos en mobile */
+  tr[data-empty] {
+    display: none !important;
+  }
+
+  /* ⌘K badge — ocultar en mobile */
+  input[role="combobox"] + div kbd {
+    display: none !important;
+  }
+
+  /* Notification dropdown — centrar en pantalla en vez de salir fuera */
+  .dropdown-toggle + div[role="menu"] {
+    right: auto !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: calc(100vw - 32px) !important;
+    max-width: 350px !important;
+    position: fixed !important;
+    top: 70px !important;
+  }
+}
