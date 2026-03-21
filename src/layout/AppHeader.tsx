@@ -93,7 +93,7 @@ const AppHeader: React.FC = () => {
         </div>
 
         {/* Acciones mobile — derecha: ?, tema, notificaciones, usuario */}
-        <div className="mobile-header-actions flex items-center gap-1 ml-auto lg:hidden">
+        <div className="mobile-header-actions flex items-center gap-1 ml-auto mr-[16px] lg:hidden">
           <button
             type="button"
             onClick={() => navigate("/ayuda")}
@@ -186,12 +186,12 @@ const AppHeader: React.FC = () => {
 
     </header>
 
-    {/* Brand chips — fuera del header, z-index bajo para que sidebar lo tape */}
-    {!hideFilters && (
+    {/* Brand chips — deshabilitado, ahora los filtros están in-page en ExecutiveFilters */}
+    {/* {!hideFilters && (
       <div className={`mobile-brand-chips px-4 py-2.5 bg-gray-50/50 dark:bg-gray-900/50 lg:hidden sticky top-[40px] ${isMobileOpen ? "sidebar-open" : ""}`} style={{ zIndex: 1 }}>
         <FilterBar filters={filters} compact brandOnly />
       </div>
-    )}
+    )} */}
     </>
   );
 };

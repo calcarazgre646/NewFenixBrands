@@ -55,45 +55,75 @@ export default function FilterBar({ compact = false, brandOnly = false }: Filter
   const pillLocked =
     "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-60";
 
+  const selectBase =
+    "appearance-none rounded-lg border border-gray-200 bg-white py-1.5 pl-3 pr-7 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 cursor-pointer";
+
   if (compact) {
     return (
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Canal */}
+        {/* ── Canal ── */}
         {!brandOnly && (
-          <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-            {CHANNELS.map(({ value, label }) => {
-              const active = filters.channel === value;
-              const locked = isChannelLocked && !active;
-              return (
-                <button
-                  key={value}
-                  onClick={() => setChannel(value)}
-                  disabled={isChannelLocked}
-                  title={isChannelLocked ? "Canal asignado por tu rol" : undefined}
-                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                    active
-                      ? isChannelLocked
-                        ? "bg-brand-400 text-white cursor-not-allowed"
-                        : "bg-brand-500 text-white"
-                      : locked
-                        ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed"
-                        : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  {label}
-                  {isChannelLocked && active && (
-                    <svg className="inline-block ml-1 h-3 w-3 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                    </svg>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          <>
+            {/* Desktop: botones agrupados originales */}
+            <div className="hidden lg:flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+              {CHANNELS.map(({ value, label }) => {
+                const active = filters.channel === value;
+                const locked = isChannelLocked && !active;
+                return (
+                  <button
+                    key={value}
+                    onClick={() => setChannel(value)}
+                    disabled={isChannelLocked}
+                    title={isChannelLocked ? "Canal asignado por tu rol" : undefined}
+                    className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                      active
+                        ? isChannelLocked
+                          ? "bg-brand-400 text-white cursor-not-allowed"
+                          : "bg-brand-500 text-white"
+                        : locked
+                          ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                          : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    }`}
+                  >
+                    {label}
+                    {isChannelLocked && active && (
+                      <svg className="inline-block ml-1 h-3 w-3 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                      </svg>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Mobile: botones separados */}
+            <div className="lg:hidden flex gap-1">
+              {CHANNELS.map(({ value, label }) => {
+                const active = filters.channel === value;
+                return (
+                  <button
+                    key={value}
+                    onClick={() => setChannel(value)}
+                    disabled={isChannelLocked}
+                    title={isChannelLocked ? "Canal asignado por tu rol" : undefined}
+                    className={`${pillBase} ${
+                      active
+                        ? pillActive
+                        : isChannelLocked
+                          ? pillLocked
+                          : pillInactive
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </>
         )}
 
-        {/* Marca */}
-        <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+        {/* ── Marca ── */}
+        {/* Desktop: botones agrupados originales */}
+        <div className="hidden lg:flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
           {BRANDS.map(({ value, label }) => (
             <button
               key={value}
@@ -108,20 +138,45 @@ export default function FilterBar({ compact = false, brandOnly = false }: Filter
             </button>
           ))}
         </div>
+        {/* Mobile: select individual */}
+        <select
+          value={filters.brand}
+          onChange={(e) => setBrand(e.target.value as BrandFilter)}
+          className={`lg:hidden ${selectBase}`}
+        >
+          {BRANDS.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {value === "total" ? "Todas" : label}
+            </option>
+          ))}
+        </select>
 
-        {/* Período */}
+        {/* ── Período ── */}
         {!brandOnly && (
-          <div className="flex gap-1">
-            {PERIODS.map(({ value, label }) => (
-              <button
-                key={value}
-                onClick={() => setPeriod(value)}
-                className={`${pillBase} cursor-pointer ${filters.period === value ? pillActive : pillInactive}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <>
+            {/* Desktop: pills originales */}
+            <div className="hidden lg:flex gap-1">
+              {PERIODS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setPeriod(value)}
+                  className={`${pillBase} cursor-pointer ${filters.period === value ? pillActive : pillInactive}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {/* Mobile: select individual */}
+            <select
+              value={filters.period}
+              onChange={(e) => setPeriod(e.target.value as PeriodFilter)}
+              className={`lg:hidden ${selectBase}`}
+            >
+              {PERIODS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </>
         )}
       </div>
     );

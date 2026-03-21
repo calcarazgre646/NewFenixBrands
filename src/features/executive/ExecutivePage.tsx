@@ -295,19 +295,31 @@ export default function ExecutivePage() {
   const viewMonthName = MONTH_FULL[viewMonth] ?? "";
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
+    <div className="space-y-[3px] p-4 sm:p-6">
 
       {/* ═══ TIER 1: COMMAND CENTER ═══════════════════════════════════════ */}
 
       {/* Context Filters (in-page, hierarchical) */}
       <div className="exec-anim-1">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* Desktop: datos izq + filtros der en una fila */}
+        <div className="hidden lg:flex lg:flex-wrap lg:items-center lg:justify-between lg:gap-3">
           <DataFreshnessTag
             lastDataDay={lastDataDay}
             calendarMonth={calendarMonth}
             isPartialMonth={isPartialMonth}
           />
           <ExecutiveFilters />
+        </div>
+        {/* Mobile: filtros arriba + datos abajo centrado */}
+        <div className="flex flex-col gap-1 lg:hidden">
+          <ExecutiveFilters />
+          <div className="text-center -mt-[4px]">
+            <DataFreshnessTag
+              lastDataDay={lastDataDay}
+              calendarMonth={calendarMonth}
+              isPartialMonth={isPartialMonth}
+            />
+          </div>
         </div>
       </div>
 

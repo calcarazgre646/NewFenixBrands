@@ -1121,36 +1121,22 @@ span.flatpickr-weekday,
     margin-top: 12px !important;
   }
 
-  /* Filtros — en fila, botones se expanden, select queda compacto */
-  .exec-anim-1 > div {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 8px !important;
-  }
-  .exec-anim-1 > div > div {
+  /* Filtros — 4 selects iguales en fila (solo mobile) */
+  .exec-mobile-filters {
     width: 100% !important;
     display: flex !important;
     gap: 8px !important;
   }
-  .exec-anim-1 > div > div > div:first-child {
-    display: flex !important;
+  .exec-mobile-filters > .relative {
     flex: 1 !important;
   }
-  /* #1 — Botones filtro 44px touch target */
-  .exec-anim-1 > div > div > div:first-child button {
-    flex: 1 !important;
+  .exec-mobile-filters > .relative select {
+    width: 100% !important;
     min-height: 44px !important;
     font-size: 14px !important;
     font-weight: 600 !important;
-  }
-  .exec-anim-1 > div > div > div:last-child {
-    flex: 0 0 auto !important;
-  }
-  .exec-anim-1 > div > div > div:last-child select {
-    min-height: 44px !important;
-    font-size: 14px !important;
     padding-left: 12px !important;
-    padding-right: 28px !important;
+    padding-right: 26px !important;
   }
 
   /* Grid de arriba — menos gap */

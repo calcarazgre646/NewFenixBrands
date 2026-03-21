@@ -1,0 +1,6 @@
+git checkout main
+  git pull origin main              # traer lo último
+  git checkout -b feat/mi-feature   # crear rama                                
+  # ... trabajar, commits ...
+  git push origin feat/mi-feature   # subir rama                                
+  # Abrir PR en GitHub → CI corre → merge
