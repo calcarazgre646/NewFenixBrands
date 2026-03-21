@@ -1232,54 +1232,36 @@ span.flatpickr-weekday,
     border-bottom-color: var(--color-gray-700);
   }
 
-  /* KPIs — mismo tamaño, gap compacto */
-  div:has(> .exec-anim-4) {
-    gap: 8px !important;
-  }
-  /* Todas las cards misma altura */
-  .exec-anim-4,
-  .exec-anim-5,
-  .exec-anim-6,
-  .exec-anim-7 {
-    display: flex !important;
-  }
-  .exec-anim-4 > *,
-  .exec-anim-5 > *,
-  .exec-anim-6 > *,
-  .exec-anim-7 > * {
+  /* ── KPI Scorecards (mobile) ── */
+  div:has(> .exec-anim-4) { gap: 8px !important; }
+
+  .exec-anim-4, .exec-anim-5,
+  .exec-anim-6, .exec-anim-7 { display: flex !important; }
+
+  .exec-anim-4 > *, .exec-anim-5 > *,
+  .exec-anim-6 > *, .exec-anim-7 > * {
     padding: 12px !important;
     width: 100% !important;
     display: flex !important;
     flex-direction: column !important;
   }
-  /* Valor — más chico para que ₲ 36.309.931.655 entre */
-  .exec-anim-4 > * > p,
-  .exec-anim-5 > * > p,
-  .exec-anim-6 > * > p,
-  .exec-anim-7 > * > p {
+
+  /* Label (título) arriba */
+  .exec-anim-4 > * > div:first-child, .exec-anim-5 > * > div:first-child,
+  .exec-anim-6 > * > div:first-child, .exec-anim-7 > * > div:first-child {
+    order: 0 !important;
+    margin-bottom: 4px !important;
+  }
+  .exec-anim-4 > * > div:first-child > p:first-child, .exec-anim-5 > * > div:first-child > p:first-child,
+  .exec-anim-6 > * > div:first-child > p:first-child, .exec-anim-7 > * > div:first-child > p:first-child {
+    font-size: 10px !important;
+  }
+
+  /* Número y sub — tamaño compacto */
+  .exec-anim-4 > * > p, .exec-anim-5 > * > p,
+  .exec-anim-6 > * > p, .exec-anim-7 > * > p {
     font-size: 14px !important;
     line-height: 18px !important;
-  }
-  /* #2 — Número primero, label abajo (KPI stat cards) */
-  .exec-anim-4 > * > div:first-child,
-  .exec-anim-5 > * > div:first-child,
-  .exec-anim-6 > * > div:first-child,
-  .exec-anim-7 > * > div:first-child {
-    order: 2 !important;
-  }
-  .exec-anim-4 > * > div:first-child > p:first-child,
-  .exec-anim-5 > * > div:first-child > p:first-child,
-  .exec-anim-6 > * > div:first-child > p:first-child,
-  .exec-anim-7 > * > div:first-child > p:first-child {
-    order: 2 !important;
-    font-size: 10px !important;
-    margin-top: 2px !important;
-  }
-  .exec-anim-4 > * > div:first-child > p:nth-child(2),
-  .exec-anim-5 > * > div:first-child > p:nth-child(2),
-  .exec-anim-6 > * > div:first-child > p:nth-child(2),
-  .exec-anim-7 > * > div:first-child > p:nth-child(2) {
-    order: 1 !important;
   }
 
   /* Brand chips — siempre visibles, elegantes */

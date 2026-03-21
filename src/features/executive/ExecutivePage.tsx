@@ -229,24 +229,20 @@ export default function ExecutivePage() {
   }, [isYtdView, lastDataDay, calendarMonth, periodLabel]);
 
   if (isLoading) return (
-    <div className="animate-pulse space-y-6 p-4 sm:p-6">
+    <div className="animate-pulse space-y-[3px] p-4 sm:p-6 lg:space-y-6">
       {/* Filtros + Data Freshness Tag */}
-      <div className="flex items-center justify-between">
-        <Skeleton variant="text" width="120px" height="1.5rem" />
-        <Skeleton variant="text" width="200px" height="2rem" />
+      <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:justify-between">
+        <Skeleton variant="text" width="200px" height="2rem" className="lg:order-2" />
+        <Skeleton variant="text" width="120px" height="1rem" className="self-center lg:self-auto lg:order-1" />
       </div>
 
       {/* Grid 3 columnas: 2 metric cards + gauge alto */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.2fr]">
-        {/* Ventas Netas */}
         <Skeleton variant="card" height="7rem" />
-        {/* vs Año Anterior */}
         <Skeleton variant="card" height="7rem" />
-        {/* Gauge card (tall, spans 2 rows on lg) */}
         <div className="sm:col-span-2 lg:col-span-1 lg:row-span-2">
           <Skeleton variant="card" height="100%" className="min-h-[20rem]" />
         </div>
-        {/* Chart area (spans 2 cols) */}
         <div className="sm:col-span-2 lg:col-span-2">
           <Skeleton variant="card" height="280px" />
         </div>
@@ -528,7 +524,7 @@ export default function ExecutivePage() {
               label="Rotación Inventario"
               value={`${inventoryTurnover.toFixed(1)}x`}
               sub={inventoryTurnover >= 4 ? "Rotación saludable" : inventoryTurnover >= 2 ? "Rotación moderada" : "Rotación baja"}
-              variant={inventoryTurnover >= 4 ? "accent-positive" : undefined}
+              variant={inventoryTurnover >= 4 ? "accent-positive" : "accent-negative"}
             />
           )}
         </div>

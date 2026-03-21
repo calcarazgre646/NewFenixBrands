@@ -40,7 +40,7 @@ function InsightRow({ items }: { items: BrandInsight[] }) {
             key={`${insight.label}-${i}`}
             className="flex items-center gap-2 px-4 py-3"
           >
-            <ArrowIcon type={insight.type} />
+            <span className="hidden lg:inline"><ArrowIcon type={insight.type} /></span>
             <span
               className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold ${style.bg} ${style.text}`}
             >
