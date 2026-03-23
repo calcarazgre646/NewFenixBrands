@@ -42,7 +42,7 @@ export function LazyLoadPrompt({
 
 // ─── Mini sparkline (pure SVG, no ApexCharts overhead) ──────────────────────
 
-export function MiniSparkline({ data, color = "#465FFF" }: { data: number[]; color?: string }) {
+export function MiniSparkline({ data, color = "#465FFF", className }: { data: number[]; color?: string; className?: string }) {
   if (data.length < 2 || data.every((v) => v === 0)) return null;
 
   const max = Math.max(...data);
@@ -79,7 +79,7 @@ export function MiniSparkline({ data, color = "#465FFF" }: { data: number[]; col
   const areaPath = `${curvePath} L${lastX},${h} L${firstX},${h} Z`;
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-10 w-24 shrink-0" preserveAspectRatio="none">
+    <svg viewBox={`0 0 ${w} ${h}`} className={className ?? "h-10 w-24 shrink-0"} preserveAspectRatio="none">
       <path d={areaPath} fill={color} opacity={0.08} />
       <path d={curvePath} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
     </svg>
