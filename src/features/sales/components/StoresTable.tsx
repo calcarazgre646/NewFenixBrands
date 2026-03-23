@@ -176,9 +176,15 @@ export function StoresTable({
                     className="group relative w-full cursor-pointer rounded-2xl border border-gray-200 bg-white p-3 sm:p-4 text-left transition-all duration-200 hover:border-gray-300 hover:shadow-theme-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600"
                     onClick={() => handleSelect(row.storeCode, "b2b")}
                   >
-                    <div className="flex items-center justify-between">
+                    {/* Desktop: título + sparkline en línea */}
+                    <div className="hidden sm:flex items-center justify-between">
                       <p className="text-xs font-bold text-gray-900 dark:text-white">{row.storeCode}</p>
-                      <span className="hidden sm:block"><MiniSparkline data={sparklinesB2B.get(row.storeCode) ?? []} /></span>
+                      <MiniSparkline data={sparklinesB2B.get(row.storeCode) ?? []} />
+                    </div>
+                    {/* Mobile: título arriba, sparkline debajo */}
+                    <div className="sm:hidden">
+                      <p className="text-xs font-bold text-gray-900 dark:text-white">{row.storeCode}</p>
+                      <MiniSparkline data={sparklinesB2B.get(row.storeCode) ?? []} className="mt-1.5 h-8 w-full" />
                     </div>
                     <p className="mt-2 truncate text-lg font-bold tabular-nums text-gray-900 dark:text-white" title={formatPYGSuffix(row.neto)}>
                       {formatPYGSuffix(row.neto)}
@@ -248,9 +254,15 @@ export function StoresTable({
                     className="group relative w-full cursor-pointer rounded-2xl border border-gray-200 bg-white p-3 sm:p-4 text-left transition-all duration-200 hover:border-gray-300 hover:shadow-theme-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600"
                     onClick={() => handleSelect(row.storeCode, "b2c")}
                   >
-                    <div className="flex items-center justify-between">
+                    {/* Desktop: título + sparkline en línea */}
+                    <div className="hidden sm:flex items-center justify-between">
                       <p className="text-xs font-bold text-gray-900 dark:text-white">{row.storeCode}</p>
-                      <span className="hidden sm:block"><MiniSparkline data={sparklines.get(row.storeCode) ?? []} /></span>
+                      <MiniSparkline data={sparklines.get(row.storeCode) ?? []} />
+                    </div>
+                    {/* Mobile: título arriba, sparkline debajo */}
+                    <div className="sm:hidden">
+                      <p className="text-xs font-bold text-gray-900 dark:text-white">{row.storeCode}</p>
+                      <MiniSparkline data={sparklines.get(row.storeCode) ?? []} className="mt-1.5 h-8 w-full" />
                     </div>
                     <p className="mt-2 truncate text-lg font-bold tabular-nums text-gray-900 dark:text-white" title={formatPYGSuffix(row.neto)}>
                       {formatPYGSuffix(row.neto)}
