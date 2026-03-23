@@ -2,7 +2,8 @@
  * features/executive/components/InsightBar.tsx
  *
  * Barra de diagnóstico automático — muestra insights de performance por marca.
- * Layout: una sola fila horizontal con bloques separados por divisores.
+ * Desktop: fila horizontal con divisores verticales.
+ * Mobile: columna vertical con divisores horizontales.
  *
  * REGLA: Sin lógica de negocio. Recibe insights pre-calculados.
  */
@@ -26,8 +27,10 @@ function ArrowIcon({ type }: { type: BrandInsight["type"] }) {
 }
 
 function InsightRow({ items }: { items: BrandInsight[] }) {
+  const cols = items.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3";
+
   return (
-    <div className={`grid ${items.length === 2 ? "grid-cols-2" : "grid-cols-3"} divide-x divide-gray-200 dark:divide-gray-700`}>
+    <div className={`grid grid-cols-1 ${cols} divide-y sm:divide-y-0 sm:divide-x divide-gray-200 dark:divide-gray-700`}>
       {items.map((insight, i) => {
         const style = LABEL_STYLES[insight.label] ?? {
           bg: "bg-gray-50 dark:bg-gray-700",
@@ -38,9 +41,9 @@ function InsightRow({ items }: { items: BrandInsight[] }) {
         return (
           <div
             key={`${insight.label}-${i}`}
-            className="flex items-center gap-2 px-4 py-3"
+            className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-3"
           >
-            <span className="hidden lg:inline"><ArrowIcon type={insight.type} /></span>
+            <ArrowIcon type={insight.type} />
             <span
               className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold ${style.bg} ${style.text}`}
             >

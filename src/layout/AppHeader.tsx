@@ -49,16 +49,12 @@ const AppHeader: React.FC = () => {
   const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
   const isVisible = isMobile || scrollDir !== "down" || isMobileOpen;
 
+  const fullName = profile?.fullName || (user?.user_metadata?.full_name as string | undefined);
+
   const handleToggle = () => {
     if (window.innerWidth >= 1024) toggleSidebar();
     else toggleMobileSidebar();
   };
-
-  // User initials for mobile avatar
-  const fullName = profile?.fullName || (user?.user_metadata?.full_name as string | undefined);
-  const initials = fullName
-    ? fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
-    : user?.email?.slice(0, 2).toUpperCase() || "FB";
 
   return (
     <>

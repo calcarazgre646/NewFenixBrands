@@ -85,6 +85,27 @@ function buildChartOptions(
         shared: true, intersect: false,
         y: { formatter: (val: number | null) => (val != null ? formatPYGSuffix(val) : "\u2014") },
       },
+      responsive: [{
+        breakpoint: 640,
+        options: {
+          yaxis: {
+            show: false,
+            labels: { show: false, minWidth: 0, maxWidth: 0 },
+            title: { text: undefined },
+          },
+          xaxis: {
+            title: { text: undefined },
+            labels: { style: { fontSize: "9px" } },
+          },
+          legend: {
+            fontSize: "10px",
+            horizontalAlign: "center",
+            markers: { size: 4 },
+            itemMargin: { horizontal: 6 },
+          },
+          grid: { padding: { left: 12, right: 5, bottom: 0 } },
+        },
+      }],
     };
   }
 
@@ -164,6 +185,27 @@ function buildChartOptions(
       intersect: false,
       y: { formatter: (val: number | null) => (val != null ? formatPYGSuffix(val) : "\u2014") },
     },
+    responsive: [{
+      breakpoint: 640,
+      options: {
+        yaxis: {
+          show: false,
+          labels: { show: false, minWidth: 0, maxWidth: 0 },
+          title: { text: undefined },
+        },
+        xaxis: {
+          title: { text: undefined },
+          labels: { style: { fontSize: "9px" } },
+        },
+        legend: {
+          fontSize: "10px",
+          horizontalAlign: "center",
+          markers: { size: 4 },
+          itemMargin: { horizontal: 6 },
+        },
+        grid: { padding: { left: 12, right: 5, bottom: 0 } },
+      },
+    }],
   };
 }
 
@@ -229,7 +271,7 @@ export default function ExecutivePage() {
   }, [isYtdView, lastDataDay, calendarMonth, periodLabel]);
 
   if (isLoading) return (
-    <div className="animate-pulse space-y-[3px] p-4 sm:p-6 lg:space-y-6">
+    <div className="animate-pulse space-y-6 p-4 sm:p-6">
       {/* Filtros + Data Freshness Tag */}
       <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:justify-between">
         <Skeleton variant="text" width="200px" height="2rem" className="lg:order-2" />
@@ -237,7 +279,7 @@ export default function ExecutivePage() {
       </div>
 
       {/* Grid 3 columnas: 2 metric cards + gauge alto */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.2fr]">
+      <div className="grid grid-cols-1 gap-4 sm:gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.2fr]">
         <Skeleton variant="card" height="7rem" />
         <Skeleton variant="card" height="7rem" />
         <div className="sm:col-span-2 lg:col-span-1 lg:row-span-2">
@@ -249,7 +291,7 @@ export default function ExecutivePage() {
       </div>
 
       {/* 4 KPI Scorecards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:gap-3 lg:grid-cols-4">
         <Skeleton variant="card" height="6rem" />
         <Skeleton variant="card" height="6rem" />
         <Skeleton variant="card" height="6rem" />
@@ -291,7 +333,7 @@ export default function ExecutivePage() {
   const viewMonthName = MONTH_FULL[viewMonth] ?? "";
 
   return (
-    <div className="space-y-[3px] p-4 sm:p-6">
+    <div className="space-y-6 p-4 sm:p-6">
 
       {/* ═══ TIER 1: COMMAND CENTER ═══════════════════════════════════════ */}
 
@@ -306,21 +348,21 @@ export default function ExecutivePage() {
           />
           <ExecutiveFilters />
         </div>
-        {/* Mobile: filtros arriba + datos abajo centrado */}
-        <div className="flex flex-col gap-1 lg:hidden">
-          <ExecutiveFilters />
-          <div className="text-center -mt-[4px]">
+        {/* Mobile: datos arriba centrado + filtros abajo */}
+        <div className="flex flex-col gap-2 lg:hidden">
+          <div className="text-center">
             <DataFreshnessTag
               lastDataDay={lastDataDay}
               calendarMonth={calendarMonth}
               isPartialMonth={isPartialMonth}
             />
           </div>
+          <ExecutiveFilters />
         </div>
       </div>
 
       {/* Top 3-column grid: 2 metric cards + 1 tall card */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.2fr]">
+      <div className="grid grid-cols-1 gap-4 sm:gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.2fr]">
         {/* Ventas Netas */}
         <div className="exec-anim-2">
           <Card padding="lg" className="flex h-full flex-col">
@@ -341,7 +383,7 @@ export default function ExecutivePage() {
         {/* vs Año Anterior */}
         <div className="exec-anim-2">
           <Card padding="lg" className="relative flex h-full flex-col">
-            <span className={`absolute right-4 top-5 inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${
+            <span className={`absolute right-4 top-1/2 -translate-y-1/2 inline-flex items-center rounded-full px-3 py-1 text-base font-semibold sm:text-sm ${
               yoyPct >= 0
                 ? "bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-400"
                 : "bg-error-50 text-error-600 dark:bg-error-500/10 dark:text-error-400"
@@ -369,19 +411,19 @@ export default function ExecutivePage() {
         {/* Cumplimiento vs Objetivo — gauge card (tall, spans 2 rows on lg) */}
         <div className="exec-anim-2 sm:col-span-2 lg:col-span-1 lg:row-span-2">
           <div className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-white/[0.03]">
-            <div className="flex flex-1 flex-col px-5 pb-5 pt-5 sm:px-6 sm:pt-6">
+            <div className="flex flex-1 flex-col px-4 pb-4 pt-4 sm:px-6 sm:pb-5 sm:pt-6">
               {/* TOP — título izquierda, badge derecha */}
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <h3 className="text-base font-semibold text-gray-800 dark:text-white/90">
+                  <h3 className="text-sm sm:text-base font-semibold text-gray-800 dark:text-white/90">
                     {metaLabel}
                   </h3>
-                  <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="mt-0.5 text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
                     {periodDateRange}
                   </p>
                 </div>
                 <span
-                  className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${
+                  className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 sm:px-3 sm:py-1 text-[11px] sm:text-xs font-medium ${
                     forecastBeatsAnnual
                       ? "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500"
                       : "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400"
@@ -398,7 +440,7 @@ export default function ExecutivePage() {
                 const ytdPctRounded = Math.round(ytdPct * 10) / 10;
                 return (
                   <>
-                    {/* CENTER — gauge + badge como bloque centrado */}
+                    {/* CENTER — gauge centrado */}
                     <div className="flex flex-1 flex-col items-center justify-center">
                       <div className="w-full">
                         <ResponsiveChart
@@ -435,6 +477,20 @@ export default function ExecutivePage() {
                             fill: { type: "solid" },
                             stroke: { lineCap: "round" },
                             labels: ["Cumplimiento"],
+                            responsive: [{
+                              breakpoint: 640,
+                              options: {
+                                plotOptions: {
+                                  radialBar: {
+                                    hollow: { size: "72%" },
+                                    dataLabels: {
+                                      value: { fontSize: "28px", offsetY: -15 },
+                                    },
+                                  },
+                                },
+                                chart: { height: 180 },
+                              },
+                            }],
                           }}
                           series={[Math.min(ytdPctRounded, 100)]}
                           type="radialBar"
@@ -444,8 +500,8 @@ export default function ExecutivePage() {
                     </div>
 
                     {/* FOOTER — sub texto fijo abajo */}
-                    <p className="mt-auto max-w-[280px] self-center text-center text-sm text-gray-500 dark:text-gray-400">
-                      {formatPYGSuffix(ytd)} vendidos de una {isMonthView ? "meta mensual" : "meta anual"} de {formatPYGSuffix(annualTarget)}
+                    <p className="mt-7 sm:mt-auto max-w-[280px] self-center text-center text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                      <span className="whitespace-nowrap">{formatPYGSuffix(ytd)}</span> vendidos de una {isMonthView ? "meta mensual" : "meta anual"} de <span className="whitespace-nowrap">{formatPYGSuffix(annualTarget)}</span>
                     </p>
                   </>
                 );
@@ -480,7 +536,7 @@ export default function ExecutivePage() {
       {/* ═══ TIER 2: Scorecards + Full-width Table ═══════════════════════ */}
 
       {/* 4 KPI Scorecards — orden definido por cliente */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:gap-3 lg:grid-cols-4">
         {/* 1. Pronóstico */}
         <div className="exec-anim-4">
           <StatCard

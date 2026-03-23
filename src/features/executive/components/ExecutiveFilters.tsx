@@ -1,11 +1,22 @@
 /**
  * features/executive/components/ExecutiveFilters.tsx
  *
- * 4 selects: Total, B2C, B2B (cada uno con marcas adentro) + YTD (períodos).
- * Al elegir una marca desde un canal, se setea canal + marca.
+ * Filtros in-page de la vista ejecutiva.
+ *
+ * Desktop (lg+): Canal como botones agrupados + Período como select.
+ *   (Marca viene del FilterBar en el header.)
+ *
+ * Mobile (<lg): 3 selects — Canal, Marca, Período.
+ *   (El header FilterBar está oculto en mobile, así que Marca se muestra aquí.)
  */
 import { useFilters } from "@/context/FilterContext";
 import type { BrandFilter, ChannelFilter, PeriodFilter } from "@/domain/filters/types";
+
+const CHANNELS: { value: ChannelFilter; label: string }[] = [
+  { value: "total", label: "Total" },
+  { value: "b2c",   label: "B2C" },
+  { value: "b2b",   label: "B2B" },
+];
 
 const BRANDS: { value: BrandFilter; label: string }[] = [
   { value: "total",    label: "Todas" },
@@ -24,8 +35,6 @@ const selectBase =
   "appearance-none rounded-lg border py-1.5 pl-3 pr-7 text-xs font-medium transition-colors duration-[var(--duration-fast)] focus:outline-none focus:ring-2 focus:ring-brand-500/10";
 const selectInactive =
   `${selectBase} border-gray-200 bg-white text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300`;
-const selectActive =
-  `${selectBase} border-brand-500 bg-brand-50 text-gray-900 dark:border-brand-500 dark:bg-gray-800 dark:text-gray-100`;
 
 function Arrow() {
   return (
@@ -44,35 +53,22 @@ function Arrow() {
 export function ExecutiveFilters() {
   const { filters, setBrand, setChannel, setPeriod } = useFilters();
 
-  function handleChannelBrand(channel: ChannelFilter, brandValue: string) {
-    setChannel(channel);
-    setBrand(brandValue as BrandFilter);
-  }
-
-  // Valor compuesto: si el canal activo coincide, mostrar la marca seleccionada; si no, "header" del canal
-  function channelSelectValue(channel: ChannelFilter) {
-    if (filters.channel !== channel) return "__header__";
-    // Si brand es "total" (Todas), mostrar el header del canal
-    if (filters.brand === "total") return "__header__";
-    return filters.brand;
-  }
-
   const btnBase = "px-3 py-1.5 text-xs font-medium transition-colors";
   const btnActive = `${btnBase} bg-brand-500 text-white`;
   const btnInactive = `${btnBase} bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700`;
 
   return (
     <>
-      {/* ── Desktop: botones agrupados + select YTD (como estaba) ── */}
+      {/* ── Desktop (lg+): botones canal + select período ── */}
       <div className="hidden lg:flex items-center gap-2">
         <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-          {(["total", "b2c", "b2b"] as ChannelFilter[]).map((ch) => (
+          {CHANNELS.map(({ value, label }) => (
             <button
-              key={ch}
-              onClick={() => setChannel(ch)}
-              className={filters.channel === ch ? btnActive : btnInactive}
+              key={value}
+              onClick={() => setChannel(value)}
+              className={filters.channel === value ? btnActive : btnInactive}
             >
-              {ch === "total" ? "Total" : ch.toUpperCase()}
+              {label}
             </button>
           ))}
         </div>
@@ -90,57 +86,37 @@ export function ExecutiveFilters() {
         </div>
       </div>
 
-      {/* ── Mobile: 4 selects (Total, B2C, B2B, YTD) ── */}
+      {/* ── Mobile (<lg): 3 selects — Marca, Canal, Período ── */}
       <div className="exec-mobile-filters flex items-center gap-2 lg:hidden">
-        {/* Select 1: Total */}
+        {/* Marca */}
         <div className="relative">
           <select
-            value="__header__"
-            onChange={(e) => handleChannelBrand("total", e.target.value)}
-            className={filters.channel === "total" ? selectActive : selectInactive}
+            value={filters.brand}
+            onChange={(e) => setBrand(e.target.value as BrandFilter)}
+            className={selectInactive}
           >
-            <option value="__header__" disabled hidden>Total</option>
-            <option value="total">Todas</option>
-            {BRANDS.filter(b => b.value !== "total").map(({ value, label }) => (
+            {BRANDS.map(({ value, label }) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </select>
           <Arrow />
         </div>
 
-        {/* Select 2: B2C */}
+        {/* Canal */}
         <div className="relative">
           <select
-            value="__header__"
-            onChange={(e) => handleChannelBrand("b2c", e.target.value)}
-            className={filters.channel === "b2c" ? selectActive : selectInactive}
+            value={filters.channel}
+            onChange={(e) => setChannel(e.target.value as ChannelFilter)}
+            className={selectInactive}
           >
-            <option value="__header__" disabled hidden>B2C</option>
-            <option value="total">Todas</option>
-            {BRANDS.filter(b => b.value !== "total").map(({ value, label }) => (
+            {CHANNELS.map(({ value, label }) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </select>
           <Arrow />
         </div>
 
-        {/* Select 3: B2B */}
-        <div className="relative">
-          <select
-            value="__header__"
-            onChange={(e) => handleChannelBrand("b2b", e.target.value)}
-            className={filters.channel === "b2b" ? selectActive : selectInactive}
-          >
-            <option value="__header__" disabled hidden>B2B</option>
-            <option value="total">Todas</option>
-            {BRANDS.filter(b => b.value !== "total").map(({ value, label }) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-          <Arrow />
-        </div>
-
-        {/* Select 4: YTD */}
+        {/* Período */}
         <div className="relative">
           <select
             value={filters.period}
