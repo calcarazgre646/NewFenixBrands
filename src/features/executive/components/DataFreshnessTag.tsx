@@ -32,7 +32,7 @@ export function DataFreshnessTag({
   const monthName = MONTH_SHORT[calendarMonth];
 
   return (
-    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 lg:text-[11px] lg:font-normal lg:text-gray-400 lg:dark:text-gray-500">
+    <span className="text-[11px] font-normal text-gray-400 dark:text-gray-500">
       Datos hasta {dayName} {lastDataDay} {monthName}
     </span>
   );

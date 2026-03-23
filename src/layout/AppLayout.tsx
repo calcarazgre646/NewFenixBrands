@@ -11,7 +11,7 @@ import AppSidebar from "./AppSidebar";
 import Backdrop from "./Backdrop";
 
 export default function AppLayout() {
-  const { isExpanded, isHovered, isMobileOpen } = useSidebar();
+  const { isExpanded, isHovered } = useSidebar();
 
   return (
     <div className="min-h-screen xl:flex">

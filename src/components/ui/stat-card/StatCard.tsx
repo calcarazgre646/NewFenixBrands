@@ -32,12 +32,12 @@ const variantStyles: Record<
   },
   "accent-positive": {
     container:
-      "border-gray-200 border-l-[3px] border-l-success-400 bg-white dark:border-gray-700 dark:border-l-success-400 dark:bg-gray-800",
+      "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800",
     value: "text-success-700 dark:text-success-400",
   },
   "accent-negative": {
     container:
-      "border-gray-200 border-l-[3px] border-l-error-400 bg-white dark:border-gray-700 dark:border-l-error-400 dark:bg-gray-800",
+      "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800",
     value: "text-error-700 dark:text-error-400",
   },
 };
@@ -54,10 +54,10 @@ export function StatCard({
 
   return (
     <div
-      className={`rounded-2xl border p-5 transition-colors duration-[var(--duration-fast)] hover:shadow-theme-xs ${styles.container} ${className}`}
+      className={`rounded-2xl border p-3 sm:p-5 transition-colors duration-[var(--duration-fast)] hover:shadow-theme-xs ${styles.container} ${className}`}
     >
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+      <div className="mb-1 sm:mb-2 flex items-center justify-between">
+        <p className="text-[9px] sm:text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
           {label}
         </p>
         {icon && (
@@ -65,12 +65,12 @@ export function StatCard({
         )}
       </div>
       <p
-        className={`break-words text-xl font-bold leading-tight tabular-nums ${styles.value}`}
+        className={`break-words text-base sm:text-xl font-bold leading-tight tabular-nums ${styles.value}`}
       >
         {value}
       </p>
       {sub && (
-        <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+        <p className="mt-1 sm:mt-1.5 text-[10px] sm:text-xs leading-snug text-gray-400 dark:text-gray-500">
           {sub}
         </p>
       )}
