@@ -184,7 +184,7 @@ export function StoresTable({
                     {/* Mobile: título arriba, sparkline debajo */}
                     <div className="sm:hidden">
                       <p className="text-xs font-bold text-gray-900 dark:text-white">{row.storeCode}</p>
-                      <MiniSparkline data={sparklinesB2B.get(row.storeCode) ?? []} className="mt-1.5 h-8 w-full" />
+                      <MiniSparkline data={sparklinesB2B.get(row.storeCode) ?? []} className="mt-1.5 h-20 w-full" />
                     </div>
                     <p className="mt-2 truncate text-lg font-bold tabular-nums text-gray-900 dark:text-white" title={formatPYGSuffix(row.neto)}>
                       {formatPYGSuffix(row.neto)}
@@ -262,7 +262,7 @@ export function StoresTable({
                     {/* Mobile: título arriba, sparkline debajo */}
                     <div className="sm:hidden">
                       <p className="text-xs font-bold text-gray-900 dark:text-white">{row.storeCode}</p>
-                      <MiniSparkline data={sparklines.get(row.storeCode) ?? []} className="mt-1.5 h-8 w-full" />
+                      <MiniSparkline data={sparklines.get(row.storeCode) ?? []} className="mt-1.5 h-20 w-full" />
                     </div>
                     <p className="mt-2 truncate text-lg font-bold tabular-nums text-gray-900 dark:text-white" title={formatPYGSuffix(row.neto)}>
                       {formatPYGSuffix(row.neto)}
