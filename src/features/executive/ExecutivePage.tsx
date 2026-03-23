@@ -273,33 +273,42 @@ export default function ExecutivePage() {
   if (isLoading) return (
     <div className="animate-pulse space-y-6 p-4 sm:p-6">
       {/* Filtros + Data Freshness Tag */}
-      <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:justify-between">
-        <Skeleton variant="text" width="200px" height="2rem" className="lg:order-2" />
-        <Skeleton variant="text" width="120px" height="1rem" className="self-center lg:self-auto lg:order-1" />
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        {/* Mobile: data tag centrado arriba, filtros abajo */}
+        <Skeleton variant="text" width="120px" height="0.75rem" className="self-center lg:self-auto lg:order-1" />
+        <Skeleton variant="text" width="100%" height="2rem" className="sm:w-[200px] lg:order-2" />
       </div>
 
-      {/* Grid 3 columnas: 2 metric cards + gauge alto */}
+      {/* Grid: 2 metric cards + gauge + chart */}
       <div className="grid grid-cols-1 gap-4 sm:gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.2fr]">
-        <Skeleton variant="card" height="7rem" />
-        <Skeleton variant="card" height="7rem" />
+        <Skeleton variant="card" height="5.5rem" className="sm:h-[7rem]" />
+        <Skeleton variant="card" height="5.5rem" className="sm:h-[7rem]" />
         <div className="sm:col-span-2 lg:col-span-1 lg:row-span-2">
-          <Skeleton variant="card" height="100%" className="min-h-[20rem]" />
+          <Skeleton variant="card" height="14rem" className="sm:min-h-[20rem]" />
         </div>
         <div className="sm:col-span-2 lg:col-span-2">
           <Skeleton variant="card" height="280px" />
         </div>
       </div>
 
+      {/* InsightBar */}
+      <div className="flex flex-col sm:hidden gap-0">
+        <Skeleton variant="card" height="2.5rem" />
+        <Skeleton variant="card" height="2.5rem" />
+        <Skeleton variant="card" height="2.5rem" />
+      </div>
+      <Skeleton variant="card" height="3rem" className="hidden sm:block" />
+
       {/* 4 KPI Scorecards */}
       <div className="grid grid-cols-2 gap-4 sm:gap-3 lg:grid-cols-4">
-        <Skeleton variant="card" height="6rem" />
-        <Skeleton variant="card" height="6rem" />
-        <Skeleton variant="card" height="6rem" />
-        <Skeleton variant="card" height="6rem" />
+        <Skeleton variant="card" height="4.5rem" className="sm:h-[6rem]" />
+        <Skeleton variant="card" height="4.5rem" className="sm:h-[6rem]" />
+        <Skeleton variant="card" height="4.5rem" className="sm:h-[6rem]" />
+        <Skeleton variant="card" height="4.5rem" className="sm:h-[6rem]" />
       </div>
 
-      {/* Tabla mensual placeholder */}
-      <Skeleton variant="card" height="16rem" />
+      {/* Tabla mensual — mobile: tab bar + compact, desktop: full */}
+      <Skeleton variant="card" height="12rem" className="sm:h-[16rem]" />
     </div>
   );
 
