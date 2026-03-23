@@ -49,7 +49,7 @@ const ALL_CONTROL_NAV: NavItem[] = [
 ];
 
 const AppSidebar: React.FC = () => {
-  const { isExpanded, isMobileOpen, isHovered, setIsHovered, toggleSidebar } = useSidebar();
+  const { isExpanded, isMobileOpen, isHovered, setIsHovered, toggleSidebar, toggleMobileSidebar } = useSidebar();
   const { user, logout, permissions, profile } = useAuth();
   const { resetFilters } = useFilters();
   const navigate = useNavigate();
@@ -102,6 +102,11 @@ const AppSidebar: React.FC = () => {
     ? fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
     : user?.email?.slice(0, 2).toUpperCase() || "FB";
   const displayName = fullName || user?.email?.split("@")[0] || "Usuario";
+  const firstName = fullName ? fullName.split(" ")[0] : displayName;
+
+  // Saludo según hora del día
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Buenos días" : hour < 18 ? "Buenas tardes" : "Buenas noches";
 
   function handleLogout() {
     resetFilters();
@@ -118,8 +123,24 @@ const AppSidebar: React.FC = () => {
       onMouseEnter={() => !isExpanded && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Logo + colapsar */}
-      <div className={`py-8 flex items-center ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-between"}`}>
+      {/* Mobile: saludo + flechita cerrar */}
+      <div className="sidebar-mobile-logo hidden lg:!hidden">
+        <span className="font-medium text-gray-500 dark:text-gray-400 truncate min-w-0 flex-1" style={{ fontSize: `${Math.min(13, Math.max(9, 330 / (`${greeting}, ${firstName}`).length))}px` }}>
+          {greeting}, {firstName}
+        </span>
+        <button
+          onClick={toggleMobileSidebar}
+          className="flex items-center justify-center w-8 h-8 text-gray-400 dark:text-gray-500 shrink-0 ml-auto"
+          aria-label="Cerrar menú"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 2l-4 4 4 4" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Logo + colapsar (desktop) */}
+      <div className={`sidebar-logo-original py-8 flex items-center ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-between"}`}>
         <Link to="/">
           {showLabel ? (
             <>
@@ -217,8 +238,8 @@ const AppSidebar: React.FC = () => {
         </nav>
       </div>
 
-      {/* ── User section (pinned to bottom) ── */}
-      <div ref={userMenuRef} className="relative shrink-0 border-t border-gray-200 py-4 dark:border-gray-800">
+      {/* ── User section (pinned to bottom — hidden on mobile, moved to header) ── */}
+      <div ref={userMenuRef} className="sidebar-user-section relative shrink-0 border-t border-gray-200 py-4 dark:border-gray-800">
         <button
           type="button"
           onClick={() => setUserMenuOpen(!userMenuOpen)}

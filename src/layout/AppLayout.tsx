@@ -22,7 +22,7 @@ export default function AppLayout() {
       <div
         className={`flex-1 min-w-0 overflow-x-clip transition-all duration-300 ease-in-out ${
           isExpanded || isHovered ? "lg:ml-[290px]" : "lg:ml-[90px]"
-        } ${isMobileOpen ? "ml-0" : ""}`}
+        }`}
       >
         <AppHeader />
         <main id="main-content" className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">
