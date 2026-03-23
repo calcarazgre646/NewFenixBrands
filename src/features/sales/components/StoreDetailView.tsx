@@ -200,6 +200,14 @@ export function StoreDetailView({
       strokeWidth: 2,
       hover: { size: 6 },
     },
+    responsive: [{
+      breakpoint: 640,
+      options: {
+        yaxis: { show: false, labels: { show: false, minWidth: 0, maxWidth: 0 } },
+        xaxis: { title: { text: undefined }, labels: { style: { fontSize: "10px" } } },
+        markers: { size: 3 },
+      },
+    }],
   }), [monthly]);
 
   // ── Area chart: daily trend (single-month) ──
@@ -252,6 +260,14 @@ export function StoreDetailView({
       strokeWidth: 2,
       hover: { size: 5 },
     },
+    responsive: [{
+      breakpoint: 640,
+      options: {
+        yaxis: { show: false, labels: { show: false, minWidth: 0, maxWidth: 0 } },
+        xaxis: { title: { text: undefined }, labels: { style: { fontSize: "9px" } } },
+        markers: { size: 2 },
+      },
+    }],
   }), [daily]);
 
   // ── Margin health indicator (channel-aware thresholds) ──
@@ -265,7 +281,7 @@ export function StoreDetailView({
     <div className="space-y-6">
 
       {/* ── Header ── */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -277,7 +293,7 @@ export function StoreDetailView({
             </svg>
           </button>
           <div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">{store.storeCode}</h3>
+            <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">{store.storeCode}</h3>
             <p className="text-xs text-gray-400 dark:text-gray-500">
               Canal {channelLabel} · {formatPct(store.revenuePct)} del total
             </p>
@@ -291,11 +307,11 @@ export function StoreDetailView({
       </div>
 
       {/* ── KPI cards grid ── */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-6">
         {/* Hero: Venta Neta */}
-        <div className="rounded-2xl border border-brand-100 bg-brand-50/50 p-4 dark:border-brand-500/20 dark:bg-brand-500/5">
+        <div className="rounded-2xl border border-brand-100 bg-brand-50/50 p-3 sm:p-4 dark:border-brand-500/20 dark:bg-brand-500/5">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-400/70">Venta Neta</p>
-          <p className="mt-1.5 text-xl font-bold tabular-nums text-brand-700 dark:text-brand-300">
+          <p className="mt-1.5 text-base sm:text-xl font-bold tabular-nums text-brand-700 dark:text-brand-300">
             {formatPYGShort(store.neto)}
           </p>
         </div>
@@ -310,7 +326,7 @@ export function StoreDetailView({
         }`}>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">vs {priorYear}</p>
           {store.yoyPct != null ? (
-            <p className={`mt-1.5 text-xl font-bold tabular-nums ${
+            <p className={`mt-1.5 text-base sm:text-xl font-bold tabular-nums ${
               store.yoyPct >= 0
                 ? "text-success-600 dark:text-success-400"
                 : "text-error-600 dark:text-error-400"
@@ -318,36 +334,36 @@ export function StoreDetailView({
               {store.yoyPct >= 0 ? "▲" : "▼"} {formatChange(store.yoyPct)}
             </p>
           ) : (
-            <p className="mt-1.5 text-xl font-bold tabular-nums text-gray-400 dark:text-gray-500">&mdash;</p>
+            <p className="mt-1.5 text-base sm:text-xl font-bold tabular-nums text-gray-400 dark:text-gray-500">&mdash;</p>
           )}
         </div>
 
-        <div className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">
+        <div className="rounded-2xl border border-gray-200 p-3 sm:p-4 dark:border-gray-700">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Margen Bruto</p>
           <div className="mt-1.5 flex items-end gap-2">
-            <p className={`text-xl font-bold tabular-nums ${marginColor}`}>
+            <p className={`text-base sm:text-xl font-bold tabular-nums ${marginColor}`}>
               {formatPct(store.grossMargin)}
             </p>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">
+        <div className="rounded-2xl border border-gray-200 p-3 sm:p-4 dark:border-gray-700">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Markdown</p>
-          <p className={`mt-1.5 text-xl font-bold tabular-nums ${store.markdownPct > 20 ? "text-error-600 dark:text-error-400" : "text-gray-900 dark:text-white"}`}>
+          <p className={`mt-1.5 text-base sm:text-xl font-bold tabular-nums ${store.markdownPct > 20 ? "text-error-600 dark:text-error-400" : "text-gray-900 dark:text-white"}`}>
             {formatPct(store.markdownPct)}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">
+        <div className="rounded-2xl border border-gray-200 p-3 sm:p-4 dark:border-gray-700">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Tickets</p>
-          <p className="mt-1.5 text-xl font-bold tabular-nums text-gray-900 dark:text-white">
+          <p className="mt-1.5 text-base sm:text-xl font-bold tabular-nums text-gray-900 dark:text-white">
             {store.tickets > 0 ? store.tickets.toLocaleString("es-PY") : "\u2014"}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">
+        <div className="rounded-2xl border border-gray-200 p-3 sm:p-4 dark:border-gray-700">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">AOV</p>
-          <p className="mt-1.5 text-xl font-bold tabular-nums text-gray-900 dark:text-white">
+          <p className="mt-1.5 text-base sm:text-xl font-bold tabular-nums text-gray-900 dark:text-white">
             {store.aov > 0 ? formatPYGShort(store.aov) : "\u2014"}
           </p>
         </div>
@@ -358,7 +374,7 @@ export function StoreDetailView({
 
         {/* Monthly trend area chart (multi-month) */}
         {hasMultipleMonths && (
-          <div className="rounded-2xl border border-gray-200 p-5 dark:border-gray-700">
+          <div className="rounded-2xl border border-gray-200 p-3 sm:p-5 dark:border-gray-700">
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
               Evolución Mensual
             </p>
@@ -366,7 +382,7 @@ export function StoreDetailView({
               options={trendOptions}
               series={[{ name: "Ventas", data: monthly.map((m) => Math.round(m.neto)) }]}
               type="area"
-              height={200}
+              height={180}
             />
             {/* Monthly margin mini-row */}
             <div className="mt-2 flex flex-wrap gap-2">
@@ -385,7 +401,7 @@ export function StoreDetailView({
 
         {/* Daily trend area chart (single-month) */}
         {!hasMultipleMonths && hasDailyData && (
-          <div className="rounded-2xl border border-gray-200 p-5 dark:border-gray-700">
+          <div className="rounded-2xl border border-gray-200 p-3 sm:p-5 dark:border-gray-700">
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
               Evolución Diaria
             </p>
@@ -393,14 +409,14 @@ export function StoreDetailView({
               options={dailyTrendOptions}
               series={[{ name: "Ventas", data: daily.map((d) => Math.round(d.neto)) }]}
               type="area"
-              height={200}
+              height={180}
             />
           </div>
         )}
 
         {/* Brand mix — horizontal bars */}
         {hasBrands && (
-          <div className="rounded-2xl border border-gray-200 p-5 dark:border-gray-700">
+          <div className="rounded-2xl border border-gray-200 p-3 sm:p-5 dark:border-gray-700">
             <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
               Mix de Marcas
             </p>
@@ -451,7 +467,7 @@ export function StoreDetailView({
           ? Math.max(0, Math.min(100, ((store.grossMargin - scaleMin) / scaleRange) * 100))
           : 50;
         return (
-          <div className="rounded-2xl border border-gray-200 p-5 dark:border-gray-700">
+          <div className="rounded-2xl border border-gray-200 p-3 sm:p-5 dark:border-gray-700">
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
               Salud del Margen
             </p>

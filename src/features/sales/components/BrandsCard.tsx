@@ -26,7 +26,7 @@ export function BrandsCard({ data, year }: { data: BrandBreakdownRow[]; year: nu
           return (
             <div
               key={b.brand}
-              className="rounded-2xl border border-gray-200 bg-white p-5 transition-shadow duration-200 hover:shadow-theme-sm dark:border-gray-700 dark:bg-gray-800"
+              className="rounded-2xl border border-gray-200 bg-white p-3 sm:p-5 transition-shadow duration-200 hover:shadow-theme-sm dark:border-gray-700 dark:bg-gray-800"
             >
               {/* Header: name */}
               <div className="flex items-center gap-3">
@@ -34,18 +34,18 @@ export function BrandsCard({ data, year }: { data: BrandBreakdownRow[]; year: nu
               </div>
 
               {/* Radial chart — mix % */}
-              <div className="relative mt-2 h-[100px] overflow-hidden">
+              <div className="relative mt-2 h-[80px] sm:h-[100px] overflow-hidden">
                 <ResponsiveChart
                   options={buildBrandRadialOptions(mix, b.brand)}
                   series={[Math.min(Math.round(mix * 10) / 10, 100)]}
                   type="radialBar"
-                  height={180}
+                  height={150}
                 />
                 <p className="absolute inset-x-0 bottom-2 text-center text-[10px] font-medium text-gray-400 dark:text-gray-500">de las ventas totales</p>
               </div>
 
               {/* Revenue — cifra completa */}
-              <p className="mt-3 text-center text-lg font-bold tabular-nums text-gray-900 dark:text-white">
+              <p className="mt-3 text-center text-base sm:text-lg font-bold tabular-nums text-gray-900 dark:text-white truncate">
                 {formatPYGSuffix(b.neto)}
               </p>
 

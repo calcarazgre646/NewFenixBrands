@@ -138,7 +138,7 @@ export function SkusCard({
 
                 {/* Metrics */}
                 <div className="shrink-0 text-right">
-                  <p className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">
+                  <p className="text-xs sm:text-sm font-bold tabular-nums text-gray-900 dark:text-white">
                     {formatPYGShort(sku.neto)}
                   </p>
                   <p className="mt-0.5 text-[11px] tabular-nums text-gray-400 dark:text-gray-500">

@@ -46,6 +46,14 @@ export function BehaviorCard({
     },
     grid: { yaxis: { lines: { show: true } }, xaxis: { lines: { show: false } }, borderColor: "#f2f4f7" },
     tooltip: { y: { formatter: (val: number) => formatPYGShort(val) } },
+    responsive: [{
+      breakpoint: 640,
+      options: {
+        yaxis: { show: false, labels: { show: false, minWidth: 0, maxWidth: 0 } },
+        xaxis: { labels: { style: { fontSize: "10px" } } },
+        plotOptions: { bar: { columnWidth: "65%" } },
+      },
+    }],
   }), [data]);
 
   // Lazy load prompt
@@ -87,7 +95,7 @@ export function BehaviorCard({
             options={chartOptions}
             series={[{ name: "Ventas", data: data.map((d) => Math.round(d.totalNeto)) }]}
             type="bar"
-            height={220}
+            height={180}
           />
           {(bestDay || filteredStoreName) && (
             <div className="mt-auto flex flex-wrap items-center gap-6 border-t border-gray-100 pt-3 dark:border-gray-700">
