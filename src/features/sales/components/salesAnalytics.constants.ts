@@ -80,6 +80,19 @@ export function buildBrandRadialOptions(pct: number, brand: string): ApexOptions
     fill: { type: "solid" },
     stroke: { lineCap: "round" },
     labels: ["del total"],
+    responsive: [{
+      breakpoint: 640,
+      options: {
+        plotOptions: {
+          radialBar: {
+            hollow: { size: "60%" },
+            dataLabels: {
+              value: { fontSize: "14px", offsetY: -16 },
+            },
+          },
+        },
+      },
+    }],
   };
 }
 

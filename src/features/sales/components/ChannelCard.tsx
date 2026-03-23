@@ -80,6 +80,13 @@ export function ChannelCard({
       enabled: true,
       y: { formatter: (val: number) => formatPYGShort(val) },
     },
+    responsive: [{
+      breakpoint: 640,
+      options: {
+        dataLabels: { style: { fontSize: "11px" } },
+        yaxis: { labels: { style: { fontSize: "11px" } } },
+      },
+    }],
   }), [sorted]);
 
   if (storeDetail) {
