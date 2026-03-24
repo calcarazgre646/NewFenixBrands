@@ -2753,3 +2753,151 @@ describe('computeActionQueue', () => {
     expect(t1!.currentMOS <= 0 && t1!.historicalAvg <= 0).toBe(false)
   })
 })
+
+// ─── idealUnits / gapUnits / daysOfInventory ─────────────────────────────────
+
+describe('idealUnits, gapUnits, daysOfInventory', () => {
+  it('idealUnits equals full deficit.need regardless of available supply', () => {
+    // TIENDA1 has 0 stock, hist=10 → target = 10 * (13/4.33) ≈ 30.02 → need = ceil(30.02 - 0) = 31
+    // TIENDA2 has 5 surplus units (not enough to fill 31)
+    const sales = new Map([
+      ['TIENDA1|SKU001', 10],
+      ['TIENDA2|SKU001', 2],
+    ])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'TIENDA2', units: 50 }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    const t1 = result.find(a => a.store === 'TIENDA1' && a.risk === 'critical')
+    expect(t1).toBeDefined()
+    // idealUnits should be the full need (not capped by supply)
+    expect(t1!.idealUnits).toBeGreaterThan(0)
+    expect(t1!.idealUnits).toBeGreaterThanOrEqual(t1!.suggestedUnits)
+  })
+
+  it('gapUnits = idealUnits - suggestedUnits when supply < demand', () => {
+    // TIENDA1 needs ~31 units, RETAILS has only 5
+    const sales = new Map([['TIENDA1|SKU001', 10]])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'RETAILS', units: 5 }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    const t1 = result.find(a => a.store === 'TIENDA1')
+    expect(t1).toBeDefined()
+    expect(t1!.gapUnits).toBe(t1!.idealUnits - t1!.suggestedUnits)
+    expect(t1!.gapUnits).toBeGreaterThan(0)
+  })
+
+  it('gapUnits = 0 when supply >= demand', () => {
+    // TIENDA1 needs ~31, RETAILS has 100 — more than enough
+    const sales = new Map([['TIENDA1|SKU001', 10]])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'RETAILS', units: 100 }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    const t1 = result.find(a => a.store === 'TIENDA1')
+    expect(t1).toBeDefined()
+    expect(t1!.gapUnits).toBe(0)
+    expect(t1!.suggestedUnits).toBe(t1!.idealUnits)
+  })
+
+  it('daysOfInventory = (currentStock / historicalAvg) * 30', () => {
+    const sales = new Map([
+      ['TIENDA1|SKU001', 10],
+      ['TIENDA2|SKU001', 10],
+    ])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'TIENDA2', units: 100 }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    const t2 = result.find(a => a.store === 'TIENDA2')
+    expect(t2).toBeDefined()
+    // DOI = (100 / 10) * 30 = 300
+    expect(t2!.daysOfInventory).toBeCloseTo(300, 0)
+  })
+
+  it('daysOfInventory = 0 when historicalAvg = 0', () => {
+    // No sales history → DOI = 0
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'TIENDA2', units: 100 }),
+      ]),
+      'b2c', null, null, null, null, 0,
+    )
+    for (const action of result) {
+      expect(action.daysOfInventory).toBe(0)
+    }
+  })
+
+  it('surplus/overstock actions have idealUnits = 0', () => {
+    const sales = new Map([
+      ['TIENDA1|SKU001', 2],
+      ['TIENDA2|SKU001', 2],
+    ])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'TIENDA2', units: 100 }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    const overstock = result.filter(a => a.risk === 'overstock')
+    for (const action of overstock) {
+      expect(action.idealUnits).toBe(0)
+    }
+  })
+
+  it('N3 action idealUnits = unmetDeficit', () => {
+    // TIENDA1 needs units, no surplus stores, RETAILS has 0, STOCK has inventory → N3
+    const sales = new Map([['TIENDA1|SKU001', 10]])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'STOCK', units: 100 }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    const n3 = result.find(a => a.waterfallLevel === 'central_to_depot')
+    expect(n3).toBeDefined()
+    expect(n3!.idealUnits).toBeGreaterThan(0)
+  })
+
+  it('all actions have valid idealUnits and gapUnits (no NaN, no negative)', () => {
+    const sales = new Map([
+      ['TIENDA1|SKU001', 5],
+      ['TIENDA2|SKU001', 3],
+      ['TIENDA3|SKU001', 8],
+    ])
+    const result = computeActionQueue(
+      makeInput([
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'TIENDA2', units: 50 }),
+        inv({ store: 'TIENDA3', units: 2 }),
+        inv({ store: 'RETAILS', units: 10 }),
+        inv({ store: 'STOCK', units: 100 }),
+      ], sales),
+      'b2c', null, null, null, null, 0,
+    )
+    for (const action of result) {
+      expect(Number.isFinite(action.idealUnits)).toBe(true)
+      expect(action.idealUnits).toBeGreaterThanOrEqual(0)
+      expect(Number.isFinite(action.gapUnits)).toBe(true)
+      expect(action.gapUnits).toBeGreaterThanOrEqual(0)
+      expect(Number.isFinite(action.daysOfInventory)).toBe(true)
+      expect(action.daysOfInventory).toBeGreaterThanOrEqual(0)
+    }
+  })
+})

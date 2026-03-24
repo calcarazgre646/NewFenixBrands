@@ -69,6 +69,9 @@ export function CompactActionList({ items, intent, groupMode }: Props) {
             <Th className="w-28 text-center">Estado</Th>
             <Th className="w-20 text-center">Cobertura</Th>
             <UnitsHeader intent={intent} />
+            <Th className="w-14 text-right">Ideal</Th>
+            <Th className="w-14 text-right">Gap</Th>
+            <Th className="w-14 text-center">DOI</Th>
             <CounterpartHeader intent={intent} />
           </tr>
         </thead>
@@ -156,6 +159,39 @@ export function CompactActionList({ items, intent, groupMode }: Props) {
                   {item.suggestedUnits}
                 </span>
                 <span className="ml-0.5 text-[10px] text-gray-400">u.</span>
+              </td>
+
+              {/* Ideal units */}
+              <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                <span className="text-[11px] tabular-nums text-gray-500 dark:text-gray-400">
+                  {item.idealUnits > 0 ? item.idealUnits : "—"}
+                </span>
+              </td>
+
+              {/* Gap */}
+              <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                {item.gapUnits > 0 ? (
+                  <span className="text-[11px] font-semibold tabular-nums text-error-600 dark:text-error-400">
+                    {item.gapUnits}
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-gray-300 dark:text-gray-600">0</span>
+                )}
+              </td>
+
+              {/* DOI (Days of Inventory) */}
+              <td className="whitespace-nowrap px-3 py-2.5 text-center">
+                {item.daysOfInventory > 0 ? (
+                  <span className={`text-[11px] font-medium tabular-nums ${
+                    item.daysOfInventory < 30 ? "text-error-600 dark:text-error-400" :
+                    item.daysOfInventory < 60 ? "text-warning-600 dark:text-warning-400" :
+                    "text-gray-500 dark:text-gray-400"
+                  }`}>
+                    {item.daysOfInventory.toFixed(0)}d
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-gray-300 dark:text-gray-600">—</span>
+                )}
               </td>
 
               {/* Instruction */}

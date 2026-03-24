@@ -37,6 +37,9 @@ export interface ActionItem {
   targetStore?:    string;      // tienda destino (solo store_to_store)
   currentStock:    number;
   suggestedUnits:  number;
+  idealUnits:      number;      // unidades necesarias para llegar al target (sin restricción de disponibilidad)
+  gapUnits:        number;      // idealUnits - suggestedUnits = demanda insatisfecha → señal de compra
+  daysOfInventory: number;      // DOI = (currentStock / historicalAvg) × 30
   historicalAvg:   number;      // promedio mensual 6m (spec cliente)
   coverWeeks:      number;      // semanas de cobertura objetivo (12=nacional, 24=importado)
   currentMOS:      number;      // Months of Stock actual = stock / avg monthly sales

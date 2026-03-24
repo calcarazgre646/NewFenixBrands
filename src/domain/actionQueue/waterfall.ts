@@ -285,6 +285,7 @@ export function computeActionQueue(
       suggested: number,
       counterparts: CounterpartStore[],
       recommended: string,
+      idealUnitsParam: number = 0,
     ): ActionItemFull => {
       const isDepot = store === RETAILS_DEPOT || store === STOCK_DEPOT;
       const currentStock = isDepot
@@ -304,6 +305,8 @@ export function computeActionQueue(
         histAvg = salesHistory.get(salesHistoryKey(store, sku)) ?? 0;
       }
       const currentMOS = histAvg > 0 ? currentStock / histAvg : 0;
+      const daysOfInventory = histAvg > 0 ? (currentStock / histAvg) * 30 : 0;
+      const gapUnits = Math.max(0, idealUnitsParam - suggested);
       return {
         id: nextId(),
         rank: 0,
@@ -318,6 +321,9 @@ export function computeActionQueue(
         targetStore: counterparts.length > 0 ? counterparts[0].store : undefined,
         currentStock,
         suggestedUnits: suggested,
+        idealUnits: idealUnitsParam,
+        gapUnits,
+        daysOfInventory,
         historicalAvg: histAvg,
         coverWeeks: isDepot ? brandCoverWeeks : storeCoverWeeks,
         currentMOS,
@@ -372,6 +378,7 @@ export function computeActionQueue(
           deficit.store, risk, "transfer", "store_to_store",
           transferUnits, transferUnits, counterparts,
           `Mover desde ${counterparts[0].store} (${counterparts[0].units} u.)`,
+          deficit.need,
         ));
         // N1 partially filled — cascade remainder to N2 (RETAILS depot)
         if (toFill > 0 && remainingDepot > 0) {
@@ -382,6 +389,7 @@ export function computeActionQueue(
             fromDepot, fromDepot,
             [{ store: RETAILS_DEPOT, units: fromDepot }],
             `Mover desde deposito RETAILS (${fromDepot} u.)`,
+            toFill, // idealUnits = lo que quedaba pendiente post-N1
           ));
           toFill -= fromDepot;
         }
@@ -398,6 +406,7 @@ export function computeActionQueue(
           fromDepot, fromDepot,
           [{ store: RETAILS_DEPOT, units: fromDepot }],
           `Mover desde deposito RETAILS (${fromDepot} u.)`,
+          deficit.need,
         ));
         const unfilled = deficit.need - fromDepot;
         if (unfilled > 0) unmetDeficit += unfilled;
@@ -417,6 +426,7 @@ export function computeActionQueue(
         fromStock, fromStock,
         [{ store: STOCK_DEPOT, units: fromStock }],
         `Trasladar desde STOCK → RETAILS (${fromStock} u.) para cubrir ${deficitStores.length} tiendas`,
+        unmetDeficit,
       );
       actions.push(item);
     }
@@ -465,6 +475,7 @@ export function computeActionQueue(
           units, units,
           [{ store: STOCK_DEPOT, units }],
           `Reponer desde STOCK central (${units} u.) directo a ${deficit.store}`,
+          deficit.need,
         ));
       }
     }

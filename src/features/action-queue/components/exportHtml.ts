@@ -90,6 +90,9 @@ function actionRow(item: ActionItemFull, idx: number, showStore: boolean): strin
       <span style="display:inline-block;background:${riskBg};color:${riskColor};padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;">${RISK_LABEL[item.risk]}</span>
     </td>
     <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:14px;font-weight:700;color:#111827;text-align:center;">${item.suggestedUnits}</td>
+    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;color:#6B7280;text-align:center;">${item.idealUnits > 0 ? item.idealUnits : "—"}</td>
+    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;${item.gapUnits > 0 ? "font-weight:700;color:#DC2626;" : "color:#9CA3AF;"}text-align:center;">${item.gapUnits > 0 ? item.gapUnits : "0"}</td>
+    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;${item.daysOfInventory > 0 && item.daysOfInventory < 30 ? "color:#DC2626;font-weight:600;" : item.daysOfInventory < 60 ? "color:#D97706;" : "color:#6B7280;"}text-align:center;">${item.daysOfInventory > 0 ? `${item.daysOfInventory.toFixed(0)}d` : "—"}</td>
     <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;color:#6B7280;">${item.historicalAvg > 0 ? item.historicalAvg.toFixed(1) : "—"}</td>
     <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;${mosStyle}">${coverValue > 0 ? `${coverValue.toFixed(1)} ${coverLabel}` : item.historicalAvg > 0 ? `0.0 ${coverLabel}` : "—"}</td>
     <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;color:#374151;">${esc(item.recommendedAction)}${counterparts}</td>
@@ -102,7 +105,7 @@ function sectionBlock(section: ActionSection, showStore: boolean): string {
   const colors = INTENT_COLORS[section.intent];
   const cols = ["#", "Producto", "Talle"];
   if (showStore) cols.push("Tienda");
-  cols.push("Estado", "Uds.", "Prom 6m", "Cobertura", "Accion");
+  cols.push("Estado", "Uds.", "Ideal", "Gap", "DOI", "Prom 6m", "Cobertura", "Accion");
 
   const headerCells = cols.map(c =>
     `<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#6B7280;border-bottom:1px solid #E5E7EB;white-space:nowrap;">${c}</th>`
@@ -147,6 +150,7 @@ export function downloadGroupHtml({ groupLabel, channel, mode, items, sections }
   const low       = items.filter(i => i.risk === "low").length;
   const overstock = items.filter(i => i.risk === "overstock").length;
   const totalUnits = items.reduce((sum, i) => sum + i.suggestedUnits, 0);
+  const totalGap   = items.reduce((sum, i) => sum + i.gapUnits, 0);
 
   const modeLabel = mode === "store" ? "Tienda" : "Marca";
   const safeName = groupLabel.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase();
@@ -199,9 +203,13 @@ export function downloadGroupHtml({ groupLabel, channel, mode, items, sections }
     <p style="margin:0;font-size:20px;font-weight:700;color:#D97706;">${low}</p>
     <p style="margin:2px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#D97706;">Stock Bajo</p>
   </td>
-  <td style="padding:14px 20px;text-align:center;">
+  <td style="padding:14px 20px;text-align:center;border-right:1px solid #F3F4F6;">
     <p style="margin:0;font-size:20px;font-weight:700;color:#2563EB;">${overstock}</p>
     <p style="margin:2px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#2563EB;">Sobrestock</p>
+  </td>
+  <td style="padding:14px 20px;text-align:center;">
+    <p style="margin:0;font-size:20px;font-weight:700;color:${totalGap > 0 ? "#DC2626" : "#6B7280"};">${totalGap.toLocaleString("es-PY")}</p>
+    <p style="margin:2px 0 0;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:${totalGap > 0 ? "#DC2626" : "#6B7280"};">Gap Total</p>
   </td>
 </tr>
 </table>

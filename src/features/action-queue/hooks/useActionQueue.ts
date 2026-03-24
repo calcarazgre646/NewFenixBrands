@@ -53,6 +53,10 @@ export interface ActionQueueData {
   lowCount: number;
   overstockCount: number;
   uniqueSkus: number;
+  /** Total gap units (unmet demand across all actions) */
+  totalGapUnits: number;
+  /** Average days of inventory (weighted by historicalAvg) */
+  avgDOI: number;
   filters: ActionQueueFilters;
   setChannel: (ch: ChannelMode) => void;
   isLoading: boolean;
@@ -158,16 +162,24 @@ export function useActionQueue(): ActionQueueData {
   }, [records, historyQ.data, historyQ.isLoading, channel, brand]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived stats ──────────────────────────────────────────────────────────
-  const { totalItems, paretoCount, criticalCount, lowCount, overstockCount, uniqueSkus } =
+  const { totalItems, paretoCount, criticalCount, lowCount, overstockCount, uniqueSkus, totalGapUnits, avgDOI } =
     useMemo(() => {
       let pareto = 0, critical = 0, low = 0, overstock = 0;
+      let totalGap = 0;
+      let doiWeightedSum = 0;
+      let doiWeightTotal = 0;
       const skuSet = new Set<string>();
       for (const item of items) {
         if (item.paretoFlag) pareto++;
         if (item.risk === "critical") critical++;
         if (item.risk === "low") low++;
         if (item.risk === "overstock") overstock++;
+        totalGap += item.gapUnits;
         skuSet.add(item.sku);
+        if (item.historicalAvg > 0) {
+          doiWeightedSum += item.daysOfInventory * item.historicalAvg;
+          doiWeightTotal += item.historicalAvg;
+        }
       }
       return {
         totalItems: items.length,
@@ -176,6 +188,8 @@ export function useActionQueue(): ActionQueueData {
         lowCount: low,
         overstockCount: overstock,
         uniqueSkus: skuSet.size,
+        totalGapUnits: totalGap,
+        avgDOI: doiWeightTotal > 0 ? doiWeightedSum / doiWeightTotal : 0,
       };
     }, [items]);
 
@@ -206,6 +220,8 @@ export function useActionQueue(): ActionQueueData {
     lowCount,
     overstockCount,
     uniqueSkus,
+    totalGapUnits,
+    avgDOI,
     filters: { channel, brand: globalFilters.brand },
     setChannel,
     isLoading: inventoryQ.isLoading || (historyQ.isLoading && records.length > 0),
