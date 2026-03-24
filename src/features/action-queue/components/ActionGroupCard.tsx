@@ -191,6 +191,9 @@ export function ActionGroupCard({ group, mode, channel, defaultExpanded = false,
             <MiniStat value={group.criticalCount} label="sin stock" color="bg-error-50 text-error-700 dark:bg-error-500/10 dark:text-error-400" />
             <MiniStat value={group.lowCount} label="bajo" color="bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-400" />
             <MiniStat value={group.overstockCount} label="exceso" color="bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400" />
+            {group.totalGapUnits > 0 && (
+              <MiniStat value={group.totalGapUnits} label="gap" color="bg-error-50 text-error-700 dark:bg-error-500/10 dark:text-error-400" />
+            )}
             {groupWOI !== null && (() => {
               // B2C: 13 semanas (Rodrigo 17/03/2026). B2B: brand-based (12/24).
               const wTarget = channel === "b2c" ? 13 : (group.items[0]?.coverWeeks ?? 12);

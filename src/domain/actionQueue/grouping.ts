@@ -41,6 +41,7 @@ export interface ActionSection {
   description: string;
   items: ActionItemFull[];
   totalUnits: number;
+  totalGapUnits: number;
   criticalCount: number;
 }
 
@@ -62,6 +63,8 @@ export interface ActionGroup {
   totalImpact: number;
   uniqueSkus: number;
   totalUnits: number;
+  totalGapUnits: number;
+  avgDOI: number;
 }
 
 // ─── Intent classification ──────────────────────────────────────────────────
@@ -128,9 +131,11 @@ export function splitIntoSections(items: ActionItemFull[]): ActionSection[] {
     const meta = INTENT_META[intent];
     let critical = 0;
     let totalUnits = 0;
+    let totalGap = 0;
     for (const item of sectionItems) {
       if (item.risk === "critical") critical++;
       totalUnits += item.suggestedUnits;
+      totalGap += item.gapUnits;
     }
 
     sections.push({
@@ -139,6 +144,7 @@ export function splitIntoSections(items: ActionItemFull[]): ActionSection[] {
       description: meta.description,
       items: sectionItems,
       totalUnits,
+      totalGapUnits: totalGap,
       criticalCount: critical,
     });
   }
@@ -191,6 +197,9 @@ function buildGroup(
   let pareto = 0;
   let totalImpact = 0;
   let totalUnits = 0;
+  let totalGap = 0;
+  let doiWeightedSum = 0;
+  let doiWeightTotal = 0;
   const skuSet = new Set<string>();
 
   for (const item of items) {
@@ -200,7 +209,14 @@ function buildGroup(
     if (item.paretoFlag) pareto++;
     totalImpact += item.impactScore;
     totalUnits += item.suggestedUnits;
+    totalGap += item.gapUnits;
     skuSet.add(item.sku);
+    // Weighted DOI: weight by historicalAvg (items with more sales matter more)
+    if (item.daysOfInventory > 0 || item.historicalAvg > 0) {
+      const w = item.historicalAvg > 0 ? item.historicalAvg : 1;
+      doiWeightedSum += item.daysOfInventory * w;
+      doiWeightTotal += w;
+    }
   }
 
   return {
@@ -219,5 +235,7 @@ function buildGroup(
     totalImpact,
     uniqueSkus: skuSet.size,
     totalUnits,
+    totalGapUnits: totalGap,
+    avgDOI: doiWeightTotal > 0 ? doiWeightedSum / doiWeightTotal : 0,
   };
 }
