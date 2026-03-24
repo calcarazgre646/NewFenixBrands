@@ -11,7 +11,7 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 
 ---
 
-## Estado actual (actualizado 14/03/2026 14:00)
+## Estado actual (actualizado 24/03/2026)
 
 | Fase | Feature | Estado |
 |------|---------|--------|
@@ -20,17 +20,18 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 1 | KpiDashboardPage (`/kpis`) — 9 core + 50 catálogo + sparklines + UPT activado | ✅ COMPLETO |
 | 1B | ExecutivePage (`/`) — Road to Annual Target, chart acumulado, tabla mensual | ✅ COMPLETO |
 | 2 | SalesPage (`/ventas`) — Metricas, 4 tabs analytics, YoY tiendas, Top/Bottom SKUs | ✅ COMPLETO |
-| 3 | ActionQueuePage (`/acciones`) — Waterfall 4 niveles, vista agrupada | ✅ COMPLETO + AUDITADO |
+| 3 | ActionQueuePage (`/acciones`) — Waterfall 4 niveles + Ideal/Gap/DOI + 2 pestañas (Acciones + Planificación de Compra) | ✅ COMPLETO + AUDITADO |
 | 4 | LogisticsPage (`/logistica`) — ETAs importacion, tabla agrupada | ✅ COMPLETO + AUDITADO |
 | 5 | CalendarPage (`/calendario`) — FullCalendar + CRUD + Realtime + Llegadas logística | ✅ COMPLETO + AUDITADO |
 | 6 | UsersPage (`/usuarios`) — CRUD completo, Edge Function, cambio contraseña | ✅ COMPLETO + AUDITADO |
 | 6B | DepotsPage (`/depositos`) — Filtros estandarizados in-page | ✅ COMPLETO |
 
 **La app corre:** `npm run dev` → http://localhost:5173
-**Tests:** 848 passing (22 suites) | TSC 0 errores | Build OK
+**Tests:** 907 passing (23 suites) | TSC 0 errores | Build OK
 **Deploy:** https://fenix-brands-one.vercel.app
 **Sesión 14/03/2026 (00:00–04:00):** Ver log detallado abajo
 **Sesión 14/03/2026 (04:00–14:00):** Ver log detallado abajo
+**Sesión 24/03/2026:** Ver log detallado abajo
 
 ---
 
@@ -66,9 +67,12 @@ src/
   domain/filters/types.ts       — AppFilters, PeriodFilter, BrandFilter, ChannelFilter
   domain/kpis/calculations.ts   — TODAS las formulas KPI puras (12 funciones)
   domain/period/resolve.ts      — resolvePeriod() — fuente de verdad de periodos
-  domain/actionQueue/waterfall.ts — Algoritmo waterfall puro (4 niveles)
+  domain/actionQueue/waterfall.ts — Algoritmo waterfall puro (4 niveles) + idealUnits/gapUnits/DOI
   domain/actionQueue/clusters.ts  — Clusters de tiendas (A/B/OUT) + restricciones horarias
-  domain/actionQueue/grouping.ts  — Agrupacion pura por tienda/marca
+  domain/actionQueue/grouping.ts  — Agrupacion pura por tienda/marca + totalGapUnits/avgDOI
+  domain/actionQueue/purchasePlanning.ts — buildPurchasePlan (SKU-level gap), summarizeByBrand, computeGapTotals
+  features/action-queue/components/ActionsTab.tsx — Pestaña "Acciones" (controles, stats, grupos)
+  features/action-queue/components/PurchasePlanningTab.tsx — Pestaña "Planificación de Compra" (stats, filtros marca/tipo, tabla SKU)
   domain/logistics/types.ts      — Tipos logística (ArrivalStatus, LogisticsGroup, etc.)
   domain/logistics/arrivals.ts   — Funciones puras: toArrivals, groupArrivals, computeSummary
   domain/logistics/calendar.ts   — Funciones puras: groupsToCalendarItems, arrivalsByDay (proyeccion logistica→calendario)
@@ -388,3 +392,99 @@ Auditoría completa de todos los cambios de la sesión. Hallazgos corregidos:
 | features/calendar/calendarArrivals | 17 |
 
 **Verificación final:** 848 tests | 22 suites | TSC 0 errores | TSC -b 0 errores | Build OK
+
+---
+
+## Sesión 24/03/2026 — Reposición Sugerida vs Ideal + Planificación de Compra
+
+### Origen
+
+Reunión Torre de Control 23/03/2026. Rodrigo: "la planificación de nuevo producto a nivel: SKU, Tipo de Producto, Marca".
+
+### 1. Métricas idealUnits / gapUnits / daysOfInventory en waterfall
+
+**3 campos nuevos en ActionItem (types.ts):**
+- `idealUnits` — unidades que la tienda necesita para llegar al target (sin restricción de disponibilidad)
+- `gapUnits` — idealUnits − suggestedUnits = demanda insatisfecha = señal de compra
+- `daysOfInventory` — (currentStock / historicalAvg) × 30
+
+**waterfall.ts:** `makeItem` recibe `idealUnitsParam`, calcula DOI y gap. Cada nivel pasa el valor correcto:
+- N1 (transfer): `idealUnits = deficit.need`
+- N2 cascade: `idealUnits = toFill` (remainder post-N1)
+- N2 directo: `idealUnits = deficit.need`
+- N3 (central→depot): `idealUnits = unmetDeficit`
+- N4 (B2B): `idealUnits = deficit.need`
+- Surplus/liquidación: `idealUnits = 0` (default)
+
+**grouping.ts:** `ActionGroup` y `ActionSection` tienen `totalGapUnits` y `avgDOI` (weighted by historicalAvg).
+
+### 2. Función pura purchasePlanning.ts
+
+- `buildPurchasePlan(items)` — deduplica por (store, sku, talle) tomando max gap, agrupa por (sku, talle), retorna `PurchaseGapRow[]` con brand/linea/categoria para filtrar en UI
+- `summarizeByBrand(rows)` — totales por marca
+- `computeGapTotals(rows)` — totales globales
+
+### 3. Reestructuración UX: 2 pestañas
+
+**ActionQueuePage.tsx** → shell con loading/error + tab bar + channel B2C/B2B compartido
+
+**Pestaña "Acciones" (ActionsTab.tsx):**
+- Stats: Total Acciones, SKUs Únicos, Pareto 80%, Sin Stock, Stock Bajo, Sobrestock (6 cards)
+- Controles: Pareto toggle, vista Tienda/Marca
+- Grupos con secciones operativas
+- Cada fila de acción: +3 columnas (Ideal, Gap, DOI)
+- Pill rojo "gap" en header de cada grupo
+
+**Pestaña "Planificación de Compra" (PurchasePlanningTab.tsx):**
+- Stats propios: Gap Total, SKUs con Gap, DOI Promedio, Impacto Potencial (4 cards)
+- Summary pills por marca con gap + Gs.
+- Filtros: Marca y Tipo de Producto (segmented controls)
+- Tabla SKU-level: producto, talle, marca, tipo, gap, ideal, sugerido, tiendas, impacto
+- Paginación + totales footer
+
+**Tab bar con badges:** total acciones + gap units (rojo si > 0)
+
+### 4. Export HTML actualizado
+
+- +3 columnas: Ideal, Gap, DOI
+- +1 stat: Gap Total en header
+
+### 5. Auditoría post-implementación
+
+3 hallazgos corregidos:
+- DOI variant mostraba amarillo cuando avgDOI=0 → agregado `avgDOI === 0 ? "neutral"`
+- Guard de cost inconsistente en aggregateGaps → match con línea 75
+- Tests edge cases faltantes → +4 tests (suggestedUnits=0, dedup idéntico, linea/categoria vacíos)
+
+### Archivos creados
+
+| Archivo | Propósito |
+|---------|-----------|
+| `src/domain/actionQueue/purchasePlanning.ts` | Función pura: buildPurchasePlan, summarizeByBrand, computeGapTotals |
+| `src/domain/actionQueue/__tests__/purchasePlanning.test.ts` | 15 tests |
+| `src/features/action-queue/components/ActionsTab.tsx` | Pestaña "Acciones" |
+| `src/features/action-queue/components/PurchasePlanningTab.tsx` | Pestaña "Planificación de Compra" |
+
+### Archivos modificados
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/domain/actionQueue/types.ts` | +3 campos: idealUnits, gapUnits, daysOfInventory |
+| `src/domain/actionQueue/waterfall.ts` | makeItem + idealUnitsParam, DOI, gap en cada nivel |
+| `src/domain/actionQueue/grouping.ts` | +totalGapUnits, +avgDOI en ActionGroup/ActionSection |
+| `src/features/action-queue/ActionQueuePage.tsx` | Refactorizado a shell con tabs |
+| `src/features/action-queue/hooks/useActionQueue.ts` | +totalGapUnits, +avgDOI |
+| `src/features/action-queue/components/CompactActionList.tsx` | +3 columnas (Ideal, Gap, DOI) |
+| `src/features/action-queue/components/ActionGroupCard.tsx` | +pill gap en header |
+| `src/features/action-queue/components/exportHtml.ts` | +3 columnas, +stat Gap Total |
+| `src/domain/actionQueue/__tests__/waterfall.test.ts` | +8 tests (idealUnits, gap, DOI) |
+| `src/domain/actionQueue/__tests__/grouping.test.ts` | Helper actualizado con nuevos campos |
+
+### Verificación final
+
+907 tests | 23 suites | TSC 0 errores | Build OK
+
+### Deploy
+
+- **PR #9:** https://github.com/calcarazgre646/NewFenixBrands/pull/9 (merged)
+- **Vercel:** https://fenix-brands-one.vercel.app (production)
