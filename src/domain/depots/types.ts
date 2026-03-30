@@ -28,6 +28,7 @@ export interface DepotSkuRow {
   categoria:       string;
   estado:          string;
   carryOver:       boolean;
+  isNovelty:       boolean;         // estComercial === "lanzamiento"
   units:           number;
   value:           number;
   avgMonthlySales: number;
@@ -87,6 +88,35 @@ export interface SalesWindow {
   periodLabels: string[];     // ["2025-10", "2025-11", ...]
 }
 
+/** Estado de distribución de un producto de lanzamiento */
+export type NoveltyDistributionStatus = "en_deposito" | "en_distribucion" | "cargado";
+
+/** Resumen de un SKU de lanzamiento con su estado de distribución */
+export interface NoveltySkuSummary {
+  sku:              string;
+  skuComercial:     string;
+  description:      string;
+  brand:            string;
+  categoria:        string;
+  totalUnits:       number;
+  totalValue:       number;
+  stockUnits:       number;
+  retailsUnits:     number;
+  storeCount:       number;          // tiendas dependientes que lo tienen
+  totalDependentStores: number;
+  coveragePct:      number;          // 0-100
+  distributionStatus: NoveltyDistributionStatus;
+}
+
+/** Datos agregados de novedades/lanzamientos */
+export interface NoveltyData {
+  totalSkus:  number;
+  totalUnits: number;
+  totalValue: number;
+  byStatus:   Record<NoveltyDistributionStatus, number>;
+  skus:       NoveltySkuSummary[];
+}
+
 /** Datos completos de la vista Depósitos */
 export interface DepotData {
   salesWindow:     SalesWindow;
@@ -96,4 +126,5 @@ export interface DepotData {
   stores:          StoreNode[];
   topSkuRows:      DepotSkuRow[];
   totals:          NetworkTotals;
+  novelty:         NoveltyData;
 }

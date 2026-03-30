@@ -16,7 +16,7 @@ export default function DepotKpiCards({ data }: Props) {
   const { totals, retails, stock } = data;
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       <StatCard
         label="Demanda semanal"
         value={formatNumber(totals.networkWeeklyDemand)}
@@ -44,6 +44,12 @@ export default function DepotKpiCards({ data }: Props) {
         label="Valor red retail"
         value={formatPYGCompact(totals.networkValue)}
         sub={`${totals.dependentStoreCount} tiendas`}
+      />
+      <StatCard
+        label="Novedades"
+        value={String(data.novelty.totalSkus)}
+        sub={`${data.novelty.byStatus.en_deposito} en depósito`}
+        variant={data.novelty.byStatus.en_deposito > 0 ? "accent-negative" : "accent-positive"}
       />
     </div>
   );

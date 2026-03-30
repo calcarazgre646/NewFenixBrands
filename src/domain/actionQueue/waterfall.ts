@@ -68,6 +68,20 @@ function salesHistoryKey(store: string, sku: string): string {
   return `${store}|${sku}`;
 }
 
+/** Two-level DOI-edad lookup: exact (store+sku+talle) → fallback (store+sku, min talle) → 0 */
+function lookupDoiAge(
+  doiAge: WaterfallInput["doiAge"],
+  store: string,
+  sku: string,
+  talle: string,
+): number {
+  if (!doiAge) return 0;
+  const s = store.toUpperCase();
+  return doiAge.exact.get(`${s}|${sku}|${talle}`)
+      ?? doiAge.byStoreSku.get(`${s}|${sku}`)
+      ?? 0;
+}
+
 let _idCounter = 0;
 function resetIdCounter(): void {
   _idCounter = 0;
@@ -122,7 +136,7 @@ export function computeActionQueue(
   impactThreshold: number = MIN_IMPACT_THRESHOLD,
 ): ActionItemFull[] {
   resetIdCounter();
-  const { inventory, salesHistory } = input;
+  const { inventory, salesHistory, doiAge } = input;
 
   // -- 1. Separate rows into operational zones
   const b2cRows:    InventoryRecord[] = [];
@@ -305,7 +319,10 @@ export function computeActionQueue(
         histAvg = salesHistory.get(salesHistoryKey(store, sku)) ?? 0;
       }
       const currentMOS = histAvg > 0 ? currentStock / histAvg : 0;
-      const daysOfInventory = histAvg > 0 ? (currentStock / histAvg) * 30 : 0;
+      // DOI-edad: días desde último movimiento de stock a esta ubicación.
+      // Fuente: mv_doi_edad (movimientos_st_jde).
+      // Lookup: exact (store+sku+talle) → fallback store+sku (any talle) → 0
+      const daysOfInventory = lookupDoiAge(doiAge, store, sku, talle);
       const gapUnits = Math.max(0, idealUnitsParam - suggested);
       return {
         id: nextId(),

@@ -100,9 +100,9 @@ export function PurchasePlanningTab({ items, avgDOI }: Props) {
           sub={isFiltered ? `de ${allRows.length} total` : undefined}
         />
         <StatCard
-          label="DOI Promedio"
+          label="Edad Promedio"
           value={`${avgDOI.toFixed(0)} días`}
-          variant={avgDOI === 0 ? "neutral" : avgDOI < 30 ? "negative" : avgDOI < 60 ? "accent-negative" : "neutral"}
+          variant={avgDOI === 0 ? "neutral" : avgDOI > 180 ? "negative" : avgDOI > 90 ? "accent-negative" : "neutral"}
         />
         <StatCard
           label="Impacto Potencial"

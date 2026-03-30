@@ -17,6 +17,9 @@ import type {
   NetworkTotals,
   SalesWindow,
   DepotData,
+  NoveltyDistributionStatus,
+  NoveltySkuSummary,
+  NoveltyData,
 } from "./types";
 import { getCalendarMonth, getCalendarYear, MONTH_SHORT } from "@/domain/period/helpers";
 import { getStoreCluster } from "@/domain/actionQueue/clusters";
@@ -162,6 +165,7 @@ function buildSkuRows(
       categoria:       item.categoria,
       estado:          item.estComercial,
       carryOver:       item.carryOver,
+      isNovelty:       item.estComercial === NOVELTY_STATUS,
       units:           item.units,
       value:           item.value,
       avgMonthlySales: Math.round(avgMonthlySales),
@@ -207,9 +211,121 @@ function buildSalesWindow(): SalesWindow {
   };
 }
 
+/** Umbral de cobertura para considerar un producto "cargado en tiendas" */
+const NOVELTY_COVERAGE_THRESHOLD = 0.80;
+const NOVELTY_STATUS = "lanzamiento";
+
 /** Es una tienda dependiente de RETAILS (B2C activa) */
-function isDependentStore(storeCode: string): boolean {
+export function isDependentStore(storeCode: string): boolean {
   return !EXCLUDED_STORES.has(storeCode.toUpperCase());
+}
+
+/** Clasifica el estado de distribución de un producto de lanzamiento */
+export function classifyNoveltyDistribution(
+  storeCount: number,
+  totalStores: number,
+): NoveltyDistributionStatus {
+  if (storeCount === 0) return "en_deposito";
+  if (totalStores > 0 && storeCount / totalStores >= NOVELTY_COVERAGE_THRESHOLD) return "cargado";
+  return "en_distribucion";
+}
+
+/** Construye datos de novedades a partir del inventario completo */
+export function buildNoveltyData(
+  inventory: InventoryItem[],
+  dependentStoreCount: number,
+): NoveltyData {
+  // Filtrar solo lanzamientos
+  const noveltyItems = inventory.filter(i => i.estComercial === NOVELTY_STATUS);
+
+  if (noveltyItems.length === 0) {
+    return {
+      totalSkus: 0, totalUnits: 0, totalValue: 0,
+      byStatus: { en_deposito: 0, en_distribucion: 0, cargado: 0 },
+      skus: [],
+    };
+  }
+
+  // Agrupar por SKU (sin talle — distribución es a nivel producto)
+  const skuMap = new Map<string, {
+    skuComercial: string; description: string; brand: string; categoria: string;
+    totalUnits: number; totalValue: number;
+    stockUnits: number; retailsUnits: number;
+    dependentStores: Set<string>;
+  }>();
+
+  for (const item of noveltyItems) {
+    const key = item.sku;
+    const acc = skuMap.get(key) ?? {
+      skuComercial: item.skuComercial, description: item.description,
+      brand: item.brand, categoria: item.categoria,
+      totalUnits: 0, totalValue: 0,
+      stockUnits: 0, retailsUnits: 0,
+      dependentStores: new Set<string>(),
+    };
+
+    acc.totalUnits += item.units;
+    acc.totalValue += item.value;
+
+    const store = item.store.toUpperCase();
+    if (store === "STOCK") {
+      acc.stockUnits += item.units;
+    } else if (store === "RETAILS") {
+      acc.retailsUnits += item.units;
+    } else if (isDependentStore(store)) {
+      acc.dependentStores.add(store);
+    }
+
+    skuMap.set(key, acc);
+  }
+
+  // Construir resúmenes por SKU
+  let totalUnits = 0;
+  let totalValue = 0;
+  const byStatus: Record<NoveltyDistributionStatus, number> = {
+    en_deposito: 0, en_distribucion: 0, cargado: 0,
+  };
+
+  const skus: NoveltySkuSummary[] = [];
+  for (const [sku, data] of skuMap) {
+    const storeCount = data.dependentStores.size;
+    const coveragePct = dependentStoreCount > 0
+      ? Math.round(storeCount / dependentStoreCount * 100)
+      : 0;
+    const status = classifyNoveltyDistribution(storeCount, dependentStoreCount);
+
+    totalUnits += data.totalUnits;
+    totalValue += data.totalValue;
+    byStatus[status]++;
+
+    skus.push({
+      sku,
+      skuComercial: data.skuComercial,
+      description: data.description,
+      brand: data.brand,
+      categoria: data.categoria,
+      totalUnits: data.totalUnits,
+      totalValue: data.totalValue,
+      stockUnits: data.stockUnits,
+      retailsUnits: data.retailsUnits,
+      storeCount,
+      totalDependentStores: dependentStoreCount,
+      coveragePct,
+      distributionStatus: status,
+    });
+  }
+
+  // Ordenar: menos distribuidos primero (en_deposito → en_distribucion → cargado), luego por units desc
+  const statusOrder: Record<NoveltyDistributionStatus, number> = {
+    en_deposito: 0, en_distribucion: 1, cargado: 2,
+  };
+  skus.sort((a, b) => {
+    const so = statusOrder[a.distributionStatus] - statusOrder[b.distributionStatus];
+    if (so !== 0) return so;
+    return b.totalUnits - a.totalUnits;
+  });
+
+  return { totalSkus: skuMap.size, totalUnits, totalValue, byStatus, skus };
 }
 
 // ─── Función principal ───────────────────────────────────────────────────────
@@ -384,6 +500,9 @@ export function buildDepotData(
     criticalStoreCount: criticalCount,
   };
 
+  // ── 7. Novedades / Lanzamientos ──────────────────────────────────────────
+  const novelty = buildNoveltyData(inventory, dependentStoreKeys.length);
+
   return {
     salesWindow: buildSalesWindow(),
     scopeCandidates,
@@ -392,5 +511,6 @@ export function buildDepotData(
     stores,
     topSkuRows: allSkuRows,
     totals,
+    novelty,
   };
 }

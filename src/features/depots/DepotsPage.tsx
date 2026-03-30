@@ -19,6 +19,7 @@ import CentralNodeCard from "./components/CentralNodeCard";
 import StoreAccordion from "./components/StoreAccordion";
 import SkuLeadersTable from "./components/SkuLeadersTable";
 import DepotInsights from "./components/DepotInsights";
+import NoveltySection from "./components/NoveltySection";
 import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
 import { formatNumber } from "@/utils/format";
 
@@ -71,6 +72,13 @@ export default function DepotsPage() {
           <CentralNodeCard node={data.retails} />
         </div>
       </section>
+
+      {/* ═══ Novedades / Lanzamientos ═══ */}
+      {data.novelty.totalSkus > 0 && (
+        <section className="exec-anim-4b">
+          <NoveltySection novelty={data.novelty} />
+        </section>
+      )}
 
       {/* ═══ Tiendas dependientes ═══ */}
       <section className="exec-anim-5">

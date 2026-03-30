@@ -12,7 +12,9 @@ import { useFilters } from "@/context/FilterContext";
 import { fetchInventory, toInventoryRecord } from "@/queries/inventory.queries";
 import { fetchSalesHistory } from "@/queries/salesHistory.queries";
 import type { SalesHistoryMap } from "@/queries/salesHistory.queries";
-import { inventoryKeys, salesHistoryKeys, STALE_30MIN, GC_60MIN } from "@/queries/keys";
+import { inventoryKeys, salesHistoryKeys, doiAgeKeys, STALE_30MIN, GC_60MIN } from "@/queries/keys";
+import { fetchDoiAge } from "@/queries/doiAge.queries";
+import type { DoiAgeData } from "@/queries/doiAge.queries";
 import { getStoreCluster } from "@/domain/actionQueue/clusters";
 import { computeActionQueue } from "@/domain/actionQueue/waterfall";
 import type { ActionItemFull } from "@/domain/actionQueue/waterfall";
@@ -55,7 +57,7 @@ export interface ActionQueueData {
   uniqueSkus: number;
   /** Total gap units (unmet demand across all actions) */
   totalGapUnits: number;
-  /** Average days of inventory (weighted by historicalAvg) */
+  /** Average inventory age in days (weighted by historicalAvg) */
   avgDOI: number;
   filters: ActionQueueFilters;
   setChannel: (ch: ChannelMode) => void;
@@ -113,6 +115,15 @@ export function useActionQueue(): ActionQueueData {
     retry: 1, // Consistent with inventoryQ — fail fast, don't mask Supabase issues
   });
 
+  // ── Fetch DOI-edad (days since last movement per SKU-talle-store) ─────────
+  const doiAgeQ = useQuery({
+    queryKey: doiAgeKeys.list(),
+    queryFn: fetchDoiAge,
+    staleTime: STALE_30MIN,
+    gcTime: GC_60MIN,
+    retry: 1,
+  });
+
   // ── Total stock per store (all SKUs, for occupancy display) ───────────────
   const storeStockMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -132,10 +143,11 @@ export function useActionQueue(): ActionQueueData {
     if (records.length === 0) { setWaterfallRan(false); return []; }
     if (!historyQ.data && historyQ.isLoading) { setWaterfallRan(false); return []; }
     const history: SalesHistoryMap = historyQ.data ?? new Map();
+    const doiAge: DoiAgeData | undefined = doiAgeQ.data ?? undefined;
     try {
       const t0 = performance.now();
       const result = computeActionQueue(
-        { inventory: records, salesHistory: history },
+        { inventory: records, salesHistory: history, doiAge },
         channel,
         brand,
         null,
@@ -159,7 +171,7 @@ export function useActionQueue(): ActionQueueData {
       setWaterfallRan(true);
       return [];
     }
-  }, [records, historyQ.data, historyQ.isLoading, channel, brand]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [records, historyQ.data, historyQ.isLoading, doiAgeQ.data, channel, brand]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived stats ──────────────────────────────────────────────────────────
   const { totalItems, paretoCount, criticalCount, lowCount, overstockCount, uniqueSkus, totalGapUnits, avgDOI } =
@@ -224,9 +236,9 @@ export function useActionQueue(): ActionQueueData {
     avgDOI,
     filters: { channel, brand: globalFilters.brand },
     setChannel,
-    isLoading: inventoryQ.isLoading || (historyQ.isLoading && records.length > 0),
+    isLoading: inventoryQ.isLoading || (historyQ.isLoading && records.length > 0) || doiAgeQ.isLoading,
     isHistoryLoading: historyQ.isLoading,
-    error: inventoryQ.error?.message ?? historyQ.error?.message ?? waterfallError ?? null,
+    error: inventoryQ.error?.message ?? historyQ.error?.message ?? doiAgeQ.error?.message ?? waterfallError ?? null,
     loadingProgress,
   };
 }

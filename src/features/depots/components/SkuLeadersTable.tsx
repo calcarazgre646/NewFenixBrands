@@ -6,6 +6,7 @@
  */
 import { formatNumber, formatPYGCompact, formatWeeks } from "@/utils/format";
 import type { DepotSkuRow } from "@/domain/depots/types";
+import NoveltyBadge from "./NoveltyBadge";
 
 interface Props {
   rows: DepotSkuRow[];
@@ -53,11 +54,14 @@ export default function SkuLeadersTable({ rows }: Props) {
                   <span className="block truncate">{row.store}</span>
                 </td>
                 <td className="px-3 py-2">
-                  <span className="block truncate font-medium text-gray-800 dark:text-white">
-                    {row.skuComercial || row.sku}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate font-medium text-gray-800 dark:text-white">
+                      {row.description}
+                    </span>
+                    {row.isNovelty && <NoveltyBadge />}
+                  </div>
                   <span className="block truncate text-[10px] text-gray-400 dark:text-gray-500">
-                    {row.description}
+                    {row.skuComercial || row.sku}
                   </span>
                 </td>
                 <td className="hidden sm:table-cell px-3 py-2 text-gray-600 dark:text-gray-300">

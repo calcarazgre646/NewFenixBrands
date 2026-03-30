@@ -260,11 +260,8 @@ export default function ExecutivePage() {
   // Solo refinamos con día exacto cuando el período incluye el mes en curso con datos parciales.
   const periodDateRange = useMemo(() => {
     const yr = new Date().getFullYear();
-    if (isYtdView && lastDataDay) {
-      return `1 Ene – ${lastDataDay} ${MONTH_SHORT[calendarMonth]} ${yr}`;
-    }
     if (isYtdView) {
-      return `1 Ene – ${new Date().getDate()} ${MONTH_SHORT[calendarMonth]} ${yr}`;
+      return `Ene – ${MONTH_SHORT[calendarMonth]} ${yr}`;
     }
     // currentMonth y lastClosedMonth: usar periodLabel de resolvePeriod
     return periodLabel;
