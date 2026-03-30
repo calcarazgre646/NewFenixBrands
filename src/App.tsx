@@ -38,6 +38,7 @@ const CalendarPage      = lazy(() => import("@/features/calendar/CalendarPage"))
 const NoAccessPage         = lazy(() => import("@/features/auth/NoAccessPage"));
 const ChangePasswordPage   = lazy(() => import("@/features/auth/ChangePasswordPage"));
 const UsersPage            = lazy(() => import("@/features/users/UsersPage"));
+const CommissionsPage      = lazy(() => import("@/features/commissions/CommissionsPage"));
 const HelpPage             = lazy(() => import("@/features/help/HelpPage"));
 
 // ─── Loading fallback ─────────────────────────────────────────────────────────
@@ -150,6 +151,13 @@ export default function App() {
             <Route path="calendario" element={
               <PermissionGuard allowed={(p) => p.canViewCalendar}>
                 <FeatureErrorBoundary feature="Calendario"><CalendarPage /></FeatureErrorBoundary>
+              </PermissionGuard>
+            } />
+
+            {/* Comisiones — super_user y gerencia */}
+            <Route path="comisiones" element={
+              <PermissionGuard allowed={(p) => p.canViewCommissions}>
+                <FeatureErrorBoundary feature="Comisiones"><CommissionsPage /></FeatureErrorBoundary>
               </PermissionGuard>
             } />
 

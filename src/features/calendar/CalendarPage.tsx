@@ -2,7 +2,7 @@
  * features/calendar/CalendarPage.tsx
  *
  * Calendario de Eventos + Llegadas de Logística.
- * Vistas: Mes, Semana, Dia, Ano (custom grid 12 meses).
+ * Vistas: Mes, Semana, Día, Año (custom grid 12 meses).
  * Categorias dinamicas con colores editables.
  * CRUD de eventos con Supabase Realtime.
  * Llegadas de importación como indicadores read-only (desde logística).
@@ -76,12 +76,22 @@ interface MiniMonthProps {
 function MiniMonth({ year, month, events, categories, arrivalDays, today, onDayClick }: MiniMonthProps) {
   const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const [hoverDate, setHoverDate] = useState<string | null>(null);
+  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cells: (number | null)[] = [
     ...Array(firstDow).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
   while (cells.length % 7 !== 0) cells.push(null);
+
+  function handleMouseEnter(dateStr: string) {
+    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+    setHoverDate(dateStr);
+  }
+  function handleMouseLeave() {
+    hoverTimeout.current = setTimeout(() => setHoverDate(null), 150);
+  }
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
@@ -102,15 +112,18 @@ function MiniMonth({ year, month, events, categories, arrivalDays, today, onDayC
           const hasEvents = dayEvs.length > 0;
           const arrivalDay = arrivalDays.get(dateStr);
           const hasContent = hasEvents || !!arrivalDay;
+          const isHovered = hoverDate === dateStr;
 
           return (
             <div
               key={i}
+              className={`relative flex flex-col items-center py-0.5 ${hasContent ? "cursor-pointer" : ""}`}
               role={hasContent ? "button" : undefined}
               tabIndex={hasContent ? 0 : undefined}
               onClick={() => hasContent && onDayClick(dateStr)}
               onKeyDown={(e) => { if (hasContent && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onDayClick(dateStr); } }}
-              className={`flex flex-col items-center py-0.5 ${hasContent ? "cursor-pointer" : ""}`}
+              onMouseEnter={() => hasContent && handleMouseEnter(dateStr)}
+              onMouseLeave={handleMouseLeave}
             >
               <span
                 className={`flex h-6 w-6 items-center justify-center rounded-full text-xs transition-colors
@@ -144,11 +157,11 @@ function MiniMonth({ year, month, events, categories, arrivalDays, today, onDayC
                     </div>
                   )}
                   {arrivalDay && (
-                    <div className="flex items-center gap-px">
+                    <div className="flex items-center gap-0.5">
                       {arrivalDay.brands.slice(0, 3).map((b) => (
                         <span
                           key={b}
-                          className="block h-1 w-2.5 rounded-sm"
+                          className="block h-1.5 w-1.5 rounded-sm"
                           style={{ backgroundColor: getBrandColor(b), opacity: arrivalDay.hasOverdue ? 1 : 0.7 }}
                         />
                       ))}
@@ -156,10 +169,81 @@ function MiniMonth({ year, month, events, categories, arrivalDays, today, onDayC
                   )}
                 </div>
               )}
+              {/* Tooltip popover on hover */}
+              {isHovered && hasContent && (
+                <DayTooltip
+                  dateStr={dateStr}
+                  dayEvs={dayEvs}
+                  categories={categories}
+                  arrivalDay={arrivalDay}
+                  columnIndex={i % 7}
+                />
+              )}
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** Tooltip que aparece al hover sobre un día con eventos en la vista año */
+function DayTooltip({
+  dateStr,
+  dayEvs,
+  categories,
+  arrivalDay,
+  columnIndex,
+}: {
+  dateStr: string;
+  dayEvs: CalendarEvent[];
+  categories: Record<string, DbCategory>;
+  arrivalDay?: { totalUnits: number; brands: string[]; hasOverdue: boolean };
+  columnIndex: number;
+}) {
+  // Posicionar a la izquierda si estamos en las últimas columnas para no salir del viewport
+  const alignRight = columnIndex >= 5;
+  const d = new Date(dateStr + "T12:00:00");
+  const label = d.toLocaleDateString("es-PY", { weekday: "short", day: "numeric", month: "short" });
+
+  return (
+    <div
+      className={`absolute z-50 mt-1 w-52 rounded-lg border border-gray-200 bg-white p-2.5 shadow-lg dark:border-gray-700 dark:bg-gray-800 ${
+        alignRight ? "right-0" : "left-0"
+      }`}
+      style={{ top: "100%" }}
+      onMouseEnter={(e) => e.stopPropagation()}
+    >
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+        {label}
+      </p>
+      {dayEvs.length > 0 && (
+        <ul className="space-y-1">
+          {dayEvs.slice(0, 5).map((ev, j) => {
+            const color = categories[ev.extendedProps?.calendar]?.color ?? "#465fff";
+            return (
+              <li key={ev.id ?? j} className="flex items-center gap-1.5">
+                <span className="block h-2 w-2 shrink-0 rounded-sm" style={{ backgroundColor: color }} />
+                <span className="truncate text-[11px] text-gray-700 dark:text-gray-200">
+                  {ev.title}
+                </span>
+              </li>
+            );
+          })}
+          {dayEvs.length > 5 && (
+            <li className="text-[10px] text-gray-400 dark:text-gray-500">+{dayEvs.length - 5} más</li>
+          )}
+        </ul>
+      )}
+      {arrivalDay && (
+        <div className={dayEvs.length > 0 ? "mt-1.5 border-t border-gray-100 pt-1.5 dark:border-gray-700" : ""}>
+          <p className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+            <ShipIcon className="h-3 w-3" />
+            {arrivalDay.brands.join(", ")} — {arrivalDay.totalUnits.toLocaleString()} uds.
+          </p>
+        </div>
+      )}
+      <p className="mt-1.5 text-[9px] text-gray-400 dark:text-gray-500">Click para ver detalle</p>
     </div>
   );
 }
@@ -480,7 +564,7 @@ export default function CalendarPage() {
             <div className="flex justify-end">
               <div className="flex rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900">
                 <button className="rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-900 shadow-theme-xs dark:bg-gray-800 dark:text-white">
-                  Ano
+                  Año
                 </button>
                 {(["dayGridMonth", "timeGridWeek", "timeGridDay"] as const).map((v) => (
                   <button
@@ -488,7 +572,7 @@ export default function CalendarPage() {
                     onClick={() => switchToFCView(v)}
                     className="rounded-md border-0 bg-transparent px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                   >
-                    {v === "dayGridMonth" ? "Mes" : v === "timeGridWeek" ? "Semana" : "Dia"}
+                    {v === "dayGridMonth" ? "Mes" : v === "timeGridWeek" ? "Semana" : "Día"}
                   </button>
                 ))}
               </div>
@@ -504,7 +588,7 @@ export default function CalendarPage() {
                 month={m}
                 events={events}
                 categories={categories}
-                arrivalDays={arrivalDays}
+                arrivalDays={showArrivals ? arrivalDays : new Map()}
                 today={today}
                 onDayClick={(date) => switchToFCView("timeGridDay", date)}
               />
@@ -525,7 +609,7 @@ export default function CalendarPage() {
             center: "title",
             right: "yearViewButton,dayGridMonth,timeGridWeek,timeGridDay",
           }}
-          buttonText={{ today: "Hoy", month: "Mes", week: "Semana", day: "Dia" }}
+          buttonText={{ today: "Hoy", month: "Mes", week: "Semana", day: "Día" }}
           events={allFCEvents}
           selectable={true}
           editable={true}
@@ -551,7 +635,7 @@ export default function CalendarPage() {
               },
             },
             yearViewButton: {
-              text: "Ano",
+              text: "Año",
               click: enterYearView,
             },
           }}

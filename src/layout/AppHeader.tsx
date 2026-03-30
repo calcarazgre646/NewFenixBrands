@@ -42,7 +42,7 @@ const AppHeader: React.FC = () => {
     navigate("/signin");
   }
   const scrollDir = useScrollDirection();
-  const hideFilters = pathname === "/calendario" || pathname === "/usuarios" || pathname === "/ayuda";
+  const hideFilters = pathname === "/calendario" || pathname === "/usuarios" || pathname === "/comisiones" || pathname === "/ayuda";
   const hasInPageFilters = pathname === "/" || pathname === "/ventas" || pathname === "/acciones" || pathname === "/logistica" || pathname === "/depositos" || pathname.startsWith("/kpis");
 
   // Header visible when: at top, scrolling up, or mobile sidebar is open
