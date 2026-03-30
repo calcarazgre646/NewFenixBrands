@@ -11,7 +11,7 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 
 ---
 
-## Estado actual (actualizado 24/03/2026)
+## Estado actual (actualizado 30/03/2026)
 
 | Fase | Feature | Estado |
 |------|---------|--------|
@@ -24,18 +24,29 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 4 | LogisticsPage (`/logistica`) — ETAs importacion, tabla agrupada | ✅ COMPLETO + AUDITADO |
 | 5 | CalendarPage (`/calendario`) — FullCalendar + CRUD + Realtime + Llegadas logística | ✅ COMPLETO + AUDITADO |
 | 6 | UsersPage (`/usuarios`) — CRUD completo, Edge Function, cambio contraseña | ✅ COMPLETO + AUDITADO |
-| 6B | DepotsPage (`/depositos`) — Filtros estandarizados in-page | ✅ COMPLETO |
+| 6B | DepotsPage (`/depositos`) — Filtros estandarizados in-page + Novedades/Lanzamientos | ✅ COMPLETO + AUDITADO |
+| 7 | CommissionsPage (`/comisiones`) — Comisiones por vendedor, datos reales, 8 escalas | ⚠️ PARCIAL — esperando datos de Fenix |
 
 **La app corre:** `npm run dev` → http://localhost:5173
-**Tests:** 907 passing (23 suites) | TSC 0 errores | Build OK
+**Tests:** 967 passing (24 suites) | TSC 0 errores | Build OK
 **Deploy:** https://fenix-brands-one.vercel.app
 **Sesión 14/03/2026 (00:00–04:00):** Ver log detallado abajo
 **Sesión 14/03/2026 (04:00–14:00):** Ver log detallado abajo
 **Sesión 24/03/2026:** Ver log detallado abajo
+**Sesión 30/03/2026:** Ver log detallado abajo
 
 ---
 
 ## Proximo trabajo
+
+**Comisiones — Retail FUNCIONAL, Mayorista/UTP esperando datos de Fenix:**
+- Retail: 33 vendedores con comisiones reales calculadas (cumplimiento por tienda)
+- Mayorista/UTP: ventas reales conectadas pero meta individual "Pendiente" (necesita `comisiones_metas_vendedor`)
+- Cobranza Mayorista/UTP: pendiente (`c_cobrar` vacia)
+- Roles supervisor/gerencia/backoffice: pendiente mapeo explicito
+- SQL y spec completa en `docs/COMISIONES_DATA_SPEC.md`
+- Datos de cobranza en `c_cobrar` (para comision Mayorista/UTP)
+- Ver preguntas pendientes en `docs/COMISIONES_DATA_SPEC.md`
 
 **Deuda SettingsPage:** Posible contenido restante:
 - Perfil de usuario (nombre, foto, cambiar contraseña)
@@ -487,4 +498,105 @@ Reunión Torre de Control 23/03/2026. Rodrigo: "la planificación de nuevo produ
 ### Deploy
 
 - **PR #9:** https://github.com/calcarazgre646/NewFenixBrands/pull/9 (merged)
+- **Vercel:** https://fenix-brands-one.vercel.app (production)
+
+---
+
+## Sesión 30/03/2026 — Novedades en Depósito + Comisiones de Vendedores
+
+### 1. DepotsPage — Novedades / Lanzamientos (PR #10)
+
+**Objetivo:** El equipo comercial necesita ver qué productos nuevos (Wrangler, Lee) llegaron a depósito y en qué estado de distribución están.
+
+**Auditoría BD:**
+- `est_comercial = "lanzamiento"` en `mv_stock_tienda`: 8,151 filas, ~230 SKUs únicos
+- Marcas: Wrangler, Lee, Martel — exactamente las del pedido
+- Distribución derivable: cruzando presencia del SKU en STOCK/RETAILS vs tiendas dependientes
+
+**Implementación:**
+
+| Archivo | Propósito |
+|---------|-----------|
+| `domain/depots/types.ts` | +NoveltyDistributionStatus, NoveltySkuSummary, NoveltyData, isNovelty en DepotSkuRow |
+| `domain/depots/calculations.ts` | +classifyNoveltyDistribution, buildNoveltyData, isDependentStore exportado |
+| `domain/depots/__tests__/calculations.test.ts` | +18 tests (clasificación, distribución, edge cases) |
+| `features/depots/components/NoveltyBadge.tsx` | Pill violeta "Nuevo" |
+| `features/depots/components/DistributionStatusPill.tsx` | 3 estados: gris/ámbar/verde |
+| `features/depots/components/NoveltySection.tsx` | Sección completa: barra distribución + tabla paginada |
+| `features/depots/DepotsPage.tsx` | +sección NoveltySection |
+| `features/depots/components/DepotKpiCards.tsx` | +6ta card "Novedades" (grid 5→6) |
+| `features/depots/components/StoreAccordion.tsx` | +NoveltyBadge en filas SKU |
+| `features/depots/components/SkuLeadersTable.tsx` | +NoveltyBadge en filas SKU |
+
+**Lógica:**
+- Producto nuevo = `est_comercial === "lanzamiento"` (flag del ERP, 0 migraciones)
+- En depósito: solo en STOCK/RETAILS, 0 tiendas dependientes
+- En distribución: en < 80% de tiendas dependientes
+- Cargado: en >= 80% de tiendas (threshold configurable: NOVELTY_COVERAGE_THRESHOLD)
+
+**UI adicional:** Nombre de producto arriba, código SKU abajo en las 3 tablas de Depósitos.
+
+### 2. CommissionsPage — Comisiones de Vendedores
+
+**Objetivo:** Automatizar cálculo de comisiones para 3 canales (Mayorista, UTP, Retail) con 8 roles y escalas escalonadas.
+
+**Auditoría BD:**
+- `fjdhstvta1.v_vended` + `v_dsvende`: vendedor por transacción (33 retail + 4 mayorista + 1 UTP activos)
+- `fmetasucu`: metas por tienda/mes (15 tiendas × 12 meses)
+- `Budget_2026`: 2,842 filas con Revenue targets + Sales Comisions precalculadas
+- `c_cobrar`: existe con 15 columnas pero 0 filas
+- `maestro_clientes_mayoristas`: 444 clientes mapeados a 5 vendedores + UNIFORMES
+
+**2 lógicas de cálculo separadas:**
+
+| | Retail | Mayorista/UTP |
+|---|---|---|
+| Cumplimiento | Venta total TIENDA / meta TIENDA | Venta VENDEDOR / meta VENDEDOR |
+| Meta viene de | `fmetasucu` (funciona) | `comisiones_metas_vendedor` (pendiente) |
+| Cobranza | No aplica | `c_cobrar` (pendiente, vacía) |
+| Estado | **FUNCIONAL con datos reales** | **Ventas reales + "Pendiente" en meta** |
+
+**Implementación:**
+
+| Archivo | Propósito |
+|---------|-----------|
+| `domain/commissions/types.ts` | 8 roles, 3 canales, SellerGoal, CommissionResult, CommissionSummary |
+| `domain/commissions/scales.ts` | 8 escalas verificadas contra specs de Rodrigo |
+| `domain/commissions/calculations.ts` | Motor de cálculo puro: cumplimiento, tramos, % y fijo |
+| `domain/commissions/storeMapping.ts` | classifyStoreForCommission, storeGoalToSellerGoal |
+| `domain/commissions/__tests__/calculations.test.ts` | 41 tests: 8 roles, edge cases, batch, summary |
+| `queries/commissions.queries.ts` | fetchSellerSales — ventas por vendedor de fjdhstvta1 |
+| `features/commissions/CommissionsPage.tsx` | Página: KPIs, filtro mes/canal, badge "Datos reales" |
+| `features/commissions/hooks/useCommissions.ts` | Hook con 2 lógicas: Retail (tienda) + Mayorista/UTP (vendedor) |
+| `features/commissions/components/CommissionTable.tsx` | Tabla paginada, "Pendiente" para datos faltantes |
+| `features/commissions/components/ScalesReference.tsx` | 8 tablas de referencia collapsibles |
+| `domain/auth/types.ts` | +canViewCommissions |
+| `App.tsx` | +ruta /comisiones |
+| `layout/AppSidebar.tsx` | +item Comisiones en sección Control |
+| `layout/AppHeader.tsx` | Filtros ocultos en /comisiones |
+| `docs/COMISIONES_DATA_SPEC.md` | Spec completa: lógica, datos, SQL, preguntas |
+
+**Pendiente de Fenix (para completar Mayorista/UTP):**
+1. Tabla `comisiones_metas_vendedor` con metas individuales por vendedor (SQL en spec)
+2. Datos de cobranza en `c_cobrar`
+3. Rol de comisión por vendedor (supervisor, gerencia, backoffice)
+
+### 3. CalendarPage — Fixes de vista año
+
+| Fix | Detalle |
+|-----|---------|
+| "Ano" → "Año" | Corregido en botón custom FullCalendar + toolbar vista año |
+| "Dia" → "Día" | Corregido en buttonText FullCalendar + toolbar vista año |
+| Tooltip hover en vista año | Popover al pasar mouse sobre días con eventos: lista de eventos + llegadas logísticas |
+| Llegadas respetan toggle | `showArrivals` ahora controla visibilidad en vista año (antes siempre se mostraban) |
+| Indicadores de llegada más visibles | Barras de 1×2.5px → cuadrados de 1.5×1.5px |
+
+### Verificación final
+
+967 tests | 24 suites | TSC 0 errores | Build OK
+
+### Deploy
+
+- **PR #10:** https://github.com/calcarazgre646/NewFenixBrands/pull/10 (merged) — Novedades Depósito
+- **Comisiones + Calendario:** deploy directo via `vercel --prod`
 - **Vercel:** https://fenix-brands-one.vercel.app (production)

@@ -45,6 +45,7 @@ const ALL_ANALYSIS_NAV: NavItem[] = [
 ];
 
 const ALL_CONTROL_NAV: NavItem[] = [
+  { path: "/comisiones", label: "Comisiones", icon: <DollarLineIcon />, allowed: (p) => p.canViewCommissions },
   { path: "/usuarios", label: "Usuarios", icon: <GroupIcon />, allowed: (p) => p.canManageUsers },
 ];
 

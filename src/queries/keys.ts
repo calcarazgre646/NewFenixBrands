@@ -134,6 +134,13 @@ export const profileKeys = {
   detail: (userId: string) => ["profile", userId] as const,
 };
 
+// ─── Comisiones ──────────────────────────────────────────────────────────────
+export const commissionKeys = {
+  all: ["commissions"] as const,
+  storeLevel: (year: number) =>
+    ["commissions", "storeLevel", year] as const,
+};
+
 // ─── Cache durations ──────────────────────────────────────────────────────────
 // 30 min staleTime: dato cambia ~cada 6h, 30 min es conservador.
 // 60 min gcTime: mantener en memoria tras unmount.
