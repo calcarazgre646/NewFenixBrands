@@ -179,12 +179,12 @@ export function CompactActionList({ items, intent, groupMode }: Props) {
                 )}
               </td>
 
-              {/* DOI (Days of Inventory) */}
+              {/* DOI — Edad del inventario (días desde último movimiento) */}
               <td className="whitespace-nowrap px-3 py-2.5 text-center">
                 {item.daysOfInventory > 0 ? (
                   <span className={`text-[11px] font-medium tabular-nums ${
-                    item.daysOfInventory < 30 ? "text-error-600 dark:text-error-400" :
-                    item.daysOfInventory < 60 ? "text-warning-600 dark:text-warning-400" :
+                    item.daysOfInventory > 180 ? "text-error-600 dark:text-error-400" :
+                    item.daysOfInventory > 90 ? "text-warning-600 dark:text-warning-400" :
                     "text-gray-500 dark:text-gray-400"
                   }`}>
                     {item.daysOfInventory.toFixed(0)}d

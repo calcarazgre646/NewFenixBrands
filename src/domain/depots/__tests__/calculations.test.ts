@@ -8,6 +8,8 @@ import {
   computeWOI,
   monthlyToWeekly,
   classifyDepotRisk,
+  classifyNoveltyDistribution,
+  buildNoveltyData,
   buildDepotData,
 } from "../calculations";
 import type { InventoryItem } from "@/queries/inventory.queries";
@@ -248,5 +250,181 @@ describe("buildDepotData", () => {
     expect(feria).toBeDefined();
     expect(feria!.units).toBe(0);
     expect(feria!.risk).toBe("critico");
+  });
+
+  it("incluye datos de novelty en resultado", () => {
+    const items = [
+      inv({ store: "STOCK", sku: "SKU001", units: 200, estComercial: "lanzamiento" }),
+      inv({ store: "TOLAMB", sku: "SKU001", units: 50, estComercial: "lanzamiento" }),
+      inv({ store: "TOLAMB", sku: "SKU002", units: 100, estComercial: "linea" }),
+    ];
+
+    const result = buildDepotData(items, new Map());
+
+    expect(result.novelty).toBeDefined();
+    expect(result.novelty.totalSkus).toBe(1); // solo SKU001 es lanzamiento
+    expect(result.novelty.totalUnits).toBe(250);
+  });
+
+  it("marca isNovelty en DepotSkuRow", () => {
+    const items = [
+      inv({ store: "TOLAMB", sku: "SKU001", estComercial: "lanzamiento" }),
+      inv({ store: "TOLAMB", sku: "SKU002", estComercial: "linea" }),
+    ];
+
+    const result = buildDepotData(items, new Map());
+    const rows = result.stores[0].skuRows;
+
+    const noveltyRow = rows.find(r => r.sku === "SKU001");
+    const normalRow = rows.find(r => r.sku === "SKU002");
+    expect(noveltyRow?.isNovelty).toBe(true);
+    expect(normalRow?.isNovelty).toBe(false);
+  });
+});
+
+// ─── classifyNoveltyDistribution ───────────────────────────────────────────
+
+describe("classifyNoveltyDistribution", () => {
+  it("0 tiendas → en_deposito", () => {
+    expect(classifyNoveltyDistribution(0, 10)).toBe("en_deposito");
+  });
+
+  it("1 de 10 tiendas → en_distribucion", () => {
+    expect(classifyNoveltyDistribution(1, 10)).toBe("en_distribucion");
+  });
+
+  it("7 de 10 tiendas → en_distribucion (70%)", () => {
+    expect(classifyNoveltyDistribution(7, 10)).toBe("en_distribucion");
+  });
+
+  it("8 de 10 tiendas → cargado (80% exacto)", () => {
+    expect(classifyNoveltyDistribution(8, 10)).toBe("cargado");
+  });
+
+  it("10 de 10 tiendas → cargado (100%)", () => {
+    expect(classifyNoveltyDistribution(10, 10)).toBe("cargado");
+  });
+
+  it("0 tiendas totales → en_deposito", () => {
+    expect(classifyNoveltyDistribution(0, 0)).toBe("en_deposito");
+  });
+});
+
+// ─── buildNoveltyData ──────────────────────────────────────────────────────
+
+describe("buildNoveltyData", () => {
+  it("inventario vacío → totalSkus 0", () => {
+    const result = buildNoveltyData([], 10);
+    expect(result.totalSkus).toBe(0);
+    expect(result.skus).toHaveLength(0);
+    expect(result.byStatus).toEqual({ en_deposito: 0, en_distribucion: 0, cargado: 0 });
+  });
+
+  it("filtra solo items con estComercial lanzamiento", () => {
+    const items = [
+      inv({ sku: "SKU001", estComercial: "lanzamiento", store: "STOCK" }),
+      inv({ sku: "SKU002", estComercial: "linea", store: "STOCK" }),
+      inv({ sku: "SKU003", estComercial: "outlet", store: "STOCK" }),
+    ];
+    const result = buildNoveltyData(items, 10);
+    expect(result.totalSkus).toBe(1);
+    expect(result.skus[0].sku).toBe("SKU001");
+  });
+
+  it("SKU solo en STOCK → en_deposito", () => {
+    const items = [
+      inv({ sku: "SKU001", estComercial: "lanzamiento", store: "STOCK", units: 100, value: 1000000 }),
+    ];
+    const result = buildNoveltyData(items, 10);
+    expect(result.skus[0].distributionStatus).toBe("en_deposito");
+    expect(result.skus[0].stockUnits).toBe(100);
+    expect(result.skus[0].storeCount).toBe(0);
+    expect(result.skus[0].coveragePct).toBe(0);
+    expect(result.byStatus.en_deposito).toBe(1);
+  });
+
+  it("SKU en STOCK + 3 de 10 tiendas → en_distribucion", () => {
+    const items = [
+      inv({ sku: "SKU001", estComercial: "lanzamiento", store: "STOCK", units: 200 }),
+      inv({ sku: "SKU001", estComercial: "lanzamiento", store: "TOLAMB", units: 10 }),
+      inv({ sku: "SKU001", estComercial: "lanzamiento", store: "CERROALTO", units: 5 }),
+      inv({ sku: "SKU001", estComercial: "lanzamiento", store: "ESTRELLA", units: 8 }),
+    ];
+    const result = buildNoveltyData(items, 10);
+    expect(result.skus[0].distributionStatus).toBe("en_distribucion");
+    expect(result.skus[0].storeCount).toBe(3);
+    expect(result.skus[0].coveragePct).toBe(30);
+  });
+
+  it("SKU en 9 de 10 tiendas → cargado", () => {
+    const stores = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9"];
+    const items = stores.map(s =>
+      inv({ sku: "SKU001", estComercial: "lanzamiento", store: s, units: 5 })
+    );
+    const result = buildNoveltyData(items, 10);
+    expect(result.skus[0].distributionStatus).toBe("cargado");
+    expect(result.skus[0].coveragePct).toBe(90);
+    expect(result.byStatus.cargado).toBe(1);
+  });
+
+  it("agrupa por SKU (sin talle)", () => {
+    const items = [
+      inv({ sku: "SKU001", talle: "M", estComercial: "lanzamiento", store: "STOCK", units: 50 }),
+      inv({ sku: "SKU001", talle: "L", estComercial: "lanzamiento", store: "STOCK", units: 30 }),
+    ];
+    const result = buildNoveltyData(items, 10);
+    expect(result.totalSkus).toBe(1);
+    expect(result.skus[0].totalUnits).toBe(80);
+    expect(result.skus[0].stockUnits).toBe(80);
+  });
+
+  it("cuenta RETAILS y STOCK por separado", () => {
+    const items = [
+      inv({ sku: "SKU001", estComercial: "lanzamiento", store: "STOCK", units: 100 }),
+      inv({ sku: "SKU001", estComercial: "lanzamiento", store: "RETAILS", units: 50 }),
+    ];
+    const result = buildNoveltyData(items, 10);
+    expect(result.skus[0].stockUnits).toBe(100);
+    expect(result.skus[0].retailsUnits).toBe(50);
+    expect(result.skus[0].totalUnits).toBe(150);
+  });
+
+  it("excluye tiendas excluidas del conteo de distribución", () => {
+    const items = [
+      inv({ sku: "SKU001", estComercial: "lanzamiento", store: "STOCK", units: 100 }),
+      inv({ sku: "SKU001", estComercial: "lanzamiento", store: "FABRICA", units: 1 }),
+      inv({ sku: "SKU001", estComercial: "lanzamiento", store: "LAVADO", units: 1 }),
+    ];
+    const result = buildNoveltyData(items, 10);
+    // FABRICA y LAVADO son excluded → storeCount debe ser 0
+    expect(result.skus[0].storeCount).toBe(0);
+    expect(result.skus[0].distributionStatus).toBe("en_deposito");
+  });
+
+  it("ordena por status (deposito primero) y luego units desc", () => {
+    const items = [
+      inv({ sku: "SKU-A", estComercial: "lanzamiento", store: "TOLAMB", units: 10 }),
+      inv({ sku: "SKU-B", estComercial: "lanzamiento", store: "STOCK", units: 200 }),
+      inv({ sku: "SKU-C", estComercial: "lanzamiento", store: "STOCK", units: 50 }),
+    ];
+    const result = buildNoveltyData(items, 10);
+    // SKU-B y SKU-C son en_deposito, SKU-A es en_distribucion
+    expect(result.skus[0].sku).toBe("SKU-B"); // en_deposito, 200 units
+    expect(result.skus[1].sku).toBe("SKU-C"); // en_deposito, 50 units
+    expect(result.skus[2].sku).toBe("SKU-A"); // en_distribucion
+  });
+
+  it("byStatus cuenta correctamente múltiples SKUs", () => {
+    const items = [
+      inv({ sku: "SKU-A", estComercial: "lanzamiento", store: "STOCK", units: 100 }),
+      inv({ sku: "SKU-B", estComercial: "lanzamiento", store: "STOCK", units: 50 }),
+      inv({ sku: "SKU-B", estComercial: "lanzamiento", store: "TOLAMB", units: 5 }),
+    ];
+    const result = buildNoveltyData(items, 1); // 1 tienda, threshold 80%
+    // SKU-A: 0 tiendas → en_deposito
+    // SKU-B: 1 de 1 → cargado (100%)
+    expect(result.byStatus.en_deposito).toBe(1);
+    expect(result.byStatus.cargado).toBe(1);
+    expect(result.byStatus.en_distribucion).toBe(0);
   });
 });

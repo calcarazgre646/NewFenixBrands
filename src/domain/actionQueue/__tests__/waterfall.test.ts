@@ -2810,26 +2810,51 @@ describe('idealUnits, gapUnits, daysOfInventory', () => {
     expect(t1!.suggestedUnits).toBe(t1!.idealUnits)
   })
 
-  it('daysOfInventory = (currentStock / historicalAvg) * 30', () => {
+  it('daysOfInventory comes from doiAge map (inventory age)', () => {
     const sales = new Map([
       ['TIENDA1|SKU001', 10],
       ['TIENDA2|SKU001', 10],
     ])
+    const doiAge = {
+      exact: new Map([['TIENDA2|SKU001|M', 150]]),
+      byStoreSku: new Map([['TIENDA2|SKU001', 150]]),
+    }
     const result = computeActionQueue(
-      makeInput([
+      { inventory: [
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 100 }),
-      ], sales),
+      ], salesHistory: sales, doiAge },
       'b2c', null, null, null, null, 0,
     )
     const t2 = result.find(a => a.store === 'TIENDA2')
     expect(t2).toBeDefined()
-    // DOI = (100 / 10) * 30 = 300
-    expect(t2!.daysOfInventory).toBeCloseTo(300, 0)
+    expect(t2!.daysOfInventory).toBe(150)
   })
 
-  it('daysOfInventory = 0 when historicalAvg = 0', () => {
-    // No sales history → DOI = 0
+  it('daysOfInventory falls back to store+sku when talle not found', () => {
+    const sales = new Map([
+      ['TIENDA1|SKU001', 10],
+      ['TIENDA2|SKU001', 10],
+    ])
+    const doiAge = {
+      exact: new Map([['TIENDA2|SKU001|XL', 200]]),
+      byStoreSku: new Map([['TIENDA2|SKU001', 200]]),
+    }
+    const result = computeActionQueue(
+      { inventory: [
+        inv({ store: 'TIENDA1', units: 0 }),
+        inv({ store: 'TIENDA2', units: 100 }),
+      ], salesHistory: sales, doiAge },
+      'b2c', null, null, null, null, 0,
+    )
+    const t2 = result.find(a => a.store === 'TIENDA2')
+    expect(t2).toBeDefined()
+    // talle M not in exact map, falls back to store+sku → 200
+    expect(t2!.daysOfInventory).toBe(200)
+  })
+
+  it('daysOfInventory = 0 when no doiAge data', () => {
+    // No doiAge map → DOI = 0
     const result = computeActionQueue(
       makeInput([
         inv({ store: 'TIENDA1', units: 0 }),

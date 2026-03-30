@@ -39,7 +39,7 @@ export interface ActionItem {
   suggestedUnits:  number;
   idealUnits:      number;      // unidades necesarias para llegar al target (sin restricción de disponibilidad)
   gapUnits:        number;      // idealUnits - suggestedUnits = demanda insatisfecha → señal de compra
-  daysOfInventory: number;      // DOI = (currentStock / historicalAvg) × 30
+  daysOfInventory: number;      // DOI-edad = días desde último movimiento de stock a esta ubicación
   historicalAvg:   number;      // promedio mensual 6m (spec cliente)
   coverWeeks:      number;      // semanas de cobertura objetivo (12=nacional, 24=importado)
   currentMOS:      number;      // Months of Stock actual = stock / avg monthly sales
@@ -56,6 +56,7 @@ export interface ActionItem {
 export interface WaterfallInput {
   inventory:    InventoryRecord[];
   salesHistory: Map<string, number>;  // key: "store|sku" → avg units/month
+  doiAge?:      { exact: Map<string, number>; byStoreSku: Map<string, number> };
 }
 
 /** Fila de inventario que consume el algoritmo */

@@ -150,6 +150,20 @@ export function ActionGroupCard({ group, mode, channel, defaultExpanded = false,
     return avgMOS * 4.33;
   }, [group.items]);
 
+  // DOI-edad promedio del grupo (weighted by historicalAvg, como en grouping.ts)
+  const groupDOI = useMemo(() => {
+    let doiWeightedSum = 0;
+    let doiWeightTotal = 0;
+    for (const item of group.items) {
+      if (item.daysOfInventory > 0 || item.historicalAvg > 0) {
+        const w = item.historicalAvg > 0 ? item.historicalAvg : 1;
+        doiWeightedSum += item.daysOfInventory * w;
+        doiWeightTotal += w;
+      }
+    }
+    return doiWeightTotal > 0 ? doiWeightedSum / doiWeightTotal : null;
+  }, [group.items]);
+
   const handleExport = (e: React.MouseEvent | React.KeyboardEvent) => {
     e.stopPropagation();
     downloadGroupHtml({
@@ -211,6 +225,18 @@ export function ActionGroupCard({ group, mode, channel, defaultExpanded = false,
                 </span>
               );
             })()}
+            {groupDOI !== null && groupDOI > 0 && (
+              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
+                groupDOI > 180
+                  ? "bg-error-50 text-error-700 dark:bg-error-500/10 dark:text-error-400"
+                  : groupDOI > 90
+                  ? "bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-400"
+                  : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+              }`}>
+                {groupDOI.toFixed(0)}d
+                <span className="font-normal opacity-70">edad</span>
+              </span>
+            )}
           </div>
 
           {mode === "store" && group.timeRestriction && group.timeRestriction !== "—" && (

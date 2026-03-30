@@ -11,6 +11,7 @@ import { formatNumber, formatPYGCompact, formatWeeks } from "@/utils/format";
 import type { StoreNode } from "@/domain/depots/types";
 import RiskBadge from "./RiskBadge";
 import MiniTable from "./MiniTable";
+import NoveltyBadge from "./NoveltyBadge";
 
 interface Props {
   store: StoreNode;
@@ -161,11 +162,14 @@ export default function StoreAccordion({ store, defaultOpen = false }: Props) {
                         className="transition-colors hover:bg-gray-50/70 dark:hover:bg-white/[0.02]"
                       >
                         <td className="px-3 py-2">
-                          <span className="block truncate font-medium text-gray-800 dark:text-white">
-                            {row.skuComercial || row.sku}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate font-medium text-gray-800 dark:text-white">
+                              {row.description}
+                            </span>
+                            {row.isNovelty && <NoveltyBadge />}
+                          </div>
                           <span className="block truncate text-[10px] text-gray-400 dark:text-gray-500">
-                            {row.description}
+                            {row.skuComercial || row.sku}
                           </span>
                         </td>
                         <td className="hidden sm:table-cell px-3 py-2 text-gray-600 dark:text-gray-300">

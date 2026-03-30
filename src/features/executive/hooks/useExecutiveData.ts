@@ -448,22 +448,12 @@ export function useExecutiveData(): ExecutiveData {
     // Pronóstico = proyección anual vs meta anual (forward-looking)
     const forecastProgressPct = annualTarget > 0 ? (forecastYearEnd / annualTarget) * 100 : 0;
 
-    // ── 5. YoY día-a-día preciso ────────────────────────────────────────
-    // Meses cerrados: usar datos mensuales (completos, simétricos).
-    // Mes parcial: usar datos diarios con corte en el último día con datos reales CY.
-    // REGLA: CY y PY deben cubrir exactamente el mismo rango de días para ser simétricos.
+    // ── 5. YoY vs meses completos del año anterior ────────────────────
+    // Siempre comparar contra el mes COMPLETO del año anterior (sin prorrateo).
+    // Consistente con la tabla de Performance Mensual que muestra meses PY completos.
     let priorYtd = 0;
     for (const [m, neto] of monthlyPY) {
-      if (closedMonths.includes(m)) priorYtd += neto;
-    }
-    // Sumar el mes parcial día a día (ej: datos CY hasta día 7 → PY días 1-7)
-    if (correctedProrata && activeMonths.includes(correctedProrata.month)) {
-      const cutoffDay = lastDataDay ?? now.getDate();
-      for (const r of filteredDailyPY) {
-        if (r.month === correctedProrata.month && r.day <= cutoffDay) {
-          priorYtd += r.neto;
-        }
-      }
+      if (activeMonths.includes(m)) priorYtd += neto;
     }
     const yoyDelta = ytd - priorYtd;
     const yoyPct = priorYtd > 0 ? (yoyDelta / priorYtd) * 100 : 0;
@@ -476,18 +466,10 @@ export function useExecutiveData(): ExecutiveData {
     }
     const grossMarginPct = calcGrossMargin(ytd, ytdCost);
 
-    // PY GM% simétrico (mismos meses cerrados + mes parcial día a día)
+    // PY GM% — mismos meses completos (sin prorrateo, consistente con YoY)
     let priorCost = 0;
     for (const [m, cost] of monthlyPYCost) {
-      if (closedMonths.includes(m)) priorCost += cost;
-    }
-    if (correctedProrata && activeMonths.includes(correctedProrata.month)) {
-      const cutoffDay = lastDataDay ?? now.getDate();
-      for (const r of filteredDailyPY) {
-        if (r.month === correctedProrata.month && r.day <= cutoffDay) {
-          priorCost += r.costo;
-        }
-      }
+      if (activeMonths.includes(m)) priorCost += cost;
     }
     const prevGrossMarginPct = calcGrossMargin(priorYtd, priorCost);
     const grossMarginYoY = grossMarginPct - prevGrossMarginPct;

@@ -110,6 +110,12 @@ function simpleHash(arr: string[]): number {
   return h;
 }
 
+// ─── DOI Edad (días de inventario en ubicación) ─────────────────────────────
+export const doiAgeKeys = {
+  all: ["doiAge"] as const,
+  list: () => ["doiAge", "list"] as const,
+};
+
 // ─── Depósitos & Cobertura ────────────────────────────────────────────────────
 export const depotKeys = {
   all: ["depots"] as const,
