@@ -46,7 +46,7 @@ export default function SalesPage() {
     isLoading: dashLoading,
     error: dashError,
     lastDataDay,
-    calendarMonth,
+    lastDataMonth,
   } = useSalesDashboard();
 
   const {
@@ -110,7 +110,7 @@ export default function SalesPage() {
     );
   }
 
-  const { real, budget, grossMarginPct, markdownPct, budgetAttainment, growthVsLY, lastYear, globalAOV, isPartialMonth } = metrics;
+  const { real, budget, grossMarginPct, markdownPct, budgetAttainment, growthVsLY, lastYear, globalAOV } = metrics;
   const budgetDeviation = budgetAttainment - 100;
   const isBudgetPositive = budgetDeviation >= 0;
   const isGrowthPositive = growthVsLY >= 0;
@@ -145,8 +145,7 @@ export default function SalesPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <DataFreshnessTag
             lastDataDay={lastDataDay}
-            calendarMonth={calendarMonth}
-            isPartialMonth={isPartialMonth}
+            lastDataMonth={lastDataMonth}
           />
           <ExecutiveFilters />
         </div>
