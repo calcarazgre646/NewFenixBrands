@@ -310,6 +310,7 @@ export function useKpiDashboard(): UseKpiDashboardResult {
     const currRows       = filteredSales.filter((r) => activeMonths.includes(r.month));
     const currClosedRows = currRows.filter((r) => closedMonths.includes(r.month));
     const prevRows       = filteredPrevSales.filter((r) => closedMonths.includes(r.month));
+    const prevRowsAll    = filteredPrevSales.filter((r) => activeMonths.includes(r.month));
     const ticketsForMonths     = (ticketsQ.data ?? []).filter((t) => activeMonths.includes(t.month));
     const prevTicketsForMonths = (prevTicketsQ.data ?? []).filter((t) => closedMonths.includes(t.month));
     const daily          = (dailyQ.data ?? []).filter((r) => activeMonths.includes(r.month));
@@ -326,6 +327,10 @@ export function useKpiDashboard(): UseKpiDashboardResult {
 
     let prevNeto = 0, prevCogs = 0, prevBruto = 0, prevDcto = 0, prevUnitsMonthly = 0;
     for (const r of prevRows) { prevNeto += r.neto; prevCogs += r.cogs; prevBruto += r.bruto; prevDcto += r.dcto; prevUnitsMonthly += r.units; }
+
+    // Prior year para TODOS los meses activos (incluye mes en curso completo, sin prorrateo)
+    let prevNetoAll = 0;
+    for (const r of prevRowsAll) { prevNetoAll += r.neto; }
 
     // ── Tickets (filtrado en memoria por canal y tienda) ───────────────────
     const storeMap = new Map<string, string>();
@@ -379,7 +384,6 @@ export function useKpiDashboard(): UseKpiDashboardResult {
       ? filteredPrevMTD
       : null;
 
-    let cmpCurrNeto: number;
     let cmpNeto:     number;
     let cmpCogs:     number;
     let cmpBruto:    number;
@@ -387,7 +391,6 @@ export function useKpiDashboard(): UseKpiDashboardResult {
     let hasFullYoY:  boolean;
 
     if (isCurrMonthPeriod && prevCurrMo && prevCurrMo.neto > 0) {
-      cmpCurrNeto = currNeto;
       cmpNeto     = prevCurrMo.neto;
       cmpCogs     = prevCurrMo.cogs;
       cmpBruto    = prevCurrMo.bruto;
@@ -395,18 +398,12 @@ export function useKpiDashboard(): UseKpiDashboardResult {
       hasFullYoY  = true;
     } else if (isYtdCurrentYear) {
       if (prevCurrMo) {
-        // Tenemos datos day-precise del año anterior → YoY incluye mes parcial
-        cmpCurrNeto = currNeto;
         cmpNeto     = prevNeto  + prevCurrMo.neto;
         cmpCogs     = prevCogs  + prevCurrMo.cogs;
         cmpBruto    = prevBruto + prevCurrMo.bruto;
         cmpDcto     = prevDcto  + prevCurrMo.dcto;
         hasFullYoY  = cmpNeto > 0;
       } else {
-        // prevCurrMo no disponible (cargando, error, o no aplica).
-        // Fallback: comparar solo meses cerrados (simétrico: Ene+Feb vs Ene+Feb).
-        // NO mezclar currNeto (incluye mes parcial) con prevNeto (solo cerrados).
-        cmpCurrNeto = currClosedNeto;
         cmpNeto     = prevNeto;
         cmpCogs     = prevCogs;
         cmpBruto    = prevBruto;
@@ -414,7 +411,6 @@ export function useKpiDashboard(): UseKpiDashboardResult {
         hasFullYoY  = !prevCurrMoLoading && closedMonths.length > 0 && prevNeto > 0;
       }
     } else {
-      cmpCurrNeto = currClosedNeto;
       cmpNeto     = prevNeto;
       cmpCogs     = prevCogs;
       cmpBruto    = prevBruto;
@@ -427,8 +423,10 @@ export function useKpiDashboard(): UseKpiDashboardResult {
     const prevGMPct      = calcGrossMargin(cmpNeto, cmpCogs);
     const prevMarkdown   = calcMarkdownDependency(cmpDcto, cmpBruto);
 
-    const revenueYoY     = hasFullYoY ? calcYoY(cmpCurrNeto, cmpNeto) : null;
-    const lflValue       = hasClosedYoY ? calcLfL(currClosedNeto, prevNeto) : 0;
+    // Revenue YoY: misma ventana que lflValue (mes parcial vs mes completo AA)
+    const revenueYoY     = prevNetoAll > 0 ? calcYoY(currNeto, prevNetoAll) : null;
+    // YoY: mes en curso parcial vs mes completo año anterior (sin prorrateo)
+    const lflValue       = prevNetoAll > 0 ? calcLfL(currNeto, prevNetoAll) : 0;
     const grossMarginYoY = hasFullYoY ? grossMarginPct - prevGMPct : null;
     const aovYoY         = hasClosedYoY && prevTotalTickets > 0 ? calcYoY(aov, prevAov) : null;
     const markdownYoY    = hasFullYoY ? markdownDep - prevMarkdown : null;

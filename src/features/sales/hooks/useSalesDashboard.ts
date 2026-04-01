@@ -15,7 +15,6 @@ import { useMemo } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { useFilters } from "@/context/FilterContext";
 import { fetchMonthlySalesWide, fetchDailySalesWide } from "@/queries/sales.queries";
-import type { DailySalesRow } from "@/queries/sales.queries";
 import { fetchBudget } from "@/queries/budget.queries";
 import type { BudgetRow } from "@/queries/budget.queries";
 import { fetchAnnualTickets } from "@/queries/tickets.queries";
@@ -24,7 +23,7 @@ import { salesKeys, budgetKeys, storeKeys, STALE_30MIN, GC_60MIN } from "@/queri
 import { classifyStore } from "@/api/normalize";
 import { filterSalesRows } from "@/queries/filters";
 import { resolvePeriod } from "@/domain/period/resolve";
-import { currentMonthProrata, daysInMonth } from "@/domain/period/helpers";
+import { currentMonthProrata } from "@/domain/period/helpers";
 import { brandIdToCanonical } from "@/api/normalize";
 import {
   calcGrossMargin,
@@ -116,14 +115,6 @@ export function useSalesDashboard(): SalesDashboardData {
     gcTime: GC_60MIN,
   });
 
-  // Ventas diarias del año anterior (para YoY día-a-día preciso en mes parcial)
-  const dailyPYQ = useQuery({
-    queryKey: salesKeys.dailyWide(filters.year - 1),
-    queryFn: () => fetchDailySalesWide(filters.year - 1),
-    staleTime: STALE_30MIN,
-    gcTime: GC_60MIN,
-  });
-
   // Ventas diarias CY (para detectar último día con datos reales — query ya cacheada por Executive)
   const dailyCYQ = useQuery({
     queryKey: salesKeys.dailyWide(filters.year),
@@ -172,21 +163,8 @@ export function useSalesDashboard(): SalesDashboardData {
     [prevSalesQ.data, filters.brand, filters.channel, filters.store],
   );
 
-  // Filtrado local de ventas diarias PY (sin store — la vista no tiene esa dimensión)
-  const filteredDailyPY = useMemo((): DailySalesRow[] => {
-    const rows = dailyPYQ.data ?? [];
-    const canonical = filters.brand !== "total" ? brandIdToCanonical(filters.brand) : null;
-    const ch = filters.channel !== "total" ? filters.channel.toUpperCase() : null;
-    return rows.filter(r => {
-      if (canonical && r.brand !== canonical) return false;
-      if (ch && r.channel !== ch) return false;
-      return true;
-    });
-  }, [dailyPYQ.data, filters.brand, filters.channel]);
-
   // ── Último día con datos reales (usa datos WIDE, sin filtros de usuario) ──
   const calendarMonth = new Date().getMonth() + 1;
-  const year = filters.year;
   const lastDataDay = useMemo((): number | null => {
     if (!prorata) return null;
     const allDaily = dailyCYQ.data ?? [];
@@ -195,15 +173,6 @@ export function useSalesDashboard(): SalesDashboardData {
       .map((r) => r.day);
     return daysInCurrentMonth.length > 0 ? Math.max(...daysInCurrentMonth) : null;
   }, [dailyCYQ.data, prorata]);
-
-  // Prorata corregido: usa el último día con datos reales en vez del día del calendario.
-  // Evita dividir N días de ventas por un factor de M días (M > N → forecast/budget subestimado).
-  const correctedProrata = useMemo(() => {
-    if (!prorata) return null;
-    const effectiveDay = lastDataDay ?? new Date().getDate();
-    const dim = daysInMonth(year, prorata.month);
-    return { month: prorata.month, factor: effectiveDay / dim };
-  }, [prorata, lastDataDay, year]);
 
   // ── Calculo de metricas ──────────────────────────────────────────────────
   const metrics = useMemo((): SalesMetrics | null => {
@@ -214,20 +183,11 @@ export function useSalesDashboard(): SalesDashboardData {
     let real = 0, cogs = 0, bruto = 0, dcto = 0;
     for (const r of currRows) { real += r.neto; cogs += r.cogs; bruto += r.bruto; dcto += r.dcto; }
 
-    // YoY día-a-día preciso (simétrico con Executive):
-    // Meses cerrados: usar datos mensuales (completos, simétricos).
-    // Mes parcial: usar datos diarios con corte en lastDataDay (no día calendario).
+    // YoY: mes en curso parcial vs mes completo año anterior (sin prorrateo).
+    // Consistente con KPIs dashboard.
     let prevNeto = 0;
-    for (const r of filteredPY.filter((r) => closedMonths.includes(r.month))) {
+    for (const r of filteredPY.filter((r) => activeMonths.includes(r.month))) {
       prevNeto += r.neto;
-    }
-    if (correctedProrata && activeMonths.includes(correctedProrata.month)) {
-      const cutoffDay = lastDataDay ?? new Date().getDate();
-      for (const r of filteredDailyPY) {
-        if (r.month === correctedProrata.month && r.day <= cutoffDay) {
-          prevNeto += r.neto;
-        }
-      }
     }
 
     // Budget de los meses activos (sin prorrateo)
@@ -297,13 +257,13 @@ export function useSalesDashboard(): SalesDashboardData {
       globalAOV,
       isPartialMonth: isPartial,
     };
-  }, [filteredCY, filteredPY, filteredDailyPY, salesQ.isLoading, activeMonths, closedMonths,
+  }, [filteredCY, filteredPY, salesQ.isLoading, activeMonths, closedMonths,
       budgetQ.data, ticketsQ.data, storesQ.data, filters.brand, filters.channel, filters.store,
-      filters.period, isPartial, correctedProrata, lastDataDay]);
+      filters.period, isPartial]);
 
-  const isLoading = salesQ.isLoading || prevSalesQ.isLoading || budgetQ.isLoading || dailyPYQ.isLoading || dailyCYQ.isLoading || ticketsQ.isLoading || storesQ.isLoading;
+  const isLoading = salesQ.isLoading || prevSalesQ.isLoading || budgetQ.isLoading || dailyCYQ.isLoading || ticketsQ.isLoading || storesQ.isLoading;
   const error = salesQ.error?.message ?? prevSalesQ.error?.message
-    ?? budgetQ.error?.message ?? dailyPYQ.error?.message ?? dailyCYQ.error?.message ?? null;
+    ?? budgetQ.error?.message ?? dailyCYQ.error?.message ?? null;
 
   return { metrics, periodLabel, activeMonths, closedMonths, isLoading, error, lastDataDay, calendarMonth };
 }
