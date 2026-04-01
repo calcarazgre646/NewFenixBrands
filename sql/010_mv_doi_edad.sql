@@ -42,11 +42,14 @@ WITH store_map (jde_name, cosujd) AS (VALUES
   ('PTO. VTA LUQUE OUTLET', 'LUQ-OUTLET'),
   ('Paseo CERROALTO', 'CERROALTO'),
   ('MVMORRA - Martel Vmorra', 'MVMORRA'),
-  ('MARTELSSL', 'MARTELSSL'),
-  ('WRMULTIPLAZA', 'WRMULTIPLAZA'),
-  ('WRSSL', 'WRSSL'),
-  ('Martel MARTELMCAL', 'MARTELMCAL'),
-  ('MARTELLUQUE', 'MARTELLUQUE')
+  -- Fix: nombres JDE reales (verificados en movimientos_st_jde 2026-04-01)
+  ('MARTEL SHOPPING SAN LORENZO', 'MARTELSSL'),
+  ('WR SHOPPING SAN LORENZO', 'WRSSL'),
+  ('WR SHOP MULTIPLAZA', 'WRMULTIPLAZA'),
+  ('Almac. MARTELLUQUE', 'MARTELLUQUE'),
+  ('Almac. Tejidos', 'ALMTEJIDOS'),
+  ('ALMACEN DE BATAS', 'ALMACENBATAS'),
+  ('SERVICIOS', 'SERVICIOS')
 ),
 decoded AS (
   SELECT
