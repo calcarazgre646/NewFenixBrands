@@ -82,6 +82,35 @@ export function parseDDMMYYYY(val: string | null | undefined): Date | null {
 }
 
 /**
+ * Parsea fecha D-Mon-YYYY: "9-Oct-2025", "15-Mar-2026" → Date
+ * Soporta meses en español e inglés (ERP puede devolver ambos).
+ */
+const MONTH_NAMES: Record<string, number> = {
+  ene: 0, jan: 0, feb: 1, mar: 2, abr: 3, apr: 3, may: 4,
+  jun: 5, jul: 6, ago: 7, aug: 7, sep: 8, oct: 9,
+  nov: 10, dic: 11, dec: 11,
+};
+export function parseDMonYYYY(val: string | null | undefined): Date | null {
+  if (!val) return null;
+  const parts = val.trim().split("-");
+  if (parts.length !== 3) return null;
+  const d = parseInt(parts[0], 10);
+  const m = MONTH_NAMES[parts[1].toLowerCase()];
+  const y = parseInt(parts[2], 10);
+  if (isNaN(d) || m === undefined || isNaN(y) || y < 2000 || d < 1 || d > 31) return null;
+  return new Date(y, m, d);
+}
+
+/**
+ * Parsea monto formato EU/PY: "68.450,00" → 68450
+ * Punto = miles, coma = decimal. Sin símbolo de moneda.
+ */
+export function parseEUCost(val: string | null | undefined): number {
+  if (!val) return 0;
+  return parseFloat(val.trim().replace(/\./g, "").replace(",", ".")) || 0;
+}
+
+/**
  * Parsea periodo YYYYMM: "202601" → { year: 2026, month: 1 }
  */
 export function parsePeriodYYYYMM(val: string): { year: number; month: number } {

@@ -6,7 +6,7 @@
  */
 import { Card } from "@/components/ui/card/Card";
 import type { BrandPipelineDetail } from "@/domain/logistics/types";
-import { formatFob } from "./logistics.shared";
+import { formatFob, ERP_STATUS_STYLE, erpStatusLabel } from "./logistics.shared";
 
 interface Props {
   pipeline: BrandPipelineDetail[];
@@ -51,6 +51,21 @@ export function BrandPipelineCards({ pipeline }: Props) {
                 </div>
               )}
             </div>
+            {/* ERP status pills */}
+            {Object.keys(b.byErpStatus).length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {Object.entries(b.byErpStatus)
+                  .filter(([k]) => k !== "Sin estado")
+                  .map(([status, count]) => (
+                    <span
+                      key={status}
+                      className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${ERP_STATUS_STYLE[status] ?? "bg-gray-100 text-gray-500"}`}
+                    >
+                      {count} {erpStatusLabel(status)}
+                    </span>
+                  ))}
+              </div>
+            )}
             {/* Share bar */}
             <div className="mt-2.5">
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">

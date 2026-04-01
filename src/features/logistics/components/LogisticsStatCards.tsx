@@ -38,8 +38,12 @@ export function LogisticsStatCards({ summary }: Props) {
         sub={summary.nextDaysUntil < 999 ? `en ${summary.nextDaysUntil}d` : undefined}
       />
       <StatCard
-        label="Marcas activas"
-        value={String(summary.activeBrands)}
+        label="Pipeline"
+        value={[
+          summary.byErpStatus["PEDIDO"] ? `${summary.byErpStatus["PEDIDO"]} ped` : null,
+          summary.byErpStatus["EN TRANSITO"] ? `${summary.byErpStatus["EN TRANSITO"]} trán` : null,
+          summary.byErpStatus["EN STOCK"] ? `${summary.byErpStatus["EN STOCK"]} stk` : null,
+        ].filter(Boolean).join(" · ") || "—"}
       />
     </div>
   );

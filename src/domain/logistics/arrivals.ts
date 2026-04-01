@@ -7,9 +7,8 @@
  * HISTORIAL:
  *   - 08/03/2026: Implementación inicial (4 statuses: past, this_month, next_month, upcoming)
  *   - 10/03/2026: Agregado status "overdue" para ETAs vencidas dentro del mes actual.
- *     Bug: ETAs del 5/Mar mostraban "Este Mes" el 10/Mar — sin señal de atraso.
- *     Fix: nueva clasificación "overdue" con label "Atrasado · Xd".
- *     También: unificado `today` como parámetro para pureza y testabilidad.
+ *   - 01/04/2026: Migración a productos_importacion. Agregado erpStatus, purchaseOrder,
+ *     filtrado de ANULADO, byErpStatus en summary/pipeline, grouping key con OC.
  */
 import type { LogisticsImport } from "@/queries/logistics.queries";
 import type {
@@ -39,7 +38,7 @@ function getDaysUntil(date: Date | null, today: Date): number {
 }
 
 /**
- * Clasifica estado del arribo.
+ * Clasifica estado del arribo por fecha.
  *
  * - past:       ETA en un mes anterior al actual
  * - overdue:    ETA en el mes actual pero la fecha ya pasó (atrasado)
@@ -79,7 +78,11 @@ export function toArrivals(rows: LogisticsImport[], now?: Date): LogisticsArriva
   return rows
     .filter(r => {
       const m = r.brand.toLowerCase();
-      return KNOWN_BRANDS.has(m) && (r.eta || r.etaLabel);
+      if (!KNOWN_BRANDS.has(m)) return false;
+      if (!(r.eta || r.etaLabel)) return false;
+      // Excluir pedidos cancelados
+      if (r.erpStatus === "ANULADO") return false;
+      return true;
     })
     .map(r => {
       const status    = getArrivalStatus(r.eta, today);
@@ -87,7 +90,6 @@ export function toArrivals(rows: LogisticsImport[], now?: Date): LogisticsArriva
       const dateLabel = r.eta
         ? r.eta.toLocaleDateString("es-PY", { day: "2-digit", month: "short", year: "numeric" })
         : r.etaLabel || "—";
-      // Usar fecha ISO para grouping key — evita inconsistencias de formato en BD
       const etaKey = r.eta ? r.eta.toISOString().split("T")[0] : r.etaLabel;
       return {
         ...r,
@@ -106,15 +108,29 @@ export function toArrivals(rows: LogisticsImport[], now?: Date): LogisticsArriva
     });
 }
 
-// ─── Grouping by (brand + supplier + ETA) ────────────────────────────────────
+// ─── Grouping by (brand + OC/supplier + ETA) ────────────────────────────────
+
+/** ERP status priority: EN STOCK > EN TRANSITO > PEDIDO > null */
+const ERP_PRIORITY: Record<string, number> = {
+  "EN STOCK": 3, "EN TRANSITO": 2, "PEDIDO": 1,
+};
+
+function deriveGroupErpStatus(rows: LogisticsArrival[]) {
+  let best: LogisticsArrival["erpStatus"] = null;
+  let bestPri = -1;
+  for (const r of rows) {
+    const pri = r.erpStatus ? (ERP_PRIORITY[r.erpStatus] ?? 0) : -1;
+    if (pri > bestPri) { best = r.erpStatus; bestPri = pri; }
+  }
+  return best;
+}
 
 export function groupArrivals(arrivals: LogisticsArrival[]): LogisticsGroup[] {
   const map = new Map<string, LogisticsArrival[]>();
 
   for (const a of arrivals) {
-    // Usar etaKey (fecha ISO o label crudo) en vez de etaLabel crudo
-    // para evitar que "3/5/2026" y "03/05/2026" generen grupos distintos
-    const k = [a.brandNorm, a.supplier, a.etaKey].join("|||");
+    // OC es más específico que proveedor — usar como grouping key cuando existe
+    const k = [a.brandNorm, a.purchaseOrder || a.supplier, a.etaKey].join("|||");
     const bucket = map.get(k) ?? [];
     bucket.push(a);
     map.set(k, bucket);
@@ -123,17 +139,19 @@ export function groupArrivals(arrivals: LogisticsArrival[]): LogisticsGroup[] {
   return [...map.values()].map(rows => {
     const f = rows[0];
     return {
-      key:        [f.brandNorm, f.supplier, f.etaKey].join("|||"),
+      key:           [f.brandNorm, f.purchaseOrder || f.supplier, f.etaKey].join("|||"),
       rows,
-      totalUnits: rows.reduce((s, r) => s + r.quantity, 0),
-      brand:      f.brand,
-      supplier:   f.supplier,
-      origin:     f.origin,
-      categories: [...new Set(rows.map(r => r.category).filter(Boolean))],
-      status:     f.status,
-      daysUntil:  f.daysUntil,
-      dateLabel:  f.dateLabel,
-      brandNorm:  f.brandNorm,
+      totalUnits:    rows.reduce((s, r) => s + r.quantity, 0),
+      brand:         f.brand,
+      supplier:      f.supplier,
+      origin:        f.origin,
+      categories:    [...new Set(rows.map(r => r.category).filter(Boolean))],
+      status:        f.status,
+      daysUntil:     f.daysUntil,
+      dateLabel:     f.dateLabel,
+      brandNorm:     f.brandNorm,
+      erpStatus:     deriveGroupErpStatus(rows),
+      purchaseOrder: f.purchaseOrder,
     };
   });
 }
@@ -144,19 +162,21 @@ export function computeSummary(
   groups: LogisticsGroup[],
   arrivals: LogisticsArrival[],
 ): LogisticsSummary {
-  // "overdue" counts as active — it's not past, it's urgently late
   const activeGroups = groups.filter(g => g.status !== "past");
   const active       = arrivals.filter(a => a.status !== "past");
   const next         = active.find(a => a.eta != null && a.status !== "overdue");
 
   const overdueCount = arrivals.filter(a => a.status === "overdue").length;
 
-  const byBrand:  Record<string, number> = {};
-  const byOrigin: Record<string, number> = {};
+  const byBrand:     Record<string, number> = {};
+  const byOrigin:    Record<string, number> = {};
+  const byErpStatus: Record<string, number> = {};
   for (const a of active) {
     byBrand[a.brand]              = (byBrand[a.brand]  ?? 0) + a.quantity;
     const origin = a.origin || "Sin dato";
     byOrigin[origin]              = (byOrigin[origin]   ?? 0) + a.quantity;
+    const erp = a.erpStatus || "Sin estado";
+    byErpStatus[erp]              = (byErpStatus[erp]   ?? 0) + 1;
   }
 
   const brands = new Set(active.map(a => a.brandNorm));
@@ -171,6 +191,7 @@ export function computeSummary(
     nextDaysUntil: next ? next.daysUntil : 999,
     totalFobUSD:   active.reduce((s, a) => s + a.costUSD, 0),
     activeBrands:  brands.size,
+    byErpStatus,
   };
 }
 
@@ -193,11 +214,17 @@ export function computeBrandPipeline(
     .map(([brandNorm, rows]) => {
       const totalUnits = rows.reduce((s, r) => s + r.quantity, 0);
       const fobUSD     = rows.reduce((s, r) => s + r.costUSD, 0);
-      const orders     = new Set(rows.map(r => [r.brandNorm, r.supplier, r.etaKey].join("|||")));
+      const orders     = new Set(rows.map(r => [r.brandNorm, r.purchaseOrder || r.supplier, r.etaKey].join("|||")));
       const nonOverdue = rows
         .filter(r => r.status !== "overdue" && r.eta != null)
         .sort((a, b) => a.eta!.getTime() - b.eta!.getTime());
       const next = nonOverdue[0] ?? null;
+
+      const byErpStatus: Record<string, number> = {};
+      for (const r of rows) {
+        const erp = r.erpStatus || "Sin estado";
+        byErpStatus[erp] = (byErpStatus[erp] ?? 0) + 1;
+      }
 
       return {
         brand:        rows[0].brand,
@@ -208,6 +235,7 @@ export function computeBrandPipeline(
         nextEta:      next ? next.dateLabel : null,
         nextDaysUntil: next ? next.daysUntil : 999,
         sharePct:     totalUnitsAll > 0 ? Math.round((totalUnits / totalUnitsAll) * 100) : 0,
+        byErpStatus,
       };
     })
     .sort((a, b) => b.totalUnits - a.totalUnits);

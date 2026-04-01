@@ -12,21 +12,21 @@ import { Badge } from "@/components/ui/badge/Badge";
 import { Card } from "@/components/ui/card/Card";
 import { statusLabel } from "@/domain/logistics/arrivals";
 import type { LogisticsArrival, LogisticsGroup, StatusSection } from "@/domain/logistics/types";
-import { STATUS_STYLE, STATUS_ACCENT, pvpRange, marginRange, ChevronIcon } from "./logistics.shared";
+import { STATUS_STYLE, STATUS_ACCENT, ERP_STATUS_STYLE, erpStatusLabel, pvpRange, marginRange, ChevronIcon } from "./logistics.shared";
 
 // ─── Column definitions with responsive visibility ──────────────────────────
 
 const COLS: { label: string; className?: string }[] = [
   { label: "" },
-  { label: "ETA" },
-  { label: "Estado" },
   { label: "Marca" },
   { label: "Proveedor" },
-  { label: "Categorias", className: "hidden sm:table-cell" },
-  { label: "Origen", className: "hidden lg:table-cell" },
+  { label: "Estado" },
   { label: "Unidades" },
-  { label: "PVP B2C", className: "hidden md:table-cell" },
-  { label: "Margen", className: "hidden md:table-cell" },
+  { label: "ETA" },
+  { label: "Categorias" },
+  { label: "Origen" },
+  { label: "PVP B2C" },
+  { label: "Margen" },
 ];
 
 // ─── Props ──────────────────────────────────────────────────────────────────
@@ -45,50 +45,53 @@ interface TableProps {
 function ChildRow({ row }: { row: LogisticsArrival }) {
   return (
     <tr className="bg-gray-50/60 transition-colors hover:bg-gray-50 dark:bg-white/[0.01] dark:hover:bg-white/[0.03]">
+      {/* 1. Chevron spacer */}
       <td className="px-2 py-2" />
+      {/* 2-3. Descripción + Color (spans Marca + Proveedor cols) */}
       <td colSpan={2} className="px-2 py-2">
         <p className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate max-w-[200px]">
           {row.description || "Sin descripcion"}
         </p>
-        {row.season && (
-          <p className="mt-0.5 text-[10px] text-gray-400 dark:text-gray-500">
-            Temp. {row.season}
-          </p>
-        )}
+        <div className="mt-0.5 flex items-center gap-2">
+          {row.season && (
+            <span className="text-[10px] text-gray-400 dark:text-gray-500">
+              Temp. {row.season}
+            </span>
+          )}
+          {row.color && (
+            <span className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+              <span className="inline-block h-2 w-2 shrink-0 rounded-full border border-gray-300 bg-gray-200 dark:border-gray-600 dark:bg-gray-600" />
+              {row.color}
+            </span>
+          )}
+        </div>
       </td>
-      <td className="px-2 py-2">
-        {row.color ? (
-          <span className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
-            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-gray-300 bg-gray-200 dark:border-gray-600 dark:bg-gray-600" />
-            <span className="truncate max-w-[60px]">{row.color}</span>
-          </span>
-        ) : (
-          <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
-        )}
-      </td>
+      {/* 4. Estado spacer */}
       <td className="px-2 py-2" />
-      {/* Categorias — hidden on mobile */}
-      <td className="hidden sm:table-cell px-2 py-2">
+      {/* 5. Unidades */}
+      <td className="px-2 py-2">
+        <span className="text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
+          {row.quantity.toLocaleString("es-PY")}
+        </span>
+      </td>
+      {/* 6. ETA spacer */}
+      <td className="px-2 py-2" />
+      {/* 7. Categoria */}
+      <td className="px-2 py-2">
         {row.category ? (
           <Badge text={row.category} className="bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400" />
         ) : (
           <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
         )}
       </td>
-      {/* Origen — hidden on mobile+tablet */}
-      <td className="hidden lg:table-cell px-2 py-2" />
-      {/* Unidades */}
-      <td className="px-2 py-2">
-        <span className="text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
-          {row.quantity.toLocaleString("es-PY")}
-        </span>
-      </td>
-      {/* PVP B2C — hidden on mobile */}
-      <td className="hidden md:table-cell whitespace-nowrap px-2 py-2 text-xs tabular-nums text-gray-600 dark:text-gray-400">
+      {/* 8. Origen spacer */}
+      <td className="px-2 py-2" />
+      {/* 9. PVP B2C */}
+      <td className="whitespace-nowrap px-2 py-2 text-xs tabular-nums text-gray-600 dark:text-gray-400">
         {row.pvpB2C > 0 ? row.pvpB2C.toLocaleString("es-PY") : "—"}
       </td>
-      {/* Margen — hidden on mobile */}
-      <td className="hidden md:table-cell px-2 py-2">
+      {/* 10. Margen */}
+      <td className="px-2 py-2">
         {row.marginB2C > 0 ? (
           <span className="text-xs font-semibold text-success-600 dark:text-success-400">{row.marginB2C}%</span>
         ) : (
@@ -124,33 +127,65 @@ function GroupRow({
           group.status === "past" ? "opacity-50" : ""
         } ${group.status === "overdue" ? "bg-error-50/30 dark:bg-error-500/[0.03]" : ""}`}
       >
-        {/* Expand chevron */}
+        {/* 1. Expand chevron */}
         <td className="w-8 px-2 py-2.5">
           <ChevronIcon open={isExpanded} />
         </td>
-        {/* ETA */}
+        {/* 2. Marca */}
+        <td className="whitespace-nowrap px-2 py-2.5 text-xs font-bold text-gray-700 dark:text-gray-300">
+          {group.brand}
+        </td>
+        {/* 3. OC + Proveedor */}
+        <td className="px-2 py-2.5">
+          {group.purchaseOrder ? (
+            <>
+              <span className="text-xs font-bold font-mono text-gray-800 dark:text-gray-200">
+                OC {group.purchaseOrder}
+              </span>
+              <span className="block truncate max-w-[120px] text-[10px] text-gray-400 dark:text-gray-500">
+                {group.supplier}
+              </span>
+            </>
+          ) : (
+            <span className="truncate block max-w-[120px] text-xs font-semibold text-gray-600 dark:text-gray-300">
+              {group.supplier || "—"}
+            </span>
+          )}
+        </td>
+        {/* 4. Estado (date + ERP pipeline) */}
+        <td className="px-2 py-2.5">
+          <div className="flex flex-wrap items-center gap-1">
+            <Badge
+              text={statusLabel(group.status, group.daysUntil)}
+              className={STATUS_STYLE[group.status]}
+            />
+            {group.erpStatus && (
+              <Badge
+                text={erpStatusLabel(group.erpStatus)}
+                className={ERP_STATUS_STYLE[group.erpStatus] ?? "bg-gray-100 text-gray-500"}
+              />
+            )}
+          </div>
+        </td>
+        {/* 5. Unidades */}
+        <td className="px-2 py-2.5">
+          <span className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">
+            {group.totalUnits.toLocaleString("es-PY")}
+          </span>
+          {group.rows.length > 1 && (
+            <span className="ml-1 text-[10px] text-gray-400 dark:text-gray-500">
+              ({group.rows.length})
+            </span>
+          )}
+        </td>
+        {/* 6. ETA */}
         <td className="whitespace-nowrap px-2 py-2.5">
           <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">
             {group.dateLabel}
           </span>
         </td>
-        {/* Estado */}
+        {/* 7. Categorias */}
         <td className="px-2 py-2.5">
-          <Badge
-            text={statusLabel(group.status, group.daysUntil)}
-            className={STATUS_STYLE[group.status]}
-          />
-        </td>
-        {/* Marca */}
-        <td className="whitespace-nowrap px-2 py-2.5 text-xs font-bold text-gray-700 dark:text-gray-300">
-          {group.brand}
-        </td>
-        {/* Proveedor */}
-        <td className="px-2 py-2.5 text-xs font-semibold text-gray-600 dark:text-gray-300">
-          <span className="truncate block max-w-[100px]">{group.supplier || "—"}</span>
-        </td>
-        {/* Categorias — hidden on mobile */}
-        <td className="hidden sm:table-cell px-2 py-2.5">
           <div className="flex flex-wrap gap-1">
             {group.categories.slice(0, 2).map(c => (
               <Badge
@@ -166,27 +201,16 @@ function GroupRow({
             )}
           </div>
         </td>
-        {/* Origen — hidden on mobile+tablet */}
-        <td className="hidden lg:table-cell whitespace-nowrap px-2 py-2.5 text-xs text-gray-500 dark:text-gray-400">
+        {/* 8. Origen */}
+        <td className="whitespace-nowrap px-2 py-2.5 text-xs text-gray-500 dark:text-gray-400">
           {group.origin || "—"}
         </td>
-        {/* Unidades */}
-        <td className="px-2 py-2.5">
-          <span className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">
-            {group.totalUnits.toLocaleString("es-PY")}
-          </span>
-          {group.rows.length > 1 && (
-            <span className="ml-1 text-[10px] text-gray-400 dark:text-gray-500">
-              ({group.rows.length})
-            </span>
-          )}
-        </td>
-        {/* PVP B2C — hidden on mobile */}
-        <td className="hidden md:table-cell whitespace-nowrap px-2 py-2.5 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
+        {/* 9. PVP B2C */}
+        <td className="whitespace-nowrap px-2 py-2.5 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
           {pvpRange(group.rows)}
         </td>
-        {/* Margen — hidden on mobile */}
-        <td className="hidden md:table-cell px-2 py-2.5">
+        {/* 10. Margen */}
+        <td className="px-2 py-2.5">
           {margin.value > 0 ? (
             <span className="text-xs font-semibold text-success-600 dark:text-success-400">{margin.label}</span>
           ) : (
@@ -261,7 +285,8 @@ export function LogisticsTable({
         </div>
       )}
 
-      <table className="w-full table-fixed text-left text-xs">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[900px] text-left text-xs">
         <thead>
           <tr className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
             {COLS.map((col, i) => (
@@ -296,6 +321,7 @@ export function LogisticsTable({
           )}
         </tbody>
       </table>
+      </div>
     </Card>
   );
 }

@@ -27,6 +27,7 @@ function makeImport(overrides: Partial<LogisticsImport> = {}): LogisticsImport {
     description: "Remera test", color: null, quantity: 100, origin: "China",
     costUSD: 10, pvpB2C: 30, pvpB2B: 25, marginB2C: 65, marginB2B: 50,
     eta: new Date(2026, 2, 15), etaLabel: "03/15/2026",
+    erpStatus: null, purchaseOrder: null, launchDate: null,
     ...overrides,
   };
 }
@@ -220,6 +221,8 @@ describe("arrivalsByDay", () => {
       dateLabel: "15 mar 2026",
       origin: "China",
       costUSD: 10,
+      erpStatus: null,
+      purchaseOrder: null,
       ...overrides,
     };
   }

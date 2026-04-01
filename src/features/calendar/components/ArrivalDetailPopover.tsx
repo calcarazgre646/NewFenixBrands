@@ -9,7 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import type { ArrivalCalendarItem } from "@/domain/logistics/calendar";
 import { getBrandColor, getStatusColor } from "@/domain/logistics/calendar";
 import { statusLabel } from "@/domain/logistics/arrivals";
-import { formatFob } from "@/features/logistics/components/logistics.shared";
+import { formatFob, ERP_STATUS_STYLE, erpStatusLabel } from "@/features/logistics/components/logistics.shared";
 
 interface ArrivalDetailPopoverProps {
   item: ArrivalCalendarItem;
@@ -60,6 +60,11 @@ export function ArrivalDetailPopover({
             />
             {label}
           </span>
+          {item.erpStatus && (
+            <span className={`ml-1.5 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${ERP_STATUS_STYLE[item.erpStatus] ?? ""}`}>
+              {erpStatusLabel(item.erpStatus)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -69,6 +74,7 @@ export function ArrivalDetailPopover({
         <DataCell label="Unidades" value={item.totalUnits.toLocaleString("es-PY")} />
         <DataCell label="Origen" value={item.origin || "Sin dato"} />
         <DataCell label="FOB" value={formatFob(item.costUSD)} />
+        {item.purchaseOrder && <DataCell label="OC" value={item.purchaseOrder} />}
       </div>
 
       {/* Categorías */}
