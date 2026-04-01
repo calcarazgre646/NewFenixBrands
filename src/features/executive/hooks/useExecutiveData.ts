@@ -96,8 +96,10 @@ export interface ExecutiveData {
   /** true mientras la query de inventario (GMROI/Rotación) está cargando. */
   isInventoryLoading: boolean;
   error: string | null;
-  /** Último día con datos reales en el mes actual (null si no aplica). */
+  /** Último día con datos reales (null si no aplica). */
   lastDataDay: number | null;
+  /** Mes del último dato real (1-12, null si no aplica). */
+  lastDataMonth: number | null;
   /** Re-filter cached wide data for a specific brand/channel view (instant, no API call). */
   getRowsForView: (brand: string, channel: string) => MonthlyRow[];
 }
@@ -296,26 +298,38 @@ export function useExecutiveData(): ExecutiveData {
     });
   }, [dailyPYQ.data, filters.brand, filters.channel]);
 
-  // ── Detectar último día con datos reales en el mes actual ─────────────
-  // Usa datos WIDE (sin filtros de usuario) para que el día no varíe por marca/canal.
-  const lastDataDay = useMemo((): number | null => {
-    if (!prorata) return null; // no es el año actual → no aplica
+  // ── Detectar último día con datos reales en el año ──────────────────
+  // Busca el dato más reciente de CUALQUIER mes del año actual (no solo calMonth).
+  // Así el indicador "Datos hasta…" se muestra incluso si el mes calendario
+  // aún no tiene datos (ej: 1 de abril, datos hasta 28 de marzo).
+  const { lastDataDay, lastDataMonth } = useMemo(() => {
+    if (!prorata) return { lastDataDay: null, lastDataMonth: null }; // no es el año actual
     const allDaily = dailyCYQ.data ?? [];
-    const daysInCurrentMonth = allDaily
-      .filter(r => r.month === calMonth)
-      .map(r => r.day);
-    if (daysInCurrentMonth.length === 0) return null; // sin datos diarios aún
-    return Math.max(...daysInCurrentMonth);
-  }, [dailyCYQ.data, calMonth, prorata]);
+    if (allDaily.length === 0) return { lastDataDay: null, lastDataMonth: null };
+    // Encontrar el registro más reciente por (month, day)
+    let maxMonth = 0;
+    let maxDay = 0;
+    for (const r of allDaily) {
+      if (r.month > maxMonth || (r.month === maxMonth && r.day > maxDay)) {
+        maxMonth = r.month;
+        maxDay = r.day;
+      }
+    }
+    return { lastDataDay: maxDay || null, lastDataMonth: maxMonth || null };
+  }, [dailyCYQ.data, prorata]);
 
   // Prorata corregido: usa el último día con datos reales en vez del día del calendario.
   // Evita dividir N días de ventas por un factor de M días (M > N → forecast subestimado).
+  // Si el mes con datos más recientes coincide con prorata.month, usamos ese día;
+  // si no (ej: prorata=abril pero datos hasta marzo), usamos el día calendario.
   const correctedProrata = useMemo(() => {
     if (!prorata) return null;
-    const effectiveDay = lastDataDay ?? new Date().getDate();
+    const effectiveDay = (lastDataMonth === prorata.month && lastDataDay != null)
+      ? lastDataDay
+      : new Date().getDate();
     const dim = daysInMonth(year, prorata.month);
     return { month: prorata.month, factor: effectiveDay / dim };
-  }, [prorata, lastDataDay, year]);
+  }, [prorata, lastDataDay, lastDataMonth, year]);
 
   // ── Agregación por mes ─────────────────────────────────────────────────
   const monthlyReal   = useMemo(() => aggregateByMonth(filteredSales), [filteredSales]);
@@ -412,8 +426,8 @@ export function useExecutiveData(): ExecutiveData {
 
     // Usar el último día con datos reales (no el calendario) para calcular días transcurridos.
     // Evita dividir N días de ventas por un denominador de M días (M > N → forecast subestimado).
-    const effectiveDate = lastDataDay != null && isCurrentYear
-      ? new Date(year, calMonth - 1, lastDataDay)
+    const effectiveDate = lastDataDay != null && lastDataMonth != null && isCurrentYear
+      ? new Date(year, lastDataMonth - 1, lastDataDay)
       : now;
     const daysElapsed = dayOfYear(effectiveDate);
     const daysRemaining = Math.max(0, daysInYear - daysElapsed);
@@ -675,6 +689,7 @@ export function useExecutiveData(): ExecutiveData {
     isInventoryLoading,
     error,
     lastDataDay,
+    lastDataMonth,
     getRowsForView,
   };
 }

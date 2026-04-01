@@ -56,10 +56,10 @@ export interface SalesDashboardData {
   closedMonths: number[];
   isLoading: boolean;
   error: string | null;
-  /** Último día con datos reales en el mes actual (null si no aplica). */
+  /** Último día con datos reales (null si no aplica). */
   lastDataDay: number | null;
-  /** Mes calendario actual (1-12). */
-  calendarMonth: number;
+  /** Mes del último dato real (1-12, null si no aplica). */
+  lastDataMonth: number | null;
 }
 
 // ─── Helpers de filtrado local ───────────────────────────────────────────────
@@ -164,14 +164,20 @@ export function useSalesDashboard(): SalesDashboardData {
   );
 
   // ── Último día con datos reales (usa datos WIDE, sin filtros de usuario) ──
-  const calendarMonth = new Date().getMonth() + 1;
-  const lastDataDay = useMemo((): number | null => {
-    if (!prorata) return null;
+  // Busca el dato más reciente de cualquier mes del año actual.
+  const { lastDataDay, lastDataMonth } = useMemo(() => {
+    if (!prorata) return { lastDataDay: null, lastDataMonth: null };
     const allDaily = dailyCYQ.data ?? [];
-    const daysInCurrentMonth = allDaily
-      .filter((r) => r.month === prorata.month)
-      .map((r) => r.day);
-    return daysInCurrentMonth.length > 0 ? Math.max(...daysInCurrentMonth) : null;
+    if (allDaily.length === 0) return { lastDataDay: null, lastDataMonth: null };
+    let maxMonth = 0;
+    let maxDay = 0;
+    for (const r of allDaily) {
+      if (r.month > maxMonth || (r.month === maxMonth && r.day > maxDay)) {
+        maxMonth = r.month;
+        maxDay = r.day;
+      }
+    }
+    return { lastDataDay: maxDay || null, lastDataMonth: maxMonth || null };
   }, [dailyCYQ.data, prorata]);
 
   // ── Calculo de metricas ──────────────────────────────────────────────────
@@ -265,5 +271,5 @@ export function useSalesDashboard(): SalesDashboardData {
   const error = salesQ.error?.message ?? prevSalesQ.error?.message
     ?? budgetQ.error?.message ?? dailyCYQ.error?.message ?? null;
 
-  return { metrics, periodLabel, activeMonths, closedMonths, isLoading, error, lastDataDay, calendarMonth };
+  return { metrics, periodLabel, activeMonths, closedMonths, isLoading, error, lastDataDay, lastDataMonth };
 }

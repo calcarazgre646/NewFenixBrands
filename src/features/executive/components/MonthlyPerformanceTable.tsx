@@ -81,11 +81,10 @@ interface MonthlyPerformanceTableProps {
   rows: MonthlyRow[];
   highlightMonth?: number | null;
   lastDataDay?: number | null;
-  calendarMonth?: number;
-  isPartialMonth?: boolean;
+  lastDataMonth?: number | null;
 }
 
-export function MonthlyPerformanceTable({ rows, highlightMonth, lastDataDay, calendarMonth, isPartialMonth }: MonthlyPerformanceTableProps) {
+export function MonthlyPerformanceTable({ rows, highlightMonth, lastDataDay, lastDataMonth }: MonthlyPerformanceTableProps) {
   const [mobileTab, setMobileTab] = useState<MobileTab>("ventas");
 
   const totals = useMemo(() => {
@@ -249,9 +248,9 @@ export function MonthlyPerformanceTable({ rows, highlightMonth, lastDataDay, cal
         <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
           Performance mensual
         </span>
-        {isPartialMonth && lastDataDay != null && calendarMonth != null && (
+        {lastDataDay != null && lastDataMonth != null && (
           <span className="text-[10px] sm:text-[11px] text-gray-400 dark:text-gray-500">
-            Datos hasta {lastDataDay} {MONTH_SHORT[calendarMonth]}
+            Datos hasta {lastDataDay} {MONTH_SHORT[lastDataMonth]}
           </span>
         )}
       </div>

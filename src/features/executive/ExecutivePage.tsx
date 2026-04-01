@@ -227,6 +227,7 @@ export default function ExecutivePage() {
     isInventoryLoading,
     error,
     lastDataDay,
+    lastDataMonth,
   } = useExecutiveData();
 
   // Series del chart principal — cambia según período
@@ -349,8 +350,7 @@ export default function ExecutivePage() {
         <div className="hidden lg:flex lg:flex-wrap lg:items-center lg:justify-between lg:gap-3">
           <DataFreshnessTag
             lastDataDay={lastDataDay}
-            calendarMonth={calendarMonth}
-            isPartialMonth={isPartialMonth}
+            lastDataMonth={lastDataMonth}
           />
           <ExecutiveFilters />
         </div>
@@ -359,8 +359,7 @@ export default function ExecutivePage() {
           <div className="text-center">
             <DataFreshnessTag
               lastDataDay={lastDataDay}
-              calendarMonth={calendarMonth}
-              isPartialMonth={isPartialMonth}
+              lastDataMonth={lastDataMonth}
             />
           </div>
           <ExecutiveFilters />
@@ -611,7 +610,7 @@ export default function ExecutivePage() {
 
       {/* Tabla de performance mensual — full width */}
       {monthlyRows.length > 0 && (
-        <MonthlyPerformanceTable rows={monthlyRows} highlightMonth={isMonthView ? viewMonth : null} lastDataDay={lastDataDay} calendarMonth={calendarMonth} isPartialMonth={isPartialMonth} />
+        <MonthlyPerformanceTable rows={monthlyRows} highlightMonth={isMonthView ? viewMonth : null} lastDataDay={lastDataDay} lastDataMonth={lastDataMonth} />
       )}
 
     </div>
