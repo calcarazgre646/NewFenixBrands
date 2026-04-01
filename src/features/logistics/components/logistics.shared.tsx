@@ -24,6 +24,25 @@ export const STATUS_ACCENT: Record<ArrivalStatus, string> = {
   upcoming:   "border-l-success-400",
 };
 
+// ─── ERP Status (pipeline) styles ────────────────────────────────────────────
+
+export const ERP_STATUS_STYLE: Record<string, string> = {
+  "PEDIDO":       "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  "EN TRANSITO":  "bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400",
+  "EN STOCK":     "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+};
+
+export const ERP_STATUS_LABEL: Record<string, string> = {
+  "PEDIDO":       "Pedido",
+  "EN TRANSITO":  "En Tránsito",
+  "EN STOCK":     "En Stock",
+};
+
+export function erpStatusLabel(status: string | null): string {
+  if (!status) return "—";
+  return ERP_STATUS_LABEL[status] ?? status;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 export function pvpRange(rows: LogisticsArrival[]): string {

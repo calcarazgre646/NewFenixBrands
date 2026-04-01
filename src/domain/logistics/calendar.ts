@@ -7,7 +7,7 @@
  * REGLA: estos items NO son eventos del calendario (no CRUD).
  * Son una vista de lectura de las ETAs de importación.
  */
-import type { ArrivalStatus, LogisticsGroup } from "./types";
+import type { ArrivalStatus, ErpStatus, LogisticsGroup } from "./types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -36,6 +36,10 @@ export interface ArrivalCalendarItem {
   origin: string;
   /** Valor FOB del grupo en USD */
   costUSD: number;
+  /** Status del pipeline ERP */
+  erpStatus: ErpStatus | null;
+  /** Orden de compra */
+  purchaseOrder: string | null;
 }
 
 // ─── Brand colors (consistente con BrandPipelineCards) ────────────────────────
@@ -81,9 +85,12 @@ export function groupsToCalendarItems(
   groups: LogisticsGroup[],
   includePast = false,
 ): ArrivalCalendarItem[] {
-  const filtered = includePast
-    ? groups
-    : groups.filter(g => g.status !== "past");
+  const filtered = groups.filter(g => {
+    if (!includePast && g.status === "past") return false;
+    // EN STOCK ya llegó al depósito — no mostrar en calendario como ETA futura
+    if (g.erpStatus === "EN STOCK") return false;
+    return true;
+  });
 
   return filtered
     .filter(g => g.key && g.dateLabel)
@@ -100,6 +107,8 @@ export function groupsToCalendarItems(
       dateLabel: g.dateLabel,
       origin: g.origin,
       costUSD: g.rows.reduce((s, r) => s + r.costUSD, 0),
+      erpStatus: g.erpStatus,
+      purchaseOrder: g.purchaseOrder,
     }));
 }
 

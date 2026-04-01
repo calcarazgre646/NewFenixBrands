@@ -4,7 +4,8 @@
  * Tipos del dominio de logística / importaciones.
  * Trabaja sobre LogisticsImport de queries/logistics.queries.ts.
  */
-import type { LogisticsImport } from "@/queries/logistics.queries";
+import type { LogisticsImport, ErpStatus } from "@/queries/logistics.queries";
+export type { ErpStatus };
 
 export type ArrivalStatus = "overdue" | "past" | "this_month" | "next_month" | "upcoming";
 
@@ -18,17 +19,19 @@ export interface LogisticsArrival extends LogisticsImport {
 }
 
 export interface LogisticsGroup {
-  key:         string;
-  rows:        LogisticsArrival[];
-  totalUnits:  number;
-  brand:       string;
-  supplier:    string;
-  origin:      string;
-  categories:  string[];
-  status:      ArrivalStatus;
-  daysUntil:   number;
-  dateLabel:   string;
-  brandNorm:   string;
+  key:           string;
+  rows:          LogisticsArrival[];
+  totalUnits:    number;
+  brand:         string;
+  supplier:      string;
+  origin:        string;
+  categories:    string[];
+  status:        ArrivalStatus;
+  daysUntil:     number;
+  dateLabel:     string;
+  brandNorm:     string;
+  erpStatus:     ErpStatus | null;
+  purchaseOrder: string | null;
 }
 
 export interface LogisticsSummary {
@@ -45,17 +48,20 @@ export interface LogisticsSummary {
   totalFobUSD:   number;
   /** Cantidad de marcas distintas activas */
   activeBrands:  number;
+  /** Breakdown por status ERP (PEDIDO, EN TRANSITO, EN STOCK) */
+  byErpStatus:   Record<string, number>;
 }
 
 export interface BrandPipelineDetail {
-  brand:        string;
-  brandNorm:    string;
-  orderCount:   number;
-  totalUnits:   number;
-  fobUSD:       number;
-  nextEta:      string | null;
+  brand:         string;
+  brandNorm:     string;
+  orderCount:    number;
+  totalUnits:    number;
+  fobUSD:        number;
+  nextEta:       string | null;
   nextDaysUntil: number;
-  sharePct:     number;
+  sharePct:      number;
+  byErpStatus:   Record<string, number>;
 }
 
 export interface StatusSection {
