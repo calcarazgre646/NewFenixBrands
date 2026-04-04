@@ -29,6 +29,7 @@ import { StatCard } from "@/components/ui/stat-card/StatCard";
 import { Skeleton } from "@/components/ui/skeleton/Skeleton";
 import { Card } from "@/components/ui/card/Card";
 import { DataFreshnessTag } from "./components/DataFreshnessTag";
+import { useDataFreshness } from "@/hooks/useDataFreshness";
 
 
 // ─── Chart config ────────────────────────────────────────────────────────────
@@ -213,6 +214,10 @@ function buildChartOptions(
 
 export default function ExecutivePage() {
 
+  const { worstStatus, getInfo } = useDataFreshness();
+  const salesFreshness = worstStatus(["mv_ventas_diarias", "mv_ventas_mensual"]);
+  const salesRefreshedAt = getInfo("mv_ventas_diarias")?.refreshedAt;
+
   const {
     metrics,
     chartPoints,
@@ -351,6 +356,8 @@ export default function ExecutivePage() {
           <DataFreshnessTag
             lastDataDay={lastDataDay}
             lastDataMonth={lastDataMonth}
+            freshnessStatus={salesFreshness}
+            refreshedAt={salesRefreshedAt}
           />
           <ExecutiveFilters />
         </div>

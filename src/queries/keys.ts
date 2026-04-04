@@ -82,6 +82,7 @@ export const storeKeys = {
 export const logisticsKeys = {
   all: ["logistics"] as const,
   imports: (brand?: string) => ["logistics", "imports", brand ?? "all"] as const,
+  lastLoad: () => ["logistics", "lastLoad"] as const,
 };
 
 // ─── Calendario ───────────────────────────────────────────────────────────────
@@ -141,8 +142,15 @@ export const commissionKeys = {
     ["commissions", "storeLevel", year] as const,
 };
 
+// ─── Freshness ──────────────────────────────────────────────────────────────
+export const freshnessKeys = {
+  all: ["freshness"] as const,
+  status: () => ["freshness", "status"] as const,
+};
+
 // ─── Cache durations ──────────────────────────────────────────────────────────
 // 30 min staleTime: dato cambia ~cada 6h, 30 min es conservador.
 // 60 min gcTime: mantener en memoria tras unmount.
+export const STALE_5MIN  =  5 * 60 * 1000;
 export const STALE_30MIN = 30 * 60 * 1000;
 export const GC_60MIN    = 60 * 60 * 1000;

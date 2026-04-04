@@ -146,7 +146,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
   },
   {
     id: "logistica",
-    title: "Logística / ETAs",
+    title: "Logística",
     path: "/logistica",
     icon: "ship",
     summary:

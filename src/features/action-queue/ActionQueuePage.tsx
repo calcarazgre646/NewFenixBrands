@@ -12,6 +12,8 @@
  */
 import { useState } from "react";
 import { useActionQueue } from "./hooks/useActionQueue";
+import { useDataFreshness } from "@/hooks/useDataFreshness";
+import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
 import { ActionsTab } from "./components/ActionsTab";
 import { PurchasePlanningTab } from "./components/PurchasePlanningTab";
 import { ActionQueueLoader } from "./components/ActionQueueLoader";
@@ -24,6 +26,7 @@ type ActiveTab = "actions" | "planning";
 
 export default function ActionQueuePage() {
   const data = useActionQueue();
+  const { lastDataDay, lastDataMonth, worstStatus, getInfo } = useDataFreshness();
   const [activeTab, setActiveTab] = useState<ActiveTab>("actions");
 
   if (data.isLoading) return <ActionQueueLoader progress={data.loadingProgress} />;
@@ -40,8 +43,14 @@ export default function ActionQueuePage() {
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
-      {/* ═══ PAGE HEADER: Channel + Tab bar ═══ */}
+      {/* ═══ PAGE HEADER: Channel + Tab bar + Freshness ═══ */}
       <div className="flex flex-wrap items-center justify-between gap-4">
+        <DataFreshnessTag
+          lastDataDay={lastDataDay}
+          lastDataMonth={lastDataMonth}
+          freshnessStatus={worstStatus(["mv_stock_tienda", "mv_doi_edad"])}
+          refreshedAt={getInfo("mv_stock_tienda")?.refreshedAt}
+        />
         {/* Tab bar */}
         <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-800" role="tablist">
           <TabButton

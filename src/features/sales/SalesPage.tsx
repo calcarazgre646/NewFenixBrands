@@ -26,12 +26,16 @@ import { classifyMarginHealth } from "@/domain/kpis/calculations";
 import { Card } from "@/components/ui/card/Card";
 import { Skeleton } from "@/components/ui/skeleton/Skeleton";
 import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
+import { useDataFreshness } from "@/hooks/useDataFreshness";
 import { ExecutiveFilters } from "@/features/executive/components/ExecutiveFilters";
 
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function SalesPage() {
+  const { worstStatus, getInfo } = useDataFreshness();
+  const salesFreshness = worstStatus(["mv_ventas_diarias", "mv_ventas_mensual"]);
+  const salesRefreshedAt = getInfo("mv_ventas_diarias")?.refreshedAt;
   const { filters } = useFilters();
   const [enableSkus, setEnableSkus] = useState(true);
   const [enableBehavior, setEnableBehavior] = useState(true);
@@ -146,6 +150,8 @@ export default function SalesPage() {
           <DataFreshnessTag
             lastDataDay={lastDataDay}
             lastDataMonth={lastDataMonth}
+            freshnessStatus={salesFreshness}
+            refreshedAt={salesRefreshedAt}
           />
           <ExecutiveFilters />
         </div>

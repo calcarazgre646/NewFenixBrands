@@ -14,6 +14,8 @@ import { CHANNEL_LABELS, ALL_SCALES } from "@/domain/commissions/scales";
 import type { CommissionChannel } from "@/domain/commissions/types";
 import { useCommissions } from "./hooks/useCommissions";
 import { useFilters } from "@/context/FilterContext";
+import { useDataFreshness } from "@/hooks/useDataFreshness";
+import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
 import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
 import CommissionTable from "./components/CommissionTable";
 import ScalesReference from "./components/ScalesReference";
@@ -21,6 +23,7 @@ import ScalesReference from "./components/ScalesReference";
 const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
 export default function CommissionsPage() {
+  const { lastDataDay, lastDataMonth, getStatus, getInfo } = useDataFreshness();
   const { filters } = useFilters();
   const year = filters.year;
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -72,10 +75,16 @@ export default function CommissionsPage() {
           </p>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          {/* Indicador */}
+          {/* Indicadores */}
           <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-semibold text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400">
             Datos reales
           </span>
+          <DataFreshnessTag
+            lastDataDay={lastDataDay}
+            lastDataMonth={lastDataMonth}
+            freshnessStatus={getStatus("mv_ventas_mensual")}
+            refreshedAt={getInfo("mv_ventas_mensual")?.refreshedAt}
+          />
           {/* Month selector */}
           <select
             value={selectedMonth}

@@ -92,3 +92,18 @@ export async function fetchLogisticsImports(): Promise<LogisticsImport[]> {
     };
   });
 }
+
+/**
+ * Última carga de datos de importación.
+ * Retorna MAX(created_at) de productos_importacion.
+ */
+export async function fetchLogisticsLastLoad(): Promise<Date | null> {
+  const { data, error } = await dataClient
+    .from("productos_importacion")
+    .select("created_at")
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error || !data || data.length === 0) return null;
+  return new Date((data[0] as { created_at: string }).created_at);
+}

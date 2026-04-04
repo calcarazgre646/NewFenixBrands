@@ -8,28 +8,30 @@ import { Link } from "react-router";
 import { useKpiDashboard } from "./hooks/useKpiDashboard";
 import { KpiCard, LockedKpiCard } from "./components/KpiCard";
 import { ExecutiveFilters } from "@/features/executive/components/ExecutiveFilters";
-import { FENIX_KPI_CATALOG } from "@/domain/kpis/fenix.catalog";
 import {
   getOrderedCategories,
   getKpisByCategory,
   getPstLabel,
   getPstBadgeClass,
 } from "@/domain/kpis/categories";
+import { useDataFreshness } from "@/hooks/useDataFreshness";
+import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
 
 export default function KpiDashboardPage() {
+  const { lastDataDay, lastDataMonth, getStatus, getInfo } = useDataFreshness();
   const { kpis, periodLabel } = useKpiDashboard();
   const categories = getOrderedCategories();
-
-  const totalKpis = FENIX_KPI_CATALOG.length;
-  const coreKpis = FENIX_KPI_CATALOG.filter((k) => k.pst === "core").length;
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-gray-400 dark:text-gray-500">
-          <span className="font-medium text-gray-500 dark:text-gray-400">{totalKpis}</span> indicadores · <span className="text-green-600 dark:text-green-400">{coreKpis} disponibles</span> · <span className="text-gray-400">{totalKpis - coreKpis} pendientes</span>
-        </p>
+        <DataFreshnessTag
+          lastDataDay={lastDataDay}
+          lastDataMonth={lastDataMonth}
+          freshnessStatus={getStatus("mv_ventas_diarias")}
+          refreshedAt={getInfo("mv_ventas_diarias")?.refreshedAt}
+        />
         <ExecutiveFilters />
       </div>
 

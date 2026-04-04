@@ -59,7 +59,7 @@ const SYSTEM_PAGES: SearchableItem[] = [
   {
     type: "page",
     id: "page_logistics",
-    title: "Logística / ETAs",
+    title: "Logística",
     subtitle: "Embarques de importación, fechas de arribo, tracking",
     searchableText: "logistica importaciones embarques eta llegadas import",
     path: "/logistica",
