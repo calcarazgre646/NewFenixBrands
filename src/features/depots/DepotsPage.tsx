@@ -22,8 +22,11 @@ import DepotInsights from "./components/DepotInsights";
 import NoveltySection from "./components/NoveltySection";
 import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
 import { formatNumber } from "@/utils/format";
+import { useDataFreshness } from "@/hooks/useDataFreshness";
+import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
 
 export default function DepotsPage() {
+  const { lastDataDay, lastDataMonth, getStatus, getInfo } = useDataFreshness();
   const { data, isLoading, error } = useDepots();
 
   if (isLoading) return <PageSkeleton />;
@@ -43,9 +46,12 @@ export default function DepotsPage() {
 
       {/* ═══ Context bar ═══ */}
       <div className="exec-anim-1 flex flex-wrap items-center gap-3">
-        <p className="text-xs text-gray-500 dark:text-gray-400">
-          Cobertura 6m · Data: <strong className="text-gray-700 dark:text-gray-300">{data.salesWindow.latestLabel}</strong>
-        </p>
+        <DataFreshnessTag
+          lastDataDay={lastDataDay}
+          lastDataMonth={lastDataMonth}
+          freshnessStatus={getStatus("mv_stock_tienda")}
+          refreshedAt={getInfo("mv_stock_tienda")?.refreshedAt}
+        />
         <div className="ml-auto flex flex-wrap gap-2">
           <Chip>{data.totals.dependentStoreCount} tiendas</Chip>
           <Chip>{formatNumber(data.totals.networkUnits)} uds. en red</Chip>

@@ -1,4 +1,11 @@
-import { useState, useRef, useEffect, type ReactNode } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 
 interface TooltipProps {
   content: string;
@@ -7,13 +14,10 @@ interface TooltipProps {
   className?: string;
 }
 
-const positionClasses = {
-  top: "bottom-full left-1/2 -translate-x-1/2 mb-2",
-  bottom: "top-full left-1/2 -translate-x-1/2 mt-2",
-  left: "right-full top-1/2 -translate-y-1/2 mr-2",
-  right: "left-full top-1/2 -translate-y-1/2 ml-2",
-} as const;
-
+/**
+ * Calculates tooltip position relative to the viewport using a portal.
+ * Renders outside the DOM hierarchy to avoid overflow/z-index issues.
+ */
 export function Tooltip({
   content,
   children,
@@ -21,8 +25,53 @@ export function Tooltip({
   className = "",
 }: TooltipProps) {
   const [visible, setVisible] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLSpanElement>(null);
+  const tooltipRef = useRef<HTMLSpanElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const id = useRef<string>(`tooltip-${Math.random().toString(36).slice(2, 9)}`);
+  const id = useRef(`tooltip-${Math.random().toString(36).slice(2, 9)}`);
+
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    const tooltip = tooltipRef.current;
+    if (!trigger || !tooltip) return;
+
+    const r = trigger.getBoundingClientRect();
+    const t = tooltip.getBoundingClientRect();
+    const gap = 8;
+
+    let top = 0;
+    let left = 0;
+
+    switch (position) {
+      case "top":
+        top = r.top - t.height - gap;
+        left = r.left + r.width / 2 - t.width / 2;
+        break;
+      case "bottom":
+        top = r.bottom + gap;
+        left = r.left + r.width / 2 - t.width / 2;
+        break;
+      case "left":
+        top = r.top + r.height / 2 - t.height / 2;
+        left = r.left - t.width - gap;
+        break;
+      case "right":
+        top = r.top + r.height / 2 - t.height / 2;
+        left = r.right + gap;
+        break;
+    }
+
+    // Clamp to viewport
+    left = Math.max(8, Math.min(left, window.innerWidth - t.width - 8));
+    top = Math.max(8, Math.min(top, window.innerHeight - t.height - 8));
+
+    setCoords({ top, left });
+  }, [position]);
+
+  useEffect(() => {
+    if (visible) updatePosition();
+  }, [visible, updatePosition]);
 
   useEffect(() => {
     return () => {
@@ -36,29 +85,45 @@ export function Tooltip({
   }
 
   function hide() {
-    timeoutRef.current = setTimeout(() => setVisible(false), 100);
+    timeoutRef.current = setTimeout(() => {
+      setVisible(false);
+      setCoords(null);
+    }, 100);
   }
 
   return (
-    <span
-      className={`relative inline-flex ${className}`}
-      onMouseEnter={show}
-      onMouseLeave={hide}
-      onFocus={show}
-      onBlur={hide}
-    >
-      <span aria-describedby={visible ? id.current : undefined}>
-        {children}
-      </span>
-      {visible && (
-        <span
-          id={id.current}
-          role="tooltip"
-          className={`pointer-events-none absolute z-[9999] whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white shadow-tooltip dark:bg-gray-700 ${positionClasses[position]}`}
-        >
-          {content}
+    <>
+      <span
+        ref={triggerRef}
+        className={`relative inline-flex ${className}`}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+      >
+        <span aria-describedby={visible ? id.current : undefined}>
+          {children}
         </span>
-      )}
-    </span>
+      </span>
+      {visible &&
+        createPortal(
+          <span
+            ref={tooltipRef}
+            id={id.current}
+            role="tooltip"
+            style={{
+              position: "fixed",
+              top: coords?.top ?? -9999,
+              left: coords?.left ?? -9999,
+              opacity: coords ? 1 : 0,
+              transition: "opacity 150ms ease",
+            }}
+            className="pointer-events-none z-[99999] whitespace-nowrap rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white shadow-tooltip dark:bg-gray-700"
+          >
+            {content}
+          </span>,
+          document.body,
+        )}
+    </>
   );
 }

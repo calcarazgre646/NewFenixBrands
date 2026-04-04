@@ -6,13 +6,32 @@
  * Solo composicion. Logica en useLogistics, componentes en components/.
  */
 import { useLogistics } from "./hooks/useLogistics";
+import { useQuery } from "@tanstack/react-query";
+import { logisticsKeys, STALE_5MIN, GC_60MIN } from "@/queries/keys";
+import { fetchLogisticsLastLoad } from "@/queries/logistics.queries";
+import { classifyFreshness } from "@/domain/freshness/classify";
+import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
 import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
 import { LogisticsStatCards } from "./components/LogisticsStatCards";
 import { BrandPipelineCards } from "./components/BrandPipelineCards";
 import { OriginBreakdownCard } from "./components/OriginBreakdownCard";
 import { LogisticsTable } from "./components/LogisticsTable";
 
+// Importaciones se cargan por batch — stale > 1 día es normal, > 7 días es riesgo.
+const LOGISTICS_THRESHOLDS = { staleMinutes: 1440, riskMinutes: 10080 };
+
 export default function LogisticsPage() {
+  const lastLoadQ = useQuery({
+    queryKey: logisticsKeys.lastLoad(),
+    queryFn: fetchLogisticsLastLoad,
+    staleTime: STALE_5MIN,
+    gcTime: GC_60MIN,
+  });
+  const lastLoad = lastLoadQ.data ?? undefined;
+  const logisticsStatus = lastLoad
+    ? classifyFreshness(lastLoad, new Date(), LOGISTICS_THRESHOLDS)
+    : "unknown" as const;
+
   const {
     groups,
     summary,
@@ -46,10 +65,13 @@ export default function LogisticsPage() {
 
       {/* ═══ TIER 1 — Contexto + Filtros ═══ */}
       <div className="exec-anim-1 flex flex-wrap items-center gap-2">
-        <p className="text-xs text-gray-500 dark:text-gray-400">
-          Importaciones activas
-        </p>
-        <div className="inline-flex overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+        <DataFreshnessTag
+          lastDataDay={lastLoad ? lastLoad.getDate() : null}
+          lastDataMonth={lastLoad ? lastLoad.getMonth() + 1 : null}
+          freshnessStatus={logisticsStatus}
+          refreshedAt={lastLoad}
+        />
+        <div className="ml-auto inline-flex overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
           <button
             type="button"
             onClick={() => !showPast || togglePast()}
@@ -76,9 +98,6 @@ export default function LogisticsPage() {
           </button>
         </div>
 
-        <div className="ml-auto text-xs text-gray-400">
-          {groups.length} orden{groups.length !== 1 ? "es" : ""}
-        </div>
       </div>
 
       {/* ═══ TIER 1B — StatCards ═══ */}

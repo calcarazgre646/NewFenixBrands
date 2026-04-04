@@ -35,7 +35,7 @@ const ALL_MAIN_NAV: NavItem[] = [
   { path: "/",          label: "Inicio",              icon: <BoltIcon />,       allowed: (p) => p.canViewExecutive },
   { path: "/ventas",    label: "Ventas",              icon: <DollarLineIcon />, allowed: (p) => p.canViewSales },
   { path: "/acciones",  label: "Centro de Acciones",  icon: <ListIcon />,       allowed: (p) => p.canViewActions },
-  { path: "/logistica", label: "Logística / ETAs",    icon: <ShipIcon />,      allowed: (p) => p.canViewLogistics },
+  { path: "/logistica", label: "Logística",           icon: <ShipIcon />,      allowed: (p) => p.canViewLogistics },
   { path: "/depositos", label: "Depósitos",           icon: <WarehouseIcon />,  allowed: (p) => p.canViewDepots },
 ];
 
