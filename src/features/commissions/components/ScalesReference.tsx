@@ -3,7 +3,6 @@
  *
  * Tablas de referencia de escalas de comisión para los 8 roles.
  */
-import { ALL_SCALES } from "@/domain/commissions/scales";
 import type { CommissionScale } from "@/domain/commissions/types";
 
 const thCls = "px-3 py-1.5 text-[9px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500";
@@ -51,10 +50,10 @@ function ScaleTable({ scale }: { scale: CommissionScale }) {
   );
 }
 
-export default function ScalesReference() {
+export default function ScalesReference({ scales }: { scales: CommissionScale[] }) {
   return (
     <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {ALL_SCALES.map(scale => (
+      {scales.map(scale => (
         <ScaleTable key={scale.role} scale={scale} />
       ))}
     </div>

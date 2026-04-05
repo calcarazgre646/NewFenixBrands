@@ -10,6 +10,7 @@ import ResponsiveChart from "@/components/ui/chart/ResponsiveChart";
 import type { MonthlySalesRow, DailyDetailRow } from "@/queries/sales.queries";
 import type { StoreBreakdownRow } from "../hooks/useSalesAnalytics";
 import { calcGrossMargin, classifyMarginHealth, marginHealthThresholds } from "@/domain/kpis/calculations";
+import { useMarginConfig } from "@/hooks/useConfig";
 import { formatPYGShort, formatPYGSuffix, formatPct, formatChange } from "@/utils/format";
 import { useFilters } from "@/context/FilterContext";
 import { MONTH_SHORT } from "@/domain/period/helpers";
@@ -126,6 +127,7 @@ export function StoreDetailView({
   const { filters: globalFilters } = useFilters();
   const priorYear = globalFilters.year - 1;
   const isSingleMonth = activeMonths?.length === 1;
+  const marginConfig = useMarginConfig();
 
   const monthly = useMemo(
     () => salesWideRaw && activeMonths
@@ -272,7 +274,7 @@ export function StoreDetailView({
 
   // ── Margin health indicator (channel-aware thresholds) ──
   const ch = (channelMode === "b2b" ? "b2b" : "b2c") as "b2b" | "b2c";
-  const mHealth = classifyMarginHealth(store.grossMargin, ch);
+  const mHealth = classifyMarginHealth(store.grossMargin, ch, marginConfig);
   const marginColor = MARGIN_TEXT[mHealth];
   const marginBg = MARGIN_BG[mHealth];
   const marginLabel = MARGIN_LABEL[mHealth];
@@ -387,7 +389,7 @@ export function StoreDetailView({
             {/* Monthly margin mini-row */}
             <div className="mt-2 flex flex-wrap gap-2">
               {monthly.filter((m) => m.neto > 0).map((m) => {
-                const mc = MARGIN_TEXT[classifyMarginHealth(m.margin, ch)];
+                const mc = MARGIN_TEXT[classifyMarginHealth(m.margin, ch, marginConfig)];
                 return (
                   <div key={m.month} className="flex items-center gap-1 rounded-md bg-gray-50 px-2 py-1 dark:bg-gray-800">
                     <span className="text-[10px] text-gray-400 dark:text-gray-500">{m.label}</span>
@@ -455,7 +457,7 @@ export function StoreDetailView({
 
       {/* ── Margin gauge visual (channel-aware thresholds) ── */}
       {(() => {
-        const th = marginHealthThresholds(ch);
+        const th = marginHealthThresholds(ch, marginConfig);
         // Gauge scale: show 20% before red threshold to 10% after green threshold
         const scaleMin = Math.max(0, th.red - 20);
         const scaleMax = Math.min(100, th.yellow + 15);

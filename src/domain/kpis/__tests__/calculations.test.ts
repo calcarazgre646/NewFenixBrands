@@ -11,6 +11,7 @@ import {
   classifyMarginHealth,
   marginHealthThresholds,
 } from '../calculations'
+import { DEFAULT_MARGIN_CONFIG } from '@/domain/config/defaults'
 
 describe('calcGrossMargin', () => {
   it('div por 0: calcGrossMargin(0, 0) → 0', () => expect(calcGrossMargin(0, 0)).toBe(0))
@@ -64,23 +65,25 @@ describe('calcUPT', () => {
 })
 
 describe('classifyMarginHealth', () => {
-  // B2C / Total (Fénix): Verde ≥ 55%, Amarillo 50–54.99%, Rojo < 50%
-  it('B2C: 55% → healthy', () => expect(classifyMarginHealth(55, 'b2c')).toBe('healthy'))
-  it('B2C: 60% → healthy', () => expect(classifyMarginHealth(60, 'b2c')).toBe('healthy'))
-  it('B2C: 54.99% → moderate', () => expect(classifyMarginHealth(54.99, 'b2c')).toBe('moderate'))
-  it('B2C: 50% → moderate', () => expect(classifyMarginHealth(50, 'b2c')).toBe('moderate'))
-  it('B2C: 49.99% → low', () => expect(classifyMarginHealth(49.99, 'b2c')).toBe('low'))
-  it('B2C: 30% → low', () => expect(classifyMarginHealth(30, 'b2c')).toBe('low'))
-  it('total defaults to B2C thresholds', () => expect(classifyMarginHealth(52, 'total')).toBe('moderate'))
-  it('default channel = total', () => expect(classifyMarginHealth(56)).toBe('healthy'))
+  const { b2cHealthy, b2cModerate, b2bHealthy, b2bModerate } = DEFAULT_MARGIN_CONFIG
 
-  // B2B: Verde ≥ 50%, Amarillo 40–49.99%, Rojo < 40%
-  it('B2B: 50% → healthy', () => expect(classifyMarginHealth(50, 'b2b')).toBe('healthy'))
-  it('B2B: 55% → healthy', () => expect(classifyMarginHealth(55, 'b2b')).toBe('healthy'))
-  it('B2B: 49.99% → moderate', () => expect(classifyMarginHealth(49.99, 'b2b')).toBe('moderate'))
-  it('B2B: 40% → moderate', () => expect(classifyMarginHealth(40, 'b2b')).toBe('moderate'))
-  it('B2B: 39.99% → low', () => expect(classifyMarginHealth(39.99, 'b2b')).toBe('low'))
-  it('B2B: 20% → low', () => expect(classifyMarginHealth(20, 'b2b')).toBe('low'))
+  // B2C / Total — derived from config
+  it('B2C: at healthy threshold → healthy', () => expect(classifyMarginHealth(b2cHealthy, 'b2c')).toBe('healthy'))
+  it('B2C: above healthy → healthy', () => expect(classifyMarginHealth(b2cHealthy + 5, 'b2c')).toBe('healthy'))
+  it('B2C: just below healthy → moderate', () => expect(classifyMarginHealth(b2cHealthy - 0.01, 'b2c')).toBe('moderate'))
+  it('B2C: at moderate threshold → moderate', () => expect(classifyMarginHealth(b2cModerate, 'b2c')).toBe('moderate'))
+  it('B2C: just below moderate → low', () => expect(classifyMarginHealth(b2cModerate - 0.01, 'b2c')).toBe('low'))
+  it('B2C: well below → low', () => expect(classifyMarginHealth(30, 'b2c')).toBe('low'))
+  it('total defaults to B2C thresholds', () => expect(classifyMarginHealth(b2cModerate + 1, 'total')).toBe('moderate'))
+  it('default channel = total', () => expect(classifyMarginHealth(b2cHealthy + 1)).toBe('healthy'))
+
+  // B2B — derived from config
+  it('B2B: at healthy threshold → healthy', () => expect(classifyMarginHealth(b2bHealthy, 'b2b')).toBe('healthy'))
+  it('B2B: above healthy → healthy', () => expect(classifyMarginHealth(b2bHealthy + 5, 'b2b')).toBe('healthy'))
+  it('B2B: just below healthy → moderate', () => expect(classifyMarginHealth(b2bHealthy - 0.01, 'b2b')).toBe('moderate'))
+  it('B2B: at moderate threshold → moderate', () => expect(classifyMarginHealth(b2bModerate, 'b2b')).toBe('moderate'))
+  it('B2B: just below moderate → low', () => expect(classifyMarginHealth(b2bModerate - 0.01, 'b2b')).toBe('low'))
+  it('B2B: well below → low', () => expect(classifyMarginHealth(20, 'b2b')).toBe('low'))
 
   // Edge cases
   it('0% → low for any channel', () => {
@@ -94,13 +97,15 @@ describe('classifyMarginHealth', () => {
 })
 
 describe('marginHealthThresholds', () => {
-  it('B2C: red=50, yellow=55', () => {
-    expect(marginHealthThresholds('b2c')).toEqual({ red: 50, yellow: 55 })
+  const { b2cHealthy, b2cModerate, b2bHealthy, b2bModerate } = DEFAULT_MARGIN_CONFIG
+
+  it('B2C thresholds from config', () => {
+    expect(marginHealthThresholds('b2c')).toEqual({ red: b2cModerate, yellow: b2cHealthy })
   })
   it('total: same as B2C', () => {
-    expect(marginHealthThresholds('total')).toEqual({ red: 50, yellow: 55 })
+    expect(marginHealthThresholds('total')).toEqual({ red: b2cModerate, yellow: b2cHealthy })
   })
-  it('B2B: red=40, yellow=50', () => {
-    expect(marginHealthThresholds('b2b')).toEqual({ red: 40, yellow: 50 })
+  it('B2B thresholds from config', () => {
+    expect(marginHealthThresholds('b2b')).toEqual({ red: b2bModerate, yellow: b2bHealthy })
   })
 })

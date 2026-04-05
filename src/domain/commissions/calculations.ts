@@ -65,8 +65,9 @@ export function calcCommission(
   goal: SellerGoal,
   ventaReal: number,
   cobranzaReal: number = 0,
+  scales: Record<string, CommissionScale> = SCALE_BY_ROLE,
 ): CommissionResult {
-  const scale: CommissionScale = SCALE_BY_ROLE[goal.rolComision];
+  const scale: CommissionScale = scales[goal.rolComision];
 
   // ── Ventas ──
   const cumplimientoVentasPct = calcCumplimiento(ventaReal, goal.metaVentas);
@@ -131,6 +132,7 @@ export function calcAllCommissions(
   goals: SellerGoal[],
   sales: SellerSales[],
   _cobranzaByVendedor: Map<number, number> = new Map(),
+  scales: Record<string, CommissionScale> = SCALE_BY_ROLE,
 ): CommissionResult[] {
   // Agrupar ventas por vendedor+año+mes
   const salesMap = new Map<string, number>();
@@ -143,7 +145,7 @@ export function calcAllCommissions(
     const key = `${goal.vendedorCodigo}|${goal.año}|${goal.mes}`;
     const ventaReal = salesMap.get(key) ?? 0;
     const cobranzaReal = _cobranzaByVendedor.get(goal.vendedorCodigo) ?? 0;
-    return calcCommission(goal, ventaReal, cobranzaReal);
+    return calcCommission(goal, ventaReal, cobranzaReal, scales);
   });
 }
 

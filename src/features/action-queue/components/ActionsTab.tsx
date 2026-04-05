@@ -12,6 +12,7 @@ import { groupActions } from "@/domain/actionQueue/grouping";
 import type { GroupByMode } from "@/domain/actionQueue/grouping";
 import { StatCard } from "@/components/ui/stat-card/StatCard";
 import type { ActionItemFull } from "@/domain/actionQueue/waterfall";
+import { useStoreConfig } from "@/hooks/useConfig";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -48,6 +49,7 @@ export function ActionsTab({
   brand,
   isHistoryLoading,
 }: Props) {
+  const storeConfig = useStoreConfig();
   const [viewMode, setViewMode] = useState<ViewMode>("store");
   const [showParetoOnly, setShowParetoOnly] = useState(true);
 
@@ -59,8 +61,8 @@ export function ActionsTab({
   const visibleCount = visibleItems.length;
 
   const groups = useMemo(
-    () => groupActions(visibleItems, viewMode as GroupByMode),
-    [visibleItems, viewMode],
+    () => groupActions(visibleItems, viewMode as GroupByMode, storeConfig.clusters, storeConfig.timeRestrictions, storeConfig.assortments),
+    [visibleItems, viewMode, storeConfig.clusters, storeConfig.timeRestrictions, storeConfig.assortments],
   );
 
   return (

@@ -14,9 +14,11 @@ import { formatPYGSuffix } from "@/utils/format";
 import { buildPurchasePlan, summarizeByBrand, computeGapTotals } from "@/domain/actionQueue/purchasePlanning";
 import type { ActionItemFull } from "@/domain/actionQueue/waterfall";
 
+import { DOI_AGE_THRESHOLDS, FEATURE_PAGE_SIZE } from "@/domain/config/defaults";
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = FEATURE_PAGE_SIZE;
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -102,7 +104,7 @@ export function PurchasePlanningTab({ items, avgDOI }: Props) {
         <StatCard
           label="Edad Promedio"
           value={`${avgDOI.toFixed(0)} días`}
-          variant={avgDOI === 0 ? "neutral" : avgDOI > 180 ? "negative" : avgDOI > 90 ? "accent-negative" : "neutral"}
+          variant={avgDOI === 0 ? "neutral" : avgDOI > DOI_AGE_THRESHOLDS.criticalDays ? "negative" : avgDOI > DOI_AGE_THRESHOLDS.warningDays ? "accent-negative" : "neutral"}
         />
         <StatCard
           label="Impacto Potencial"

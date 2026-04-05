@@ -11,7 +11,7 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 
 ---
 
-## Estado actual (actualizado 30/03/2026)
+## Estado actual (actualizado 04/04/2026)
 
 | Fase | Feature | Estado |
 |------|---------|--------|
@@ -28,16 +28,30 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 7 | CommissionsPage (`/comisiones`) — Comisiones por vendedor, datos reales, 8 escalas | ⚠️ PARCIAL — esperando datos de Fenix |
 
 **La app corre:** `npm run dev` → http://localhost:5173
-**Tests:** 967 passing (24 suites) | TSC 0 errores | Build OK
+**Tests:** 1060 passing (29 suites) | TSC 0 errores | Build OK
 **Deploy:** https://fenix-brands-one.vercel.app
-**Sesión 14/03/2026 (00:00–04:00):** Ver log detallado abajo
-**Sesión 14/03/2026 (04:00–14:00):** Ver log detallado abajo
-**Sesión 24/03/2026:** Ver log detallado abajo
+**Sesión 04/04/2026:** Config editable — Etapas 2-5 (ver abajo)
 **Sesión 30/03/2026:** Ver log detallado abajo
+**Sesión 24/03/2026:** Ver log detallado abajo
+**Sesión 14/03/2026 (04:00–14:00):** Ver log detallado abajo
+**Sesión 14/03/2026 (00:00–04:00):** Ver log detallado abajo
 
 ---
 
 ## Proximo trabajo
+
+**Config editable — COMPLETA (Etapas 2-5):**
+- ✅ Comisiones: 8 escalas en `config_commission_scale` → loop completo BD→UI
+- ✅ Márgenes: 4 thresholds en `app_params` → loop completo BD→UI
+- ✅ Depots: 5 thresholds en `app_params` → loop completo BD→UI
+- ✅ Executive: 2 defaults en `app_params` → loop completo BD→UI
+- ✅ Freshness: 1 config en `app_params` → backend-only (hook lee status pre-computado)
+- ✅ Waterfall: 12 thresholds en `app_params` → loop completo BD→UI
+- ✅ Store clusters: 41 tiendas en `config_store` → loop completo BD→UI
+- ✅ 27 tests frágiles migrados a contract tests
+- ✅ Dead code eliminado (CLUSTER_PRICE_MIX, storeMapping.ts)
+- Seed: `sql/013_config_seed.sql` (Etapa 4) + `sql/014_config_seed_etapa5.sql` (Etapa 5)
+- Ver `docs/ETAPA_2_3_CONFIG_IMPLEMENTATION.md` para estado completo
 
 **Comisiones — Retail FUNCIONAL, Mayorista/UTP esperando datos de Fenix:**
 - Retail: 33 vendedores con comisiones reales calculadas (cumplimiento por tienda)
@@ -100,6 +114,12 @@ src/
   features/users/               — UsersPage CRUD + hooks + modals
   features/auth/ChangePasswordPage.tsx — Cambio de contraseña obligatorio (primer login)
   supabase/functions/manage-user/index.ts — Edge Function (create/delete users con service_role)
+  domain/config/types.ts           — Interfaces de config por dominio (WaterfallConfig, DepotConfig, etc.)
+  domain/config/defaults.ts        — Valores hardcoded como defaults nombrados (importa de fuentes canónicas)
+  domain/config/schemas.ts         — Validación sin Zod: ValidationResult<T>, numericField, validateXxxConfig
+  domain/config/loader.ts          — resolveParam, resolveStoreConfig, resolveCommissionScales (remote→validate→fallback)
+  queries/config.queries.ts        — fetchAppParams, fetchStoreConfig, fetchCommissionScales (authClient)
+  hooks/useConfig.ts               — 7 hooks: useWaterfallConfig, useDepotConfig, useFreshnessConfig, useExecutiveConfig, useMarginConfig, useStoreConfig, useCommissionScales
 ```
 
 ---
@@ -112,6 +132,10 @@ src/
 - `docs/AUDIT_WATERFALL_CORE_2026-03-08.md` — Auditoria end-to-end del algoritmo SISO/waterfall (8 bugs corregidos, flujo de datos completo, campos usados/no usados, preguntas pendientes cliente)
 - `docs/AUDIT_INTEGRAL_2026-03-11.md` — Auditoria integral completa (428 tests, 16 hallazgos, score 8.5/10)
 - `docs/PREGUNTAS_CLIENTE_COLA_ACCIONES.md` — 5+3 preguntas pendientes para Rodrigo/Derlys
+- `docs/CONFIG ARCHITECTURE.md` — Diseño de arquitectura del sistema de config (modelo, loader, validación, fallback)
+- `docs/ETAPA_2_3_CONFIG_IMPLEMENTATION.md` — Documentación completa Etapas 2-5 + seed + estado final
+- `docs/scope freeze + inventario final.md` — Auditoría de ~95 constantes de negocio, clasificación, mapa de impacto
+- `docs/safety net de tests.md` — Auditoría de fragilidad de tests, migración a contract tests
 
 ---
 
@@ -600,3 +624,213 @@ Reunión Torre de Control 23/03/2026. Rodrigo: "la planificación de nuevo produ
 - **PR #10:** https://github.com/calcarazgre646/NewFenixBrands/pull/10 (merged) — Novedades Depósito
 - **Comisiones + Calendario:** deploy directo via `vercel --prod`
 - **Vercel:** https://fenix-brands-one.vercel.app (production)
+
+---
+
+## Sesión 04/04/2026 — Config Editable: Etapas 2 + 3 + 4 + Seed Producción
+
+### Objetivo
+
+Implementar infraestructura de configuración editable y primera migración de quick wins. Permitir que constantes de negocio se externalicen progresivamente a tablas Supabase sin romper nada.
+
+### Etapa 2 — Infraestructura de config
+
+**3 tablas SQL creadas** en Supabase auth (BD de la app):
+
+| Tabla | Propósito |
+|-------|-----------|
+| `app_params` | Key/value JSONB para thresholds, ratios, factores (~30 params) |
+| `config_store` | Config por tienda: cluster, capacidad, horarios, exclusión, B2B |
+| `config_commission_scale` | Escalas de comisión: 8 roles × tiers JSONB |
+
+**SQL:** `sql/012_config_tables.sql` — tablas vacías + RLS (lectura autenticados, escritura super_user).
+
+**11 archivos creados:**
+
+| Archivo | Propósito |
+|---------|-----------|
+| `domain/config/types.ts` | Interfaces: WaterfallConfig, DepotConfig, FreshnessConfig, ExecutiveConfig, MarginConfig, StoreConfig, CommissionConfig |
+| `domain/config/defaults.ts` | Defaults hardcoded como exports. Importa de fuentes canónicas (clusters.ts, classify.ts) |
+| `domain/config/schemas.ts` | Validación sin Zod: ValidationResult\<T\>, numericField(), 10 validate functions |
+| `domain/config/loader.ts` | resolveParam(), resolveStoreConfig(), resolveCommissionScales() — remote→validate→fallback |
+| `domain/config/__tests__/schemas.test.ts` | 44 tests |
+| `domain/config/__tests__/loader.test.ts` | 14 tests |
+| `domain/config/__tests__/defaults.test.ts` | 15 tests (golden snapshots + self-validation) |
+| `queries/config.queries.ts` | fetchAppParams, fetchStoreConfig, fetchCommissionScales (authClient) |
+| `hooks/useConfig.ts` | 8 hooks con TanStack Query (staleTime 10min, fallback a defaults) |
+
+**Decisiones clave:**
+- Sin Zod (proyecto no lo tenía — validación con funciones TS puras)
+- configKeys en `queries/keys.ts` central (no archivo separado)
+- Cross-field validation en hooks (depot: critical < low < high; margin: moderate < healthy)
+- Commission scales merge: `{ ...fallback, ...overrides }` para garantizar todos los roles
+
+### Etapa 3 — Quick wins
+
+**Grupo A — Deduplicación (4 constantes, 10 duplicaciones eliminadas):**
+
+| Constante | De | A |
+|-----------|------|--------|
+| `4.33` (MOS→semanas) | Hardcoded ×4 en features | `WEEKS_PER_MONTH` desde defaults |
+| DOI 180/90 | Hardcoded ×2 | `DOI_AGE_THRESHOLDS` desde defaults |
+| `PAGE_SIZE = 20` | Hardcoded ×3 | `FEATURE_PAGE_SIZE` desde defaults |
+| `LOGISTICS_THRESHOLDS` | Inline en LogisticsPage | `DEFAULT_LOGISTICS_FRESHNESS` en defaults |
+
+**Grupo B — Inyección de config (5 funciones de domain parametrizadas):**
+
+| Función | Archivo | Parámetro agregado |
+|---------|---------|-------------------|
+| `getThresholds()` | freshness/classify.ts | sourceThresholds, defaultThresholds |
+| `calcAnnualTarget()` | executive/calcs.ts | fallback (default: 70B) |
+| `buildMonthlyRows()` | executive/calcs.ts | lyBudgetFactor (default: 0.90) |
+| `classifyDepotRisk()` | depots/calculations.ts | config (default: 4/8/16 semanas) |
+| `classifyNoveltyDistribution()` | depots/calculations.ts | noveltyCoverage (default: 0.80) |
+
+**Archivos de features modificados:** ActionGroupCard.tsx, PurchasePlanningTab.tsx, CompactActionList.tsx, exportHtml.ts, NoveltySection.tsx, LogisticsPage.tsx — todos importan constantes centralizadas en vez de hardcodear.
+
+### Auditoría de calidad (Simplify)
+
+10 hallazgos corregidos post-implementación: helper DRY, casts innecesarios, doble normalización, cross-field validation, imports centralizados. Ver `docs/ETAPA_2_3_CONFIG_IMPLEMENTATION.md`.
+
+### Etapa 4 — Migración cuidada: Comisiones + Márgenes
+
+**Safety net:** 27 tests frágiles migrados a contract tests (comisiones: 14, márgenes: 8, depots: 5). Todos derivan expected de la fuente canónica.
+
+**Funciones parametrizadas:**
+
+| Función | Parámetro agregado |
+|---------|-------------------|
+| `calcCommission()` | `scales: Record<string, CommissionScale>` |
+| `calcAllCommissions()` | `scales` (pasado a calcCommission) |
+| `classifyMarginHealth()` | `config: MarginConfig` |
+| `marginHealthThresholds()` | `config: MarginConfig` |
+
+**Conexión end-to-end comisiones:**
+- `useCommissions` hook → `useCommissionScales()` → `scales[role]` (ya no importa SCALE_BY_ROLE)
+- `CommissionsPage` → `useCommissionScales()` → pasa scales a ScalesReference como prop
+- `ScalesReference` → recibe `scales` como prop (ya no importa ALL_SCALES)
+
+**Conexión end-to-end márgenes:**
+- `SalesPage` → `useMarginConfig()` → `classifyMarginHealth(pct, channel, config)`
+- `StoresTable` → `useMarginConfig()` → `classifyMarginHealth()` (B2B y B2C)
+- `StoreDetailView` → `useMarginConfig()` → `classifyMarginHealth()` ×2 + `marginHealthThresholds()`
+
+**Seed en producción** (`sql/013_config_seed.sql`):
+- `config_commission_scale`: 8 filas (8 roles × tiers JSONB, maxPct=null para Infinity)
+- `app_params`: 12 filas (4 margin + 5 depot + 2 executive + 1 freshness)
+- Verificado en producción: `/comisiones` y `/ventas` idénticos ✅
+
+**Postergado:** Store clusters (afecta waterfall), depots/executive/freshness end-to-end (requiere refactor de buildDepotData)
+
+### Verificación final
+
+1058 tests (28 suites) | TSC 0 errores | Build OK | Producción verificada
+
+### Archivos de documentación
+
+- `docs/ETAPA_2_3_CONFIG_IMPLEMENTATION.md` — Documentación completa Etapas 2-4 + seed
+- `docs/CONFIG ARCHITECTURE.md` — Diseño de arquitectura (Etapa 2)
+- `docs/scope freeze + inventario final.md` — Auditoría de constantes (Etapa 0)
+- `docs/safety net de tests.md` — Auditoría de fragilidad de tests (Etapa 1)
+
+---
+
+## Sesión 04/04/2026 (continuación) — Etapa 5: End-to-end + Store Clusters + Waterfall + Dead Code + Tests
+
+### Objetivo
+
+Completar la migración de configuración editable: cablear los dominios faltantes (depots, executive), limpiar dead code, parametrizar store clusters y waterfall thresholds, poblar tablas y deployar.
+
+### 1. Conexiones end-to-end faltantes
+
+**Depots (2 archivos):**
+
+| Archivo | Cambio |
+|---------|--------|
+| `domain/depots/calculations.ts` | `buildDepotData()` acepta `config: DepotConfig` y `clusters: Record<string, StoreCluster>`. Pasa config a `classifyDepotRisk()` (×3), `classifyNoveltyDistribution()`, `getStoreCluster()`. `buildNoveltyData()` acepta `noveltyCoverage`. |
+| `features/depots/hooks/useDepots.ts` | Importa `useDepotConfig` + `useStoreConfig`. Pasa `depotConfig` y `storeConfig.clusters` a `buildDepotData()`. |
+
+**Executive (1 archivo):**
+
+| Archivo | Cambio |
+|---------|--------|
+| `features/executive/hooks/useExecutiveData.ts` | Importa `useExecutiveConfig`. `70_000_000_000` → `execConfig.annualTargetFallback`. `calcAnnualTarget()` (×2) recibe fallback. `buildMonthlyRows()` (×2) recibe `lyBudgetFactor`. |
+
+**Freshness:** No requiere cambio — `useDataFreshness` lee status pre-computado de BD. Config es backend-only.
+
+### 2. Dead code eliminado
+
+| Item | Archivo | Razón |
+|------|---------|-------|
+| `CLUSTER_PRICE_MIX` | clusters.ts | 0 consumidores |
+| `DEFAULT_CLUSTER_PRICE_MIX` | defaults.ts | Default del dead code |
+| `ClusterPriceMix` type + validator + hook | types.ts, schemas.ts, useConfig.ts | Soporte del dead code |
+| `classifyStoreForCommission` + `storeGoalToSellerGoal` | storeMapping.ts (eliminado) | Nunca llamados |
+| 6 tests + 1 snapshot | tests/ | Tests del dead code |
+
+### 3. Etapa 5 Bloque A — Store clusters parametrizados
+
+**Funciones en `clusters.ts` parametrizadas:**
+- `getStoreCluster(code, clusters?)` — default STORE_CLUSTERS
+- `getTimeRestriction(code, restrictions?)` — default STORE_TIME_RESTRICTIONS
+- `getStoreAssortment(code, assortments?)` — default STORE_ASSORTMENT
+
+**5 consumidores actualizados:**
+- `waterfall.ts` → `computeActionQueue` recibe `storeClusters`, `storeTimeRestrictions`
+- `grouping.ts` → `groupActions` recibe `clusters`, `timeRestrictions`, `assortments`
+- `depots/calculations.ts` → `buildDepotData` recibe `clusters`
+- `useActionQueue.ts` → pasa `storeConfig.clusters` al enriquecer records
+- `ActionsTab.tsx` → pasa `storeConfig.*` a `groupActions`
+
+### 4. Etapa 5 Bloque B — Waterfall thresholds parametrizados
+
+9 constantes module-level eliminadas → destructuradas desde `WaterfallConfig` param:
+`lowStockRatio`, `highStockRatio`, `minStockAbs`, `minAvgForRatio`, `minTransferUnits`, `paretoTarget`, `surplusLiquidateRatio`, `b2cStoreCoverWeeks`, `minImpactGs`.
+
+Además: `getCoverWeeks(brand)` → lógica inline con `importedBrands`/`coverWeeksImported`/`coverWeeksNational` del config.
+
+**Conexión:** `useActionQueue` → `useWaterfallConfig()` → `computeActionQueue(..., waterfallConfig)`
+
+### 5. Seed en producción
+
+**SQL:** `sql/014_config_seed_etapa5.sql` — ejecutado en Supabase auth el 04/04/2026.
+
+| Tabla | Filas | Contenido |
+|-------|-------|-----------|
+| `app_params` | +12 | 12 waterfall thresholds (domain='waterfall') |
+| `config_store` | 41 | 20 retail + 3 B2B + 18 excluidas |
+
+### 6. Tests migrados + nuevos
+
+**Tests frágiles migrados a contract tests:**
+- `freshness/classify.test.ts` — thresholds derivados de `SOURCE_THRESHOLDS` y `getThresholds()`
+- `executive/calcs.test.ts` — fallback derivado de `DEFAULT_EXECUTIVE_CONFIG`
+- `grouping.test.ts` — assortment derivado de `STORE_ASSORTMENT`
+
+**Tests nuevos:**
+- `queries/__tests__/filters.test.ts` — 8 tests para `filterSalesRows()` (brand, channel, store, combinaciones)
+
+### Verificación final
+
+```
+Tests:  1060 passing (29 suites)
+TSC:    0 errores
+Build:  OK
+Deploy: https://fenix-brands-one.vercel.app — verificado por usuario ✅
+```
+
+### Estado final del sistema de config
+
+Todos los dominios con loop completo BD→UI:
+
+| Dominio | Tabla | Filas | Seed |
+|---------|-------|-------|------|
+| Comisiones (8 escalas) | config_commission_scale | 8 | 013 |
+| Márgenes (4 thresholds) | app_params | 4 | 013 |
+| Depots (5 thresholds) | app_params | 5 | 013 |
+| Executive (2 defaults) | app_params | 2 | 013 |
+| Freshness (1 config) | app_params | 1 | 013 |
+| Waterfall (12 thresholds) | app_params | 12 | 014 |
+| Store clusters (41 stores) | config_store | 41 | 014 |
+
+Totales: 24 filas en app_params + 8 en config_commission_scale + 41 en config_store = 73 filas de config en producción.

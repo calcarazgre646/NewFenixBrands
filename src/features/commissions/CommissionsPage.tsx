@@ -10,7 +10,8 @@
 import { useState, useMemo } from "react";
 import { formatPYGCompact } from "@/utils/format";
 import { StatCard } from "@/components/ui/stat-card/StatCard";
-import { CHANNEL_LABELS, ALL_SCALES } from "@/domain/commissions/scales";
+import { CHANNEL_LABELS } from "@/domain/commissions/scales";
+import { useCommissionScales } from "@/hooks/useConfig";
 import type { CommissionChannel } from "@/domain/commissions/types";
 import { useCommissions } from "./hooks/useCommissions";
 import { useFilters } from "@/context/FilterContext";
@@ -25,6 +26,8 @@ const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "
 export default function CommissionsPage() {
   const { lastDataDay, lastDataMonth, getStatus, getInfo } = useDataFreshness();
   const { filters } = useFilters();
+  const scales = useCommissionScales();
+  const allScales = Object.values(scales);
   const year = filters.year;
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
@@ -155,9 +158,9 @@ export default function CommissionsPage() {
           <svg className={`h-3 w-3 transition-transform ${showScales ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
-          Escalas de referencia ({ALL_SCALES.length} roles)
+          Escalas de referencia ({allScales.length} roles)
         </button>
-        {showScales && <ScalesReference />}
+        {showScales && <ScalesReference scales={allScales} />}
       </section>
     </div>
   );

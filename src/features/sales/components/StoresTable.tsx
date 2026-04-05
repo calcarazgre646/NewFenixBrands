@@ -7,6 +7,7 @@ import { useState, useMemo } from "react";
 import type { MonthlySalesRow, DailyDetailRow } from "@/queries/sales.queries";
 import type { StoreBreakdownRow } from "../hooks/useSalesAnalytics";
 import { classifyMarginHealth } from "@/domain/kpis/calculations";
+import { useMarginConfig } from "@/hooks/useConfig";
 import { formatPYGShort, formatPYGSuffix, formatPct, formatChange } from "@/utils/format";
 import { useFilters } from "@/context/FilterContext";
 import { Card } from "@/components/ui/card/Card";
@@ -44,6 +45,7 @@ export function StoresTable({
 }) {
   const { filters } = useFilters();
   const priorYear = filters.year - 1;
+  const marginConfig = useMarginConfig();
 
   const [selectedStore, setSelectedStore] = useState<string | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
@@ -165,7 +167,7 @@ export function StoresTable({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {storeBreakdownB2B.map((row) => {
                 const share = totalNetoB2B > 0 ? (row.neto / totalNetoB2B) * 100 : 0;
-                const mh = classifyMarginHealth(row.grossMargin, "b2b");
+                const mh = classifyMarginHealth(row.grossMargin, "b2b", marginConfig);
                 const marginColor = MARGIN_TEXT[mh];
                 const marginBg = MARGIN_BG[mh];
 
@@ -243,7 +245,7 @@ export function StoresTable({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {storeBreakdown.map((row) => {
                 const share = totalNetoB2C > 0 ? (row.neto / totalNetoB2C) * 100 : 0;
-                const mh = classifyMarginHealth(row.grossMargin, "b2c");
+                const mh = classifyMarginHealth(row.grossMargin, "b2c", marginConfig);
                 const marginColor = MARGIN_TEXT[mh];
                 const marginBg = MARGIN_BG[mh];
 

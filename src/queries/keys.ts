@@ -148,9 +148,18 @@ export const freshnessKeys = {
   status: () => ["freshness", "status"] as const,
 };
 
+// ─── Config (parámetros de negocio editables) ───────────────────────────────
+export const configKeys = {
+  all: ["config"] as const,
+  params: () => ["config", "params"] as const,
+  stores: () => ["config", "stores"] as const,
+  commissions: () => ["config", "commissions"] as const,
+};
+
 // ─── Cache durations ──────────────────────────────────────────────────────────
 // 30 min staleTime: dato cambia ~cada 6h, 30 min es conservador.
 // 60 min gcTime: mantener en memoria tras unmount.
 export const STALE_5MIN  =  5 * 60 * 1000;
+export const STALE_10MIN = 10 * 60 * 1000;
 export const STALE_30MIN = 30 * 60 * 1000;
 export const GC_60MIN    = 60 * 60 * 1000;

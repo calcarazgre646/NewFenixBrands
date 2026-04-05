@@ -17,7 +17,10 @@
  */
 import type { ActionItemFull } from "./waterfall";
 import type { StoreCluster } from "./types";
-import { getStoreCluster, getTimeRestriction, getStoreAssortment } from "./clusters";
+import {
+  getStoreCluster, getTimeRestriction, getStoreAssortment,
+  STORE_CLUSTERS, STORE_TIME_RESTRICTIONS, STORE_ASSORTMENT,
+} from "./clusters";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -161,6 +164,9 @@ export function splitIntoSections(items: ActionItemFull[]): ActionSection[] {
 export function groupActions(
   items: ActionItemFull[],
   mode: GroupByMode,
+  clusters: Record<string, StoreCluster> = STORE_CLUSTERS,
+  timeRestrictions: Record<string, string> = STORE_TIME_RESTRICTIONS,
+  assortments: Record<string, number> = STORE_ASSORTMENT,
 ): ActionGroup[] {
   if (items.length === 0) return [];
 
@@ -177,7 +183,7 @@ export function groupActions(
 
   const groups: ActionGroup[] = [];
   for (const [key, groupItems] of map) {
-    groups.push(buildGroup(key, groupItems, mode));
+    groups.push(buildGroup(key, groupItems, mode, clusters, timeRestrictions, assortments));
   }
 
   groups.sort((a, b) => b.totalImpact - a.totalImpact);
@@ -190,6 +196,9 @@ function buildGroup(
   key: string,
   items: ActionItemFull[],
   mode: GroupByMode,
+  clusters: Record<string, StoreCluster>,
+  timeRestrictions: Record<string, string>,
+  assortments: Record<string, number>,
 ): ActionGroup {
   let critical = 0;
   let low = 0;
@@ -222,9 +231,9 @@ function buildGroup(
   return {
     key,
     label: key,
-    cluster: mode === "store" ? getStoreCluster(key) : null,
-    timeRestriction: mode === "store" ? getTimeRestriction(key) : null,
-    assortmentCapacity: mode === "store" ? getStoreAssortment(key) : null,
+    cluster: mode === "store" ? getStoreCluster(key, clusters) : null,
+    timeRestriction: mode === "store" ? getTimeRestriction(key, timeRestrictions) : null,
+    assortmentCapacity: mode === "store" ? getStoreAssortment(key, assortments) : null,
     items,
     sections: splitIntoSections(items),
     totalActions: items.length,

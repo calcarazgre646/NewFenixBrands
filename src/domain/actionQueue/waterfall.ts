@@ -20,30 +20,15 @@ import type {
   WaterfallInput,
   InventoryRecord,
 } from "./types";
-import { getStoreCluster, getTimeRestriction, getCoverWeeks } from "./clusters";
+import { getStoreCluster, getTimeRestriction, STORE_CLUSTERS, STORE_TIME_RESTRICTIONS } from "./clusters";
+import type { StoreCluster } from "./types";
+import type { WaterfallConfig } from "@/domain/config/types";
+import { DEFAULT_WATERFALL_CONFIG } from "@/domain/config/defaults";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const RETAILS_DEPOT = "RETAILS";
 const STOCK_DEPOT   = "STOCK";
-
-const LOW_STOCK_RATIO      = 0.40;
-const HIGH_STOCK_RATIO     = 2.50;
-const MIN_STOCK_ABS        = 3;
-const MIN_AVG_FOR_RATIO    = 5;
-const MIN_TRANSFER_UNITS   = 2;   // Minimum units per source — avoids "move 1 unit from X" noise
-const PARETO_TARGET        = 0.80;
-const SURPLUS_LIQUIDATE_RATIO = 0.60;
-
-/**
- * WOI objetivo para tiendas B2C: 13 semanas.
- * Actualizado por Rodrigo (17/03/2026) — antes era 3 semanas.
- *
- * El coverWeeks por marca (12/24 de getCoverWeeks) sigue usándose para:
- *   - Cálculo de cobertura de depósitos (RETAILS/STOCK abastan múltiples tiendas)
- *   - Cálculo de cobertura de tiendas B2B (12w nacional, 24w importado)
- */
-const B2C_STORE_COVER_WEEKS = 13;
 
 /**
  * Minimum impact score for an action to be included.
@@ -134,9 +119,17 @@ export function computeActionQueue(
   categoriaFilter: string | null,
   storeFilter: string | null,
   impactThreshold: number = MIN_IMPACT_THRESHOLD,
+  storeClusters: Record<string, StoreCluster> = STORE_CLUSTERS,
+  storeTimeRestrictions: Record<string, string> = STORE_TIME_RESTRICTIONS,
+  waterfallConfig: WaterfallConfig = DEFAULT_WATERFALL_CONFIG,
 ): ActionItemFull[] {
   resetIdCounter();
   const { inventory, salesHistory, doiAge } = input;
+  const {
+    lowStockRatio, highStockRatio, minStockAbs, minAvgForRatio,
+    minTransferUnits, paretoTarget, surplusLiquidateRatio,
+    b2cStoreCoverWeeks, importedBrands, coverWeeksImported, coverWeeksNational,
+  } = waterfallConfig;
 
   // -- 1. Separate rows into operational zones
   const b2cRows:    InventoryRecord[] = [];
@@ -233,10 +226,11 @@ export function computeActionQueue(
     const cost        = Math.max(...stores.map(([, v]) => v.cost), 0);
     // B2B uses wholesale price for impact — retail price inflates B2B priority artificially
     const effectivePrice = mode === "b2b" ? priceMay : price;
-    const brandCoverWeeks = getCoverWeeks(brand);
-    // B2C stores: 13 weeks target (Rodrigo 17/03/2026)
-    // B2B stores: brand-based coverage (12w national, 24w imported)
-    const storeCoverWeeks = mode === "b2c" ? B2C_STORE_COVER_WEEKS : brandCoverWeeks;
+    const importedSet = new Set(importedBrands.map(b => b.toLowerCase()));
+    const brandCoverWeeks = importedSet.has(brand.toLowerCase()) ? coverWeeksImported : coverWeeksNational;
+    // B2C stores: configurable weeks target (default 13, Rodrigo 17/03/2026)
+    // B2B stores: brand-based coverage (national/imported from config)
+    const storeCoverWeeks = mode === "b2c" ? b2cStoreCoverWeeks : brandCoverWeeks;
     const storeCoverMonths = storeCoverWeeks / 4.33;
 
     const totalQty = stores.reduce((s, [, v]) => s + v.qty, 0);
@@ -260,16 +254,16 @@ export function computeActionQueue(
       if (hist && hist > 0) {
         const targetStock = hist * storeCoverMonths;
         if (qty < targetStock * 0.5) {
-          need = Math.max(Math.ceil(targetStock - qty), MIN_STOCK_ABS);
+          need = Math.max(Math.ceil(targetStock - qty), minStockAbs);
         } else if (qty > targetStock * 2) {
           excess = Math.floor(qty - targetStock);
         }
       } else {
-        if (qty === 0 || qty <= MIN_STOCK_ABS) {
-          need = Math.round(Math.max(avgQty - qty, MIN_STOCK_ABS));
-        } else if (qty > avgQty * HIGH_STOCK_RATIO && qty > 10) {
+        if (qty === 0 || qty <= minStockAbs) {
+          need = Math.round(Math.max(avgQty - qty, minStockAbs));
+        } else if (qty > avgQty * highStockRatio && qty > 10) {
           excess = Math.round(qty - avgQty);
-        } else if (avgQty >= MIN_AVG_FOR_RATIO && qty < avgQty * LOW_STOCK_RATIO) {
+        } else if (avgQty >= minAvgForRatio && qty < avgQty * lowStockRatio) {
           need = Math.round(avgQty - qty);
         }
       }
@@ -349,8 +343,8 @@ export function computeActionQueue(
         actionType,
         impactScore: calcImpactScore(units, effectivePrice, cost),
         paretoFlag: false,
-        storeCluster: getStoreCluster(store),
-        timeRestriction: getTimeRestriction(store),
+        storeCluster: getStoreCluster(store, storeClusters),
+        timeRestriction: getTimeRestriction(store, storeTimeRestrictions),
         counterpartStores: counterparts,
         recommendedAction: recommended,
       };
@@ -379,7 +373,7 @@ export function computeActionQueue(
         if (avail <= 0) continue;
         const take = Math.min(avail, toFill);
         // Skip tiny transfers — not worth the logistics unless it's the last units needed
-        if (take < MIN_TRANSFER_UNITS && toFill > take) continue;
+        if (take < minTransferUnits && toFill > take) continue;
         counterparts.push({ store: s.store, units: take });
         toFill -= take;
         surplusPool.set(s.store, avail - take);
@@ -465,7 +459,7 @@ export function computeActionQueue(
 
       // Liquidation for remaining unsent excess
       if (remaining >= 3) {
-        const liquidate = Math.min(remaining, Math.round(remaining * SURPLUS_LIQUIDATE_RATIO));
+        const liquidate = Math.min(remaining, Math.round(remaining * surplusLiquidateRatio));
         if (liquidate >= 3) {
           actions.push(makeItem(
             surplus.store, "overstock", "transfer", "store_to_store",
@@ -534,7 +528,7 @@ export function computeActionQueue(
     const paretoIds = new Set<string>();
     let cumulative = 0;
     for (const action of byImpact) {
-      if (cumulative / totalImpact >= PARETO_TARGET) break;
+      if (cumulative / totalImpact >= paretoTarget) break;
       cumulative += action.impactScore;
       paretoIds.add(action.id);
     }

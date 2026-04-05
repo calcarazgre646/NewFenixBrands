@@ -37,6 +37,7 @@ import {
   buildDailySeries,
 } from "@/domain/executive/calcs";
 import { calcGrossMargin, calcGMROI, calcInventoryTurnover } from "@/domain/kpis/calculations";
+import { useExecutiveConfig } from "@/hooks/useConfig";
 import type { ChartPoint, MonthlyRow, DailyChartPoint } from "@/domain/executive/calcs";
 import {
   generateBrandInsights,
@@ -214,6 +215,7 @@ function aggregateUnitsByMonthFromDaily(rows: DailySalesRow[]): Map<number, numb
 
 export function useExecutiveData(): ExecutiveData {
   const { filters } = useFilters();
+  const execConfig = useExecutiveConfig();
   const calMonth = getCalendarMonth();
   const calYear  = getCalendarYear();
   const year     = filters.year;
@@ -385,14 +387,14 @@ export function useExecutiveData(): ExecutiveData {
     const isUnfiltered = !isBrandFiltered && filters.channel === "total";
     let fullYearTarget: number;
     if (isUnfiltered) {
-      fullYearTarget = 70_000_000_000;
+      fullYearTarget = execConfig.annualTargetFallback;
     } else if (isBrandFiltered) {
       let budgetTotal = 0;
       for (const [, v] of monthlyBudget) budgetTotal += v;
-      fullYearTarget = budgetTotal > 0 ? budgetTotal : calcAnnualTarget(filteredGoals);
+      fullYearTarget = budgetTotal > 0 ? budgetTotal : calcAnnualTarget(filteredGoals, execConfig.annualTargetFallback);
     } else {
       // Canal filtrado, marca total → usar store goals filtradas por canal
-      fullYearTarget = calcAnnualTarget(filteredGoals);
+      fullYearTarget = calcAnnualTarget(filteredGoals, execConfig.annualTargetFallback);
     }
 
     // ── 2. Objetivo del período — budget prorrateado al último día con datos ──
@@ -521,7 +523,8 @@ export function useExecutiveData(): ExecutiveData {
       monthlyReal, monthlyBudget, monthlyPY, monthlyCost, monthlyPYCost,
       activeMonths, closedMonths,
       isCurrentYear, calMonth, year, filters.brand, filters.channel, filters.store,
-      filters.period, correctedProrata, lastDataDay, filteredDailyPY]);
+      filters.period, correctedProrata, lastDataDay, filteredDailyPY,
+      execConfig.annualTargetFallback]);
 
   // ── Series del gráfico (siempre muestra 12 meses para contexto anual) ──
   const chartPoints = useMemo((): ChartPoint[] => {
@@ -588,10 +591,10 @@ export function useExecutiveData(): ExecutiveData {
       monthlyCost, monthlyPYCost, monthlyBudgetGmPct,
       monthlyUnits, monthlyBudgetUnits, monthlyPYUnits,
       calendarMonth: calMonth, partialProrata: correctedProrata,
-    }),
+    }, execConfig.lyBudgetFactor),
     [monthlyReal, monthlyBudget, monthlyPY, monthlyCost, monthlyPYCost,
      monthlyBudgetGmPct, monthlyUnits, monthlyBudgetUnits, monthlyPYUnits,
-     calMonth, correctedProrata],
+     calMonth, correctedProrata, execConfig.lyBudgetFactor],
   );
 
   // ── Insights automáticos ──────────────────────────────────────────────
@@ -663,9 +666,9 @@ export function useExecutiveData(): ExecutiveData {
         monthlyBudgetGmPct: aggregateBudgetGmPctByMonth(budgetQ.data ?? [], viewBrand, viewChannel),
         monthlyUnits: empty, monthlyBudgetUnits: empty, monthlyPYUnits: empty,
         calendarMonth: calMonth, partialProrata: correctedProrata,
-      });
+      }, execConfig.lyBudgetFactor);
     },
-    [salesQ.data, prevSalesQ.data, budgetQ.data, calMonth, correctedProrata],
+    [salesQ.data, prevSalesQ.data, budgetQ.data, calMonth, correctedProrata, execConfig.lyBudgetFactor],
   );
 
   // ── Estado consolidado ─────────────────────────────────────────────────

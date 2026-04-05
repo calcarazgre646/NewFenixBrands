@@ -23,9 +23,11 @@ import { Card } from "@/components/ui/card/Card";
 import { formatPYGSuffix } from "@/utils/format";
 import type { StoreCluster } from "@/domain/actionQueue/types";
 
+import { WEEKS_PER_MONTH, DOI_AGE_THRESHOLDS, FEATURE_PAGE_SIZE } from "@/domain/config/defaults";
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = FEATURE_PAGE_SIZE;
 
 const CLUSTER_STYLES: Record<StoreCluster, { bg: string; label: string }> = {
   A:   { bg: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400", label: "Premium" },
@@ -147,7 +149,7 @@ export function ActionGroupCard({ group, mode, channel, defaultExpanded = false,
     }
     if (totalWeight === 0) return null;
     const avgMOS = weightedMOS / totalWeight;
-    return avgMOS * 4.33;
+    return avgMOS * WEEKS_PER_MONTH;
   }, [group.items]);
 
   // DOI-edad promedio del grupo (weighted by historicalAvg, como en grouping.ts)
@@ -227,9 +229,9 @@ export function ActionGroupCard({ group, mode, channel, defaultExpanded = false,
             })()}
             {groupDOI !== null && groupDOI > 0 && (
               <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
-                groupDOI > 180
+                groupDOI > DOI_AGE_THRESHOLDS.criticalDays
                   ? "bg-error-50 text-error-700 dark:bg-error-500/10 dark:text-error-400"
-                  : groupDOI > 90
+                  : groupDOI > DOI_AGE_THRESHOLDS.warningDays
                   ? "bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-400"
                   : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
               }`}>
@@ -343,7 +345,7 @@ function buildSectionDiagnosis(section: ActionSection, channel: "b2c" | "b2b"): 
       weightedMOS += item.currentMOS * w;
       totalWeight += w;
     }
-    if (totalWeight > 0) avgWOI = (weightedMOS / totalWeight) * 4.33;
+    if (totalWeight > 0) avgWOI = (weightedMOS / totalWeight) * WEEKS_PER_MONTH;
   }
 
   const { intent } = section;

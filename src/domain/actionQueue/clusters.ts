@@ -64,17 +64,6 @@ export const STORE_ASSORTMENT: Record<string, number> = {
 };
 
 /**
- * Mix de precios por cluster.
- * Fuente: tabla de clusterización de tiendas (Rodrigo).
- * A = solo precio normal. B = 57/43 normal/sale. OUT = 40/60 sale/outlet.
- */
-export const CLUSTER_PRICE_MIX: Record<StoreCluster, { normal: number; sale: number; outlet: number }> = {
-  A:   { normal: 1.00, sale: 0.00, outlet: 0.00 },
-  B:   { normal: 0.57, sale: 0.43, outlet: 0.00 },
-  OUT: { normal: 0.00, sale: 0.40, outlet: 0.60 },
-};
-
-/**
  * Restricciones horarias de tiendas para recibir transferencias.
  * Fuente: "Tabla con restricciones de horario para movimientos de stock" (Rodrigo).
  */
@@ -93,16 +82,25 @@ export const STORE_TIME_RESTRICTIONS: Record<string, string> = {
   WRMULTIPLAZA:  "Lun–Vie antes de las 9am",
 };
 
-export function getStoreCluster(storeCode: string): StoreCluster | null {
-  return STORE_CLUSTERS[storeCode.trim().toUpperCase()] ?? null;
+export function getStoreCluster(
+  storeCode: string,
+  clusters: Record<string, StoreCluster> = STORE_CLUSTERS,
+): StoreCluster | null {
+  return clusters[storeCode.trim().toUpperCase()] ?? null;
 }
 
-export function getTimeRestriction(storeCode: string): string {
-  return STORE_TIME_RESTRICTIONS[storeCode.trim().toUpperCase()] ?? "—";
+export function getTimeRestriction(
+  storeCode: string,
+  restrictions: Record<string, string> = STORE_TIME_RESTRICTIONS,
+): string {
+  return restrictions[storeCode.trim().toUpperCase()] ?? "—";
 }
 
-export function getStoreAssortment(storeCode: string): number | null {
-  return STORE_ASSORTMENT[storeCode.trim().toUpperCase()] ?? null;
+export function getStoreAssortment(
+  storeCode: string,
+  assortments: Record<string, number> = STORE_ASSORTMENT,
+): number | null {
+  return assortments[storeCode.trim().toUpperCase()] ?? null;
 }
 
 /** Marcas importadas = Tipo 2 (lead time 180d = 24 semanas de cobertura) */

@@ -1,0 +1,78 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`defaults golden tests > DEFAULT_DEPOT_CONFIG matches snapshot 1`] = `
+{
+  "criticalWeeks": 4,
+  "highWeeks": 16,
+  "historyMonths": 6,
+  "lowWeeks": 8,
+  "noveltyCoverage": 0.8,
+}
+`;
+
+exports[`defaults golden tests > DEFAULT_EXECUTIVE_CONFIG matches snapshot 1`] = `
+{
+  "annualTargetFallback": 70000000000,
+  "lyBudgetFactor": 0.9,
+}
+`;
+
+exports[`defaults golden tests > DEFAULT_FRESHNESS_CONFIG matches snapshot 1`] = `
+{
+  "defaultThresholds": {
+    "riskMinutes": 360,
+    "staleMinutes": 120,
+  },
+  "sourceThresholds": {
+    "mv_doi_edad": {
+      "riskMinutes": 360,
+      "staleMinutes": 120,
+    },
+    "mv_stock_tienda": {
+      "riskMinutes": 180,
+      "staleMinutes": 90,
+    },
+    "mv_ventas_12m_por_tienda_sku": {
+      "riskMinutes": 180,
+      "staleMinutes": 90,
+    },
+    "mv_ventas_diarias": {
+      "riskMinutes": 180,
+      "staleMinutes": 90,
+    },
+    "mv_ventas_mensual": {
+      "riskMinutes": 180,
+      "staleMinutes": 90,
+    },
+  },
+}
+`;
+
+exports[`defaults golden tests > DEFAULT_MARGIN_CONFIG matches snapshot 1`] = `
+{
+  "b2bHealthy": 50,
+  "b2bModerate": 40,
+  "b2cHealthy": 55,
+  "b2cModerate": 50,
+}
+`;
+
+exports[`defaults golden tests > DEFAULT_WATERFALL_CONFIG matches snapshot 1`] = `
+{
+  "b2cStoreCoverWeeks": 13,
+  "coverWeeksImported": 24,
+  "coverWeeksNational": 12,
+  "highStockRatio": 2.5,
+  "importedBrands": [
+    "wrangler",
+    "lee",
+  ],
+  "lowStockRatio": 0.4,
+  "minAvgForRatio": 5,
+  "minImpactGs": 500000,
+  "minStockAbs": 3,
+  "minTransferUnits": 2,
+  "paretoTarget": 0.8,
+  "surplusLiquidateRatio": 0.6,
+}
+`;

@@ -90,38 +90,37 @@ export function calcYoY(current: number, prior: number): number {
 export const calcLfL = calcYoY;
 
 /**
- * Clasifica la salud del margen bruto según umbrales definidos por el cliente.
- *
- * Umbrales por canal (Rodrigo, 10/03/2026):
- *   B2C / Fénix (total): Verde ≥ 55%, Amarillo 50–54.99%, Rojo < 50%
- *   B2B:                  Verde ≥ 50%, Amarillo 40–49.99%, Rojo < 40%
- *
- * @param marginPct  Margen bruto en escala 0-100
- * @param channel    Canal: "b2b" | "b2c" | "total" (total usa umbrales B2C/Fénix)
+ * Clasifica la salud del margen bruto según umbrales configurables.
+ * Acepta config opcional para inyección desde config remota.
  */
 export type MarginHealth = "healthy" | "moderate" | "low";
+
+import type { MarginConfig } from "@/domain/config/types";
+import { DEFAULT_MARGIN_CONFIG } from "@/domain/config/defaults";
 
 export function classifyMarginHealth(
   marginPct: number,
   channel: "b2b" | "b2c" | "total" = "total",
+  config: MarginConfig = DEFAULT_MARGIN_CONFIG,
 ): MarginHealth {
   if (channel === "b2b") {
-    if (marginPct >= 50) return "healthy";
-    if (marginPct >= 40) return "moderate";
+    if (marginPct >= config.b2bHealthy) return "healthy";
+    if (marginPct >= config.b2bModerate) return "moderate";
     return "low";
   }
   // B2C y Total (Fénix)
-  if (marginPct >= 55) return "healthy";
-  if (marginPct >= 50) return "moderate";
+  if (marginPct >= config.b2cHealthy) return "healthy";
+  if (marginPct >= config.b2cModerate) return "moderate";
   return "low";
 }
 
-/** Returns the gauge zone boundaries for a channel: [redEnd, yellowEnd] */
+/** Returns the gauge zone boundaries for a channel */
 export function marginHealthThresholds(
   channel: "b2b" | "b2c" | "total" = "total",
+  config: MarginConfig = DEFAULT_MARGIN_CONFIG,
 ): { red: number; yellow: number } {
-  if (channel === "b2b") return { red: 40, yellow: 50 };
-  return { red: 50, yellow: 55 };
+  if (channel === "b2b") return { red: config.b2bModerate, yellow: config.b2bHealthy };
+  return { red: config.b2cModerate, yellow: config.b2cHealthy };
 }
 
 /**

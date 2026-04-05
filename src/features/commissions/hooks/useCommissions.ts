@@ -21,7 +21,7 @@ import { fetchSellerSales } from "@/queries/commissions.queries";
 import { fetchStoreGoals } from "@/queries/stores.queries";
 import { commissionKeys, storeKeys, STALE_30MIN, GC_60MIN } from "@/queries/keys";
 import { findTier, calcPercentageCommission, calcFixedCommission, buildCommissionSummary } from "@/domain/commissions/calculations";
-import { SCALE_BY_ROLE } from "@/domain/commissions/scales";
+import { useCommissionScales } from "@/hooks/useConfig";
 import type {
   CommissionResult,
   CommissionSummary,
@@ -53,6 +53,8 @@ export function useCommissions(year: number, month: number): UseCommissionsResul
       },
     ],
   });
+
+  const scales = useCommissionScales();
 
   const { results, summary } = useMemo(() => {
     if (!salesQ.data || !goalsQ.data) {
@@ -110,7 +112,7 @@ export function useCommissions(year: number, month: number): UseCommissionsResul
       if (seller.ventaNeta <= 0) continue;
 
       const { role, channel } = classifySellerRole(seller.canal, seller.tipoVenta);
-      const scale = SCALE_BY_ROLE[role];
+      const scale = scales[role];
       const primaryStore = Array.from(seller.stores)[0] ?? "";
 
       if (channel === "retail") {
@@ -195,7 +197,7 @@ export function useCommissions(year: number, month: number): UseCommissionsResul
       results: commResults,
       summary: buildCommissionSummary(commResults, year, month),
     };
-  }, [salesQ.data, goalsQ.data, year, month]);
+  }, [salesQ.data, goalsQ.data, year, month, scales]);
 
   return {
     summary,

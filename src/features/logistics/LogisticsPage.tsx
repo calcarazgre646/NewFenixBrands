@@ -17,8 +17,7 @@ import { BrandPipelineCards } from "./components/BrandPipelineCards";
 import { OriginBreakdownCard } from "./components/OriginBreakdownCard";
 import { LogisticsTable } from "./components/LogisticsTable";
 
-// Importaciones se cargan por batch — stale > 1 día es normal, > 7 días es riesgo.
-const LOGISTICS_THRESHOLDS = { staleMinutes: 1440, riskMinutes: 10080 };
+import { DEFAULT_LOGISTICS_FRESHNESS } from "@/domain/config/defaults";
 
 export default function LogisticsPage() {
   const lastLoadQ = useQuery({
@@ -29,7 +28,7 @@ export default function LogisticsPage() {
   });
   const lastLoad = lastLoadQ.data ?? undefined;
   const logisticsStatus = lastLoad
-    ? classifyFreshness(lastLoad, new Date(), LOGISTICS_THRESHOLDS)
+    ? classifyFreshness(lastLoad, new Date(), DEFAULT_LOGISTICS_FRESHNESS)
     : "unknown" as const;
 
   const {
