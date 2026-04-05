@@ -16,6 +16,7 @@ import { inventoryKeys, salesHistoryKeys, doiAgeKeys, STALE_30MIN, GC_60MIN } fr
 import { fetchDoiAge } from "@/queries/doiAge.queries";
 import type { DoiAgeData } from "@/queries/doiAge.queries";
 import { getStoreCluster } from "@/domain/actionQueue/clusters";
+import { useStoreConfig, useWaterfallConfig } from "@/hooks/useConfig";
 import { computeActionQueue } from "@/domain/actionQueue/waterfall";
 import type { ActionItemFull } from "@/domain/actionQueue/waterfall";
 import type { InventoryRecord } from "@/domain/actionQueue/types";
@@ -72,6 +73,8 @@ export interface ActionQueueData {
 
 export function useActionQueue(): ActionQueueData {
   const { filters: globalFilters } = useFilters();
+  const storeConfig = useStoreConfig();
+  const waterfallConfig = useWaterfallConfig();
   const [channel, setChannel] = useState<ChannelMode>("b2c");
 
   // Brand comes from global FilterContext (header avatars)
@@ -93,10 +96,10 @@ export function useActionQueue(): ActionQueueData {
       .filter(item => item.storeType !== "excluded")
       .map(item => {
         const rec = toInventoryRecord(item);
-        rec.storeCluster = getStoreCluster(rec.store);
+        rec.storeCluster = getStoreCluster(rec.store, storeConfig.clusters);
         return rec;
       });
-  }, [inventoryQ.data]);
+  }, [inventoryQ.data, storeConfig.clusters]);
 
   // ── Extract unique SKUs for sales history query ────────────────────────────
   const uniqueSkuList = useMemo(() => {
@@ -153,6 +156,10 @@ export function useActionQueue(): ActionQueueData {
         null,
         null,
         null,
+        waterfallConfig.minImpactGs,
+        storeConfig.clusters,
+        storeConfig.timeRestrictions,
+        waterfallConfig,
       );
       const elapsed = performance.now() - t0;
       if (import.meta.env.DEV) {
@@ -171,7 +178,7 @@ export function useActionQueue(): ActionQueueData {
       setWaterfallRan(true);
       return [];
     }
-  }, [records, historyQ.data, historyQ.isLoading, doiAgeQ.data, channel, brand]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [records, historyQ.data, historyQ.isLoading, doiAgeQ.data, channel, brand, storeConfig.clusters, storeConfig.timeRestrictions, waterfallConfig]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived stats ──────────────────────────────────────────────────────────
   const { totalItems, paretoCount, criticalCount, lowCount, overstockCount, uniqueSkus, totalGapUnits, avgDOI } =

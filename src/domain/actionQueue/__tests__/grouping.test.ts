@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { groupActions, splitIntoSections } from "../grouping";
 import type { ActionItemFull } from "../waterfall";
 import type { RiskLevel, WaterfallLevel, ActionType } from "../types";
+import { STORE_ASSORTMENT } from "../clusters";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -115,7 +116,7 @@ describe("groupActions", () => {
     const [group] = groupActions(items, "store");
     expect(group.cluster).toBe("B");
     expect(group.timeRestriction).toBe("Antes de las 10am (optimizar ruta)");
-    expect(group.assortmentCapacity).toBe(3000);
+    expect(group.assortmentCapacity).toBe(STORE_ASSORTMENT["CERROALTO"]);
   });
 
   it("does not include store metadata in brand grouping", () => {
@@ -334,7 +335,7 @@ describe("groupActions — exhaustive", () => {
   it("store group assortmentCapacity from STORE_ASSORTMENT", () => {
     const items = [makeItem({ store: "MARTELMCAL" })];
     const [group] = groupActions(items, "store");
-    expect(group.assortmentCapacity).toBe(5500);
+    expect(group.assortmentCapacity).toBe(STORE_ASSORTMENT["MARTELMCAL"]);
   });
 
   it("items array in group contains all original items", () => {

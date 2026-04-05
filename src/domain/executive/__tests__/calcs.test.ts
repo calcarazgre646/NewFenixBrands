@@ -9,6 +9,7 @@ import {
   buildMonthlyRows,
   buildDailySeries,
 } from "../calcs";
+import { DEFAULT_EXECUTIVE_CONFIG } from "@/domain/config/defaults";
 
 // ─── calcAnnualTarget ──────────────────────────────────────────────────────
 
@@ -17,12 +18,12 @@ describe("calcAnnualTarget", () => {
     expect(calcAnnualTarget([{ goal: 30e9 }, { goal: 40e9 }])).toBe(70e9);
   });
 
-  it("returns fallback 70B when array is empty", () => {
-    expect(calcAnnualTarget([])).toBe(70_000_000_000);
+  it("returns fallback when array is empty", () => {
+    expect(calcAnnualTarget([])).toBe(DEFAULT_EXECUTIVE_CONFIG.annualTargetFallback);
   });
 
   it("returns fallback when total is 0", () => {
-    expect(calcAnnualTarget([{ goal: 0 }, { goal: 0 }])).toBe(70_000_000_000);
+    expect(calcAnnualTarget([{ goal: 0 }, { goal: 0 }])).toBe(DEFAULT_EXECUTIVE_CONFIG.annualTargetFallback);
   });
 
   it("handles single goal", () => {

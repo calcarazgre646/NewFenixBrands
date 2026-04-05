@@ -22,15 +22,15 @@ import type {
   NoveltyData,
 } from "./types";
 import { getCalendarMonth, getCalendarYear, MONTH_SHORT } from "@/domain/period/helpers";
-import { getStoreCluster } from "@/domain/actionQueue/clusters";
+import { getStoreCluster, STORE_CLUSTERS } from "@/domain/actionQueue/clusters";
+import type { StoreCluster } from "@/domain/actionQueue/types";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
-const WEEKS_PER_MONTH = 4.33;
-const CRITICAL_WEEKS = 4;
-const LOW_WEEKS = 8;
-const HIGH_WEEKS = 16;
-const HISTORY_MONTHS = 6;
+import type { DepotConfig } from "@/domain/config/types";
+import { DEFAULT_DEPOT_CONFIG, WEEKS_PER_MONTH } from "@/domain/config/defaults";
+
+const { historyMonths: HISTORY_MONTHS } = DEFAULT_DEPOT_CONFIG;
 const TOP_SKU_LIMIT = 15;
 
 /** Depósitos centrales (no son tiendas retail) */
@@ -61,12 +61,15 @@ export function monthlyToWeekly(monthly: number): number {
   return monthly / WEEKS_PER_MONTH;
 }
 
-/** Clasifica riesgo por semanas de cobertura */
-export function classifyDepotRisk(weeksOnHand: number | null): DepotRisk {
+/** Clasifica riesgo por semanas de cobertura. Acepta config opcional. */
+export function classifyDepotRisk(
+  weeksOnHand: number | null,
+  config: Pick<DepotConfig, "criticalWeeks" | "lowWeeks" | "highWeeks"> = DEFAULT_DEPOT_CONFIG,
+): DepotRisk {
   if (weeksOnHand === null) return "sin_venta";
-  if (weeksOnHand < CRITICAL_WEEKS) return "critico";
-  if (weeksOnHand < LOW_WEEKS) return "bajo";
-  if (weeksOnHand > HIGH_WEEKS) return "alto";
+  if (weeksOnHand < config.criticalWeeks) return "critico";
+  if (weeksOnHand < config.lowWeeks) return "bajo";
+  if (weeksOnHand > config.highWeeks) return "alto";
   return "saludable";
 }
 
@@ -211,8 +214,6 @@ function buildSalesWindow(): SalesWindow {
   };
 }
 
-/** Umbral de cobertura para considerar un producto "cargado en tiendas" */
-const NOVELTY_COVERAGE_THRESHOLD = 0.80;
 const NOVELTY_STATUS = "lanzamiento";
 
 /** Es una tienda dependiente de RETAILS (B2C activa) */
@@ -220,13 +221,14 @@ export function isDependentStore(storeCode: string): boolean {
   return !EXCLUDED_STORES.has(storeCode.toUpperCase());
 }
 
-/** Clasifica el estado de distribución de un producto de lanzamiento */
+/** Clasifica el estado de distribución de un producto de lanzamiento. */
 export function classifyNoveltyDistribution(
   storeCount: number,
   totalStores: number,
+  noveltyCoverage: number = DEFAULT_DEPOT_CONFIG.noveltyCoverage,
 ): NoveltyDistributionStatus {
   if (storeCount === 0) return "en_deposito";
-  if (totalStores > 0 && storeCount / totalStores >= NOVELTY_COVERAGE_THRESHOLD) return "cargado";
+  if (totalStores > 0 && storeCount / totalStores >= noveltyCoverage) return "cargado";
   return "en_distribucion";
 }
 
@@ -234,6 +236,7 @@ export function classifyNoveltyDistribution(
 export function buildNoveltyData(
   inventory: InventoryItem[],
   dependentStoreCount: number,
+  noveltyCoverage: number = DEFAULT_DEPOT_CONFIG.noveltyCoverage,
 ): NoveltyData {
   // Filtrar solo lanzamientos
   const noveltyItems = inventory.filter(i => i.estComercial === NOVELTY_STATUS);
@@ -292,7 +295,7 @@ export function buildNoveltyData(
     const coveragePct = dependentStoreCount > 0
       ? Math.round(storeCount / dependentStoreCount * 100)
       : 0;
-    const status = classifyNoveltyDistribution(storeCount, dependentStoreCount);
+    const status = classifyNoveltyDistribution(storeCount, dependentStoreCount, noveltyCoverage);
 
     totalUnits += data.totalUnits;
     totalValue += data.totalValue;
@@ -340,6 +343,8 @@ export function buildNoveltyData(
 export function buildDepotData(
   inventory: InventoryItem[],
   salesHistory: SalesHistoryMap,
+  config: DepotConfig = DEFAULT_DEPOT_CONFIG,
+  clusters: Record<string, StoreCluster> = STORE_CLUSTERS,
 ): DepotData {
   // ── 1. Separar inventario por nodo ─────────────────────────────────────────
   const stockItems: InventoryItem[] = [];
@@ -405,7 +410,7 @@ export function buildDepotData(
     monthlyDemand: networkMonthlyDemand,
     weeklyDemand: networkWeeklyDemand,
     weeksOnHand: Math.round(stockWOI * 10) / 10,
-    risk: classifyDepotRisk(stockWOI),
+    risk: classifyDepotRisk(stockWOI, config),
     skuCount: stockSkuCount,
     topBrands: aggregateByFieldCentral(stockItems, "brand", allDependentItems, salesHistory),
     topCategories: aggregateByFieldCentral(stockItems, "categoria", allDependentItems, salesHistory),
@@ -422,7 +427,7 @@ export function buildDepotData(
     monthlyDemand: networkMonthlyDemand,
     weeklyDemand: networkWeeklyDemand,
     weeksOnHand: Math.round(retailsWOI * 10) / 10,
-    risk: classifyDepotRisk(retailsWOI),
+    risk: classifyDepotRisk(retailsWOI, config),
     skuCount: retailsSkuCount,
     topBrands: aggregateByFieldCentral(retailsItems, "brand", allDependentItems, salesHistory),
     topCategories: aggregateByFieldCentral(retailsItems, "categoria", allDependentItems, salesHistory),
@@ -448,7 +453,7 @@ export function buildDepotData(
     });
     const storeWeeklyDemand = monthlyToWeekly(storeMonthlyDemand);
     const woi = storeWeeklyDemand > 0 ? units / storeWeeklyDemand : 0;
-    const risk = storeMonthlyDemand > 0 ? classifyDepotRisk(woi) : "sin_venta";
+    const risk = storeMonthlyDemand > 0 ? classifyDepotRisk(woi, config) : "sin_venta";
 
     if (risk === "critico") criticalCount++;
     totalNetworkUnits += units;
@@ -460,7 +465,7 @@ export function buildDepotData(
       key: storeKey,
       label: storeKey,
       type: "store" as const,
-      cluster: getStoreCluster(storeKey),
+      cluster: getStoreCluster(storeKey, clusters),
       units,
       value,
       monthlyDemand: Math.round(storeMonthlyDemand * 100) / 100,
@@ -501,7 +506,7 @@ export function buildDepotData(
   };
 
   // ── 7. Novedades / Lanzamientos ──────────────────────────────────────────
-  const novelty = buildNoveltyData(inventory, dependentStoreKeys.length);
+  const novelty = buildNoveltyData(inventory, dependentStoreKeys.length, config.noveltyCoverage);
 
   return {
     salesWindow: buildSalesWindow(),

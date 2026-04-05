@@ -8,6 +8,7 @@ import { useState } from "react";
 import { formatNumber, formatPYGCompact } from "@/utils/format";
 import type { NoveltyData, NoveltyDistributionStatus } from "@/domain/depots/types";
 import DistributionStatusPill from "./DistributionStatusPill";
+import { FEATURE_PAGE_SIZE } from "@/domain/config/defaults";
 
 interface Props {
   novelty: NoveltyData;
@@ -28,7 +29,7 @@ const BAR_LABELS: Record<NoveltyDistributionStatus, string> = {
   cargado: "Cargado",
 };
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = FEATURE_PAGE_SIZE;
 
 export default function NoveltySection({ novelty }: Props) {
   const [page, setPage] = useState(0);

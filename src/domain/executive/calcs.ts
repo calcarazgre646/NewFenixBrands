@@ -45,20 +45,23 @@ export interface MonthlyRow {
 
 // ─── Constantes ─────────────────────────────────────────────────────────────
 
-const ANNUAL_TARGET_FALLBACK = 70_000_000_000;
-const LY_BUDGET_FACTOR = 0.90;
+import { DEFAULT_EXECUTIVE_CONFIG } from "@/domain/config/defaults";
+
 const AVG_DAYS_PER_MONTH = 365 / 12;
 
 // ─── Cálculos ───────────────────────────────────────────────────────────────
 
 /**
- * Calcula el objetivo anual desde metas por sucursal. Fallback a 70B si no hay datos.
- * Acepta metas pre-filtradas (por canal/tienda en el hook).
+ * Calcula el objetivo anual desde metas por sucursal.
+ * Fallback configurable (default: 70B Gs.) si no hay datos.
  */
-export function calcAnnualTarget(goals: Array<{ goal: number }>): number {
-  if (goals.length === 0) return ANNUAL_TARGET_FALLBACK;
+export function calcAnnualTarget(
+  goals: Array<{ goal: number }>,
+  fallback: number = DEFAULT_EXECUTIVE_CONFIG.annualTargetFallback,
+): number {
+  if (goals.length === 0) return fallback;
   const total = goals.reduce((s, g) => s + g.goal, 0);
-  return total > 0 ? total : ANNUAL_TARGET_FALLBACK;
+  return total > 0 ? total : fallback;
 }
 
 /** Día del año (1-365). Ej: 3 de Marzo → ~62. */
@@ -166,7 +169,10 @@ export interface MonthlyRowInputs {
   partialProrata?: { month: number; factor: number } | null;
 }
 
-export function buildMonthlyRows(inputs: MonthlyRowInputs): MonthlyRow[] {
+export function buildMonthlyRows(
+  inputs: MonthlyRowInputs,
+  lyBudgetFactor: number = DEFAULT_EXECUTIVE_CONFIG.lyBudgetFactor,
+): MonthlyRow[] {
   const {
     monthlyReal, monthlyBudget, monthlyPY,
     monthlyCost, monthlyPYCost, monthlyBudgetGmPct,
@@ -181,7 +187,7 @@ export function buildMonthlyRows(inputs: MonthlyRowInputs): MonthlyRow[] {
     const cost = monthlyCost.get(m) ?? 0;
     const budgetFull = monthlyBudget.get(m) ?? 0;
     const hasRealData = monthlyReal.has(m);
-    const lastYearFull = monthlyPY.has(m) ? (monthlyPY.get(m) ?? 0) : budgetFull * LY_BUDGET_FACTOR;
+    const lastYearFull = monthlyPY.has(m) ? (monthlyPY.get(m) ?? 0) : budgetFull * lyBudgetFactor;
     const lastYearCost = monthlyPYCost.get(m) ?? 0;
 
     // Presupuesto y año anterior SIEMPRE completos (sin prorrateo).

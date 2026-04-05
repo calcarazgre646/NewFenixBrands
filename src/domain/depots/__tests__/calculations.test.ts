@@ -14,6 +14,7 @@ import {
 } from "../calculations";
 import type { InventoryItem } from "@/queries/inventory.queries";
 import type { SalesHistoryMap } from "@/queries/salesHistory.queries";
+import { DEFAULT_DEPOT_CONFIG } from "@/domain/config/defaults";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -80,6 +81,9 @@ describe("monthlyToWeekly", () => {
 // ─── classifyDepotRisk ──────────────────────────────────────────────────────
 
 describe("classifyDepotRisk", () => {
+  // Derive boundaries from config defaults — tests survive threshold changes
+  const { criticalWeeks, lowWeeks, highWeeks } = DEFAULT_DEPOT_CONFIG;
+
   it("null → sin_venta", () => {
     expect(classifyDepotRisk(null)).toBe("sin_venta");
   });
@@ -88,24 +92,24 @@ describe("classifyDepotRisk", () => {
     expect(classifyDepotRisk(0)).toBe("critico");
   });
 
-  it("3 semanas → critico (< 4)", () => {
-    expect(classifyDepotRisk(3)).toBe("critico");
+  it("below critical → critico", () => {
+    expect(classifyDepotRisk(criticalWeeks - 1)).toBe("critico");
   });
 
-  it("4 semanas → bajo (>= 4, < 8)", () => {
-    expect(classifyDepotRisk(4)).toBe("bajo");
+  it("at critical → bajo", () => {
+    expect(classifyDepotRisk(criticalWeeks)).toBe("bajo");
   });
 
-  it("8 semanas → saludable (>= 8, <= 16)", () => {
-    expect(classifyDepotRisk(8)).toBe("saludable");
+  it("at low → saludable", () => {
+    expect(classifyDepotRisk(lowWeeks)).toBe("saludable");
   });
 
-  it("16 semanas → saludable (= 16)", () => {
-    expect(classifyDepotRisk(16)).toBe("saludable");
+  it("at high → saludable", () => {
+    expect(classifyDepotRisk(highWeeks)).toBe("saludable");
   });
 
-  it("17 semanas → alto (> 16)", () => {
-    expect(classifyDepotRisk(17)).toBe("alto");
+  it("above high → alto", () => {
+    expect(classifyDepotRisk(highWeeks + 1)).toBe("alto");
   });
 });
 

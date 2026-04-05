@@ -10,6 +10,7 @@
 import type { ActionItemFull } from "@/domain/actionQueue/waterfall";
 import type { RiskLevel } from "@/domain/actionQueue/types";
 import type { ActionSection, OperationalIntent } from "@/domain/actionQueue/grouping";
+import { WEEKS_PER_MONTH } from "@/domain/config/defaults";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ function actionRow(item: ActionItemFull, idx: number, showStore: boolean): strin
   const riskBg = RISK_BG[item.risk];
   const riskColor = RISK_COLOR[item.risk];
 
-  const coverValue = item.currentMOS * 4.33; // Always in weeks (WOI)
+  const coverValue = item.currentMOS * WEEKS_PER_MONTH;
   const coverLabel = "WOI";
   // Thresholds in weeks from item's coverWeeks (13 for B2C stores, 12/24 for depots/B2B)
   const lowThreshold = item.coverWeeks;           // 1× target

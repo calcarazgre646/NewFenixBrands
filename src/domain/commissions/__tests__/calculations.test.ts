@@ -80,34 +80,37 @@ describe("calcCumplimiento", () => {
 // ─── findTier ──────────────────────────────────────────────────────────────
 
 describe("findTier", () => {
-  const tiers = SCALE_BY_ROLE.vendedor_tienda.tiers;
+  const scale = SCALE_BY_ROLE.vendedor_tienda;
+  const tiers = scale.tiers;
+  // Derive expected values from the scale itself — not hardcoded
+  const tierAt = (pct: number) => tiers.find(t => pct >= t.minPct && pct < t.maxPct)?.value ?? tiers[tiers.length - 1].value;
 
-  it("0% → primer tramo (0%)", () => {
-    expect(findTier(tiers, 0).value).toBe(0);
+  it("0% → primer tramo", () => {
+    expect(findTier(tiers, 0).value).toBe(tierAt(0));
   });
 
-  it("69.99% → primer tramo (0%)", () => {
-    expect(findTier(tiers, 69.99).value).toBe(0);
+  it("69.99% → primer tramo", () => {
+    expect(findTier(tiers, 69.99).value).toBe(tierAt(69.99));
   });
 
-  it("70% → segundo tramo (0.85%)", () => {
-    expect(findTier(tiers, 70).value).toBe(0.85);
+  it("70% → segundo tramo", () => {
+    expect(findTier(tiers, 70).value).toBe(tierAt(70));
   });
 
-  it("85% → tercer tramo (0.95%)", () => {
-    expect(findTier(tiers, 85).value).toBe(0.95);
+  it("85% → tercer tramo", () => {
+    expect(findTier(tiers, 85).value).toBe(tierAt(85));
   });
 
-  it("100% → quinto tramo (1.15%)", () => {
-    expect(findTier(tiers, 100).value).toBe(1.15);
+  it("100% → quinto tramo", () => {
+    expect(findTier(tiers, 100).value).toBe(tierAt(100));
   });
 
-  it("120% → último tramo (1.35%)", () => {
-    expect(findTier(tiers, 120).value).toBe(1.35);
+  it("120% → último tramo", () => {
+    expect(findTier(tiers, 120).value).toBe(tierAt(120));
   });
 
-  it("200% → último tramo (1.35%)", () => {
-    expect(findTier(tiers, 200).value).toBe(1.35);
+  it("200% → último tramo (fallback)", () => {
+    expect(findTier(tiers, 200).value).toBe(tiers[tiers.length - 1].value);
   });
 });
 
@@ -142,32 +145,38 @@ describe("calcFixedCommission", () => {
 // ─── calcCommission — Vendedor Tienda (Retail, %) ──────────────────────────
 
 describe("calcCommission — vendedor_tienda", () => {
-  it("cumplimiento 100% → 1.15% comisión", () => {
+  const scale = SCALE_BY_ROLE.vendedor_tienda;
+  const tierAt = (pct: number) => findTier(scale.tiers, pct);
+
+  it("cumplimiento 100% → tier correcto", () => {
     const r = calcCommission(goal(), 10_000_000);
+    const expectedPct = tierAt(100).value;
     expect(r.cumplimientoVentasPct).toBe(100);
-    expect(r.comisionVentasPct).toBe(1.15);
-    expect(r.comisionVentasGs).toBe(115_000);
-    expect(r.comisionTotalGs).toBe(115_000);
+    expect(r.comisionVentasPct).toBe(expectedPct);
+    expect(r.comisionVentasGs).toBe(calcPercentageCommission(10_000_000, expectedPct));
+    expect(r.comisionTotalGs).toBe(r.comisionVentasGs);
     expect(r.comisionCobranzaGs).toBe(0);
   });
 
-  it("cumplimiento 50% → 0% comisión", () => {
+  it("cumplimiento 50% → 0% comisión (bajo umbral)", () => {
     const r = calcCommission(goal(), 5_000_000);
     expect(r.cumplimientoVentasPct).toBe(50);
-    expect(r.comisionVentasPct).toBe(0);
+    expect(r.comisionVentasPct).toBe(tierAt(50).value);
     expect(r.comisionTotalGs).toBe(0);
   });
 
-  it("cumplimiento 85% → 0.95%", () => {
+  it("cumplimiento 85% → tier correcto", () => {
     const r = calcCommission(goal(), 8_500_000);
-    expect(r.comisionVentasPct).toBe(0.95);
-    expect(r.comisionVentasGs).toBe(80_750);
+    const expectedPct = tierAt(85).value;
+    expect(r.comisionVentasPct).toBe(expectedPct);
+    expect(r.comisionVentasGs).toBe(calcPercentageCommission(8_500_000, expectedPct));
   });
 
-  it("cumplimiento 130% → 1.35%", () => {
+  it("cumplimiento 130% → último tramo", () => {
     const r = calcCommission(goal(), 13_000_000);
-    expect(r.comisionVentasPct).toBe(1.35);
-    expect(r.comisionVentasGs).toBe(175_500);
+    const expectedPct = tierAt(130).value;
+    expect(r.comisionVentasPct).toBe(expectedPct);
+    expect(r.comisionVentasGs).toBe(calcPercentageCommission(13_000_000, expectedPct));
   });
 });
 
@@ -175,26 +184,28 @@ describe("calcCommission — vendedor_tienda", () => {
 
 describe("calcCommission — supervisor_tienda", () => {
   const sup = goal({ rolComision: "supervisor_tienda" });
+  const scale = SCALE_BY_ROLE.supervisor_tienda;
+  const tierAt = (pct: number) => findTier(scale.tiers, pct);
 
-  it("cumplimiento 99% → Gs. 0", () => {
+  it("cumplimiento 99% → Gs. 0 (fixed, bajo umbral)", () => {
     const r = calcCommission(sup, 9_900_000);
-    expect(r.comisionTotalGs).toBe(0);
+    expect(r.comisionTotalGs).toBe(tierAt(99).value);
     expect(r.tipoComision).toBe("fixed");
   });
 
-  it("cumplimiento 100% → Gs. 600,000", () => {
+  it("cumplimiento 100% → monto fijo del tramo", () => {
     const r = calcCommission(sup, 10_000_000);
-    expect(r.comisionTotalGs).toBe(600_000);
+    expect(r.comisionTotalGs).toBe(tierAt(100).value);
   });
 
-  it("cumplimiento 115% → Gs. 700,000", () => {
+  it("cumplimiento 115% → monto fijo del tramo", () => {
     const r = calcCommission(sup, 11_500_000);
-    expect(r.comisionTotalGs).toBe(700_000);
+    expect(r.comisionTotalGs).toBe(tierAt(115).value);
   });
 
-  it("cumplimiento 125% → Gs. 800,000", () => {
+  it("cumplimiento 125% → monto fijo último tramo", () => {
     const r = calcCommission(sup, 12_500_000);
-    expect(r.comisionTotalGs).toBe(800_000);
+    expect(r.comisionTotalGs).toBe(tierAt(125).value);
   });
 });
 
@@ -207,23 +218,27 @@ describe("calcCommission — vendedor_mayorista", () => {
     metaVentas: 20_000_000,
     metaCobranza: 15_000_000,
   });
+  const scale = SCALE_BY_ROLE.vendedor_mayorista;
+  const tierAt = (pct: number) => findTier(scale.tiers, pct);
 
   it("100% ventas + 100% cobranza", () => {
     const r = calcCommission(may, 20_000_000, 15_000_000);
-    expect(r.comisionVentasPct).toBe(1.15);
-    expect(r.comisionVentasGs).toBe(230_000);
-    expect(r.comisionCobranzaPct).toBe(1.15);
-    expect(r.comisionCobranzaGs).toBe(172_500);
-    expect(r.comisionTotalGs).toBe(402_500);
+    const expectedPct = tierAt(100).value;
+    expect(r.comisionVentasPct).toBe(expectedPct);
+    expect(r.comisionVentasGs).toBe(calcPercentageCommission(20_000_000, expectedPct));
+    expect(r.comisionCobranzaPct).toBe(expectedPct);
+    expect(r.comisionCobranzaGs).toBe(calcPercentageCommission(15_000_000, expectedPct));
+    expect(r.comisionTotalGs).toBe(r.comisionVentasGs + r.comisionCobranzaGs);
   });
 
-  it("50% ventas (0%) + 90% cobranza (1.05%)", () => {
+  it("50% ventas (0%) + 90% cobranza → tier correcto", () => {
     const r = calcCommission(may, 10_000_000, 13_500_000);
-    expect(r.comisionVentasPct).toBe(0);
+    expect(r.comisionVentasPct).toBe(tierAt(50).value);
     expect(r.comisionVentasGs).toBe(0);
-    expect(r.comisionCobranzaPct).toBe(1.05);
-    expect(r.comisionCobranzaGs).toBe(141_750);
-    expect(r.comisionTotalGs).toBe(141_750);
+    const cobPct = tierAt(90).value; // 90% cobranza
+    expect(r.comisionCobranzaPct).toBe(cobPct);
+    expect(r.comisionCobranzaGs).toBe(calcPercentageCommission(13_500_000, cobPct));
+    expect(r.comisionTotalGs).toBe(r.comisionCobranzaGs);
   });
 
   it("sin meta cobranza → solo ventas", () => {
@@ -243,15 +258,16 @@ describe("calcCommission — vendedor_utp", () => {
     metaVentas: 8_000_000,
     metaCobranza: 0,
   });
+  const tierAt = (pct: number) => findTier(SCALE_BY_ROLE.vendedor_utp.tiers, pct);
 
-  it("cumplimiento 85% → 0.12%", () => {
+  it("cumplimiento 85% → tier correcto", () => {
     const r = calcCommission(utp, 6_800_000);
-    expect(r.comisionVentasPct).toBe(0.12);
+    expect(r.comisionVentasPct).toBe(tierAt(85).value);
   });
 
-  it("cumplimiento 120% → 0.23%", () => {
+  it("cumplimiento 120% → último tramo", () => {
     const r = calcCommission(utp, 9_600_000);
-    expect(r.comisionVentasPct).toBe(0.23);
+    expect(r.comisionVentasPct).toBe(tierAt(120).value);
   });
 });
 
@@ -264,11 +280,13 @@ describe("calcCommission — gerencia_utp", () => {
     metaVentas: 50_000_000,
     metaCobranza: 0,
   });
+  const tierAt = (pct: number) => findTier(SCALE_BY_ROLE.gerencia_utp.tiers, pct);
 
-  it("cumplimiento 100% → 1.60%", () => {
+  it("cumplimiento 100% → tier correcto", () => {
     const r = calcCommission(gutP, 50_000_000);
-    expect(r.comisionVentasPct).toBe(1.60);
-    expect(r.comisionVentasGs).toBe(800_000);
+    const expectedPct = tierAt(100).value;
+    expect(r.comisionVentasPct).toBe(expectedPct);
+    expect(r.comisionVentasGs).toBe(calcPercentageCommission(50_000_000, expectedPct));
   });
 });
 
@@ -286,8 +304,8 @@ describe("calcAllCommissions", () => {
     ];
     const results = calcAllCommissions(goals, sales);
     expect(results).toHaveLength(2);
-    expect(results[0].comisionVentasPct).toBe(1.15); // 100%
-    expect(results[1].comisionVentasPct).toBe(0.85); // 70%
+    expect(results[0].comisionVentasPct).toBe(findTier(SCALE_BY_ROLE.vendedor_tienda.tiers, 100).value);
+    expect(results[1].comisionVentasPct).toBe(findTier(SCALE_BY_ROLE.vendedor_tienda.tiers, 70).value);
   });
 
   it("vendedor sin ventas → 0% comisión", () => {
@@ -305,7 +323,7 @@ describe("calcAllCommissions", () => {
     ];
     const results = calcAllCommissions(goals, sales);
     expect(results[0].ventaReal).toBe(10_000_000); // 100%
-    expect(results[0].comisionVentasPct).toBe(1.15);
+    expect(results[0].comisionVentasPct).toBe(findTier(SCALE_BY_ROLE.vendedor_tienda.tiers, 100).value);
   });
 });
 

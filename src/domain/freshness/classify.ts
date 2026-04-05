@@ -44,9 +44,16 @@ export function classifyFreshness(
   return "risk";
 }
 
-/** Retorna los umbrales para una fuente, con fallback a defaults. */
-export function getThresholds(source: string): FreshnessThresholds {
-  return SOURCE_THRESHOLDS[source] ?? DEFAULT_THRESHOLDS;
+/**
+ * Retorna los umbrales para una fuente, con fallback a defaults.
+ * Acepta config opcional para permitir inyección desde config remota.
+ */
+export function getThresholds(
+  source: string,
+  sourceThresholds: Record<string, FreshnessThresholds> = SOURCE_THRESHOLDS,
+  defaultThresholds: FreshnessThresholds = DEFAULT_THRESHOLDS,
+): FreshnessThresholds {
+  return sourceThresholds[source] ?? defaultThresholds;
 }
 
 // ─── Relative time ──────────────────────────────────────────────────────────

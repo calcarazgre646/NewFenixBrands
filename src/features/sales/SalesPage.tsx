@@ -23,6 +23,7 @@ import { SkusCard } from "./components/SkusCard";
 import { useFilters } from "@/context/FilterContext";
 import { formatPYG, formatPYGSuffix, formatPct, formatChange } from "@/utils/format";
 import { classifyMarginHealth } from "@/domain/kpis/calculations";
+import { useMarginConfig } from "@/hooks/useConfig";
 import { Card } from "@/components/ui/card/Card";
 import { Skeleton } from "@/components/ui/skeleton/Skeleton";
 import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
@@ -37,6 +38,7 @@ export default function SalesPage() {
   const salesFreshness = worstStatus(["mv_ventas_diarias", "mv_ventas_mensual"]);
   const salesRefreshedAt = getInfo("mv_ventas_diarias")?.refreshedAt;
   const { filters } = useFilters();
+  const marginConfig = useMarginConfig();
   const [enableSkus, setEnableSkus] = useState(true);
   const [enableBehavior, setEnableBehavior] = useState(true);
   const [selectedStore, setSelectedStore] = useState<string | null>(null);
@@ -121,7 +123,7 @@ export default function SalesPage() {
 
   // Margin health: channel-aware thresholds
   const marginChannel = filters.channel === "b2b" ? "b2b" as const : filters.channel === "b2c" ? "b2c" as const : "total" as const;
-  const marginHealth = classifyMarginHealth(grossMarginPct, marginChannel);
+  const marginHealth = classifyMarginHealth(grossMarginPct, marginChannel, marginConfig);
   const marginColorClass = marginHealth === "healthy"
     ? "text-success-600 dark:text-success-400"
     : marginHealth === "moderate"

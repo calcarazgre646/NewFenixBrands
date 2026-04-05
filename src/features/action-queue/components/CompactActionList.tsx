@@ -21,6 +21,7 @@ import type { ActionItemFull } from "@/domain/actionQueue/waterfall";
 import type { RiskLevel, StoreCluster } from "@/domain/actionQueue/types";
 import type { GroupByMode, OperationalIntent } from "@/domain/actionQueue/grouping";
 import { Badge } from "@/components/ui/badge/Badge";
+import { WEEKS_PER_MONTH } from "@/domain/config/defaults";
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
@@ -133,7 +134,7 @@ export function CompactActionList({ items, intent, groupMode }: Props) {
                   // Show "—" only when there's no history to compute WOI.
                   // WOI=0 with history means stock=0 — show "0.0 WOI" so operators see the zero.
                   if (item.currentMOS <= 0 && item.historicalAvg <= 0) return <span className="text-[11px] text-gray-300 dark:text-gray-600">—</span>;
-                  const value = item.currentMOS * 4.33; // Always show in weeks (WOI)
+                  const value = item.currentMOS * WEEKS_PER_MONTH;
                   const label = "WOI";
                   // Thresholds in weeks from item's coverWeeks (13 for B2C stores, 12/24 for depots/B2B)
                   const low = item.coverWeeks;           // 1× target in weeks
