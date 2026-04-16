@@ -20,7 +20,7 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 1 | KpiDashboardPage (`/kpis`) — 9 core + 50 catálogo + sparklines + UPT activado | ✅ COMPLETO |
 | 1B | ExecutivePage (`/`) — Road to Annual Target, chart acumulado, tabla mensual | ✅ COMPLETO |
 | 2 | SalesPage (`/ventas`) — Metricas, 4 tabs analytics, YoY tiendas, Top/Bottom SKUs | ✅ COMPLETO |
-| 3 | ActionQueuePage (`/acciones`) — Waterfall 4 niveles + Ideal/Gap/DOI + 2 pestañas (Acciones + Planificación de Compra) | ✅ COMPLETO + AUDITADO |
+| 3 | ActionQueuePage (`/acciones`) — Waterfall 4 niveles + Lifecycle SKU (linealidad 3x6, sequential 5 pasos, cascade A→B→OUT, mandatory exit 90d) + 2 pestañas | ✅ COMPLETO + LIFECYCLE + AUDITADO (ver docs/LIFECYCLE_04) |
 | 4 | LogisticsPage (`/logistica`) — ETAs importacion, tabla agrupada | ✅ COMPLETO + AUDITADO |
 | 5 | CalendarPage (`/calendario`) — FullCalendar + CRUD + Realtime + Llegadas logística | ✅ COMPLETO + AUDITADO |
 | 6 | UsersPage (`/usuarios`) — CRUD completo, Edge Function, cambio contraseña | ✅ COMPLETO + AUDITADO |

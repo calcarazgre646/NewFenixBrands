@@ -2,7 +2,7 @@
  * features/action-queue/ActionQueuePage.tsx
  *
  * Centro de Acciones — shell con dos pestañas:
- *   1. Acciones: grupos priorizados por waterfall
+ *   1. Acciones: movimientos + intervenciones lifecycle (un solo motor waterfall)
  *   2. Planificación de Compra: SKUs con demanda insatisfecha (gap)
  *
  * El channel selector (B2C/B2B) es compartido — afecta el waterfall para ambas pestañas.
@@ -58,13 +58,22 @@ export default function ActionQueuePage() {
             onClick={() => setActiveTab("actions")}
           >
             Acciones
-            {data.totalItems > 0 && (
+            {data.movementCount > 0 && (
               <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
                 activeTab === "actions"
                   ? "bg-brand-600 text-white"
                   : "bg-gray-200 text-gray-500 dark:bg-gray-600 dark:text-gray-400"
               }`}>
-                {data.totalItems}
+                {data.movementCount}
+              </span>
+            )}
+            {data.lifecycleCount > 0 && (
+              <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                activeTab === "actions"
+                  ? "bg-violet-500 text-white"
+                  : "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-400"
+              }`}>
+                {data.lifecycleCount}
               </span>
             )}
           </TabButton>
@@ -113,21 +122,23 @@ export default function ActionQueuePage() {
       </div>
 
       {/* ═══ TAB CONTENT ═══ */}
-      {activeTab === "actions" ? (
+      {activeTab === "actions" && (
         <ActionsTab
           items={data.items}
           storeStockMap={data.storeStockMap}
           totalItems={data.totalItems}
-          paretoCount={data.paretoCount}
-          criticalCount={data.criticalCount}
+          stockoutCount={data.stockoutCount}
+          lifecycleCriticalCount={data.lifecycleCriticalCount}
           lowCount={data.lowCount}
           overstockCount={data.overstockCount}
           uniqueSkus={data.uniqueSkus}
+          movementCount={data.movementCount}
+          lifecycleCount={data.lifecycleCount}
           channel={data.filters.channel}
           brand={data.filters.brand}
-          isHistoryLoading={data.isHistoryLoading}
         />
-      ) : (
+      )}
+      {activeTab === "planning" && (
         <PurchasePlanningTab
           items={data.items}
           avgDOI={data.avgDOI}

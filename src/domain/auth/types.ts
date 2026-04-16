@@ -128,6 +128,72 @@ export function getDefaultRoute(permissions: Permissions): string {
   return "/signin";
 }
 
+// ─── View profile (Rule 10: brackets por perfil) ────────────────────────────
+
+export type ViewProfile = "detail" | "executive";
+
+/**
+ * Maps app role + cargo to a view profile that determines DOI bracket granularity.
+ * - detail (15d): Brand Managers, Gerencia de Producto, Operaciones, Marketing
+ * - executive (45d): Gerencia Comercial Retail
+ */
+export function getUserViewProfile(role: Role, cargo?: string | null): ViewProfile {
+  if (role === "gerencia") return "executive";
+  if (role === "super_user") return "detail";
+  const c = (cargo ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (c.includes("gerencia") || c.includes("gerente")) return "executive";
+  return "detail";
+}
+
+// ─── Lifecycle role mapping ────────────────────────────────────────────────────
+
+import type { ResponsibleRole } from "@/domain/lifecycle/types";
+import type { ActionItemFull } from "@/domain/actionQueue/waterfall";
+
+const ALL_LIFECYCLE_ROLES: ResponsibleRole[] = [
+  "marketing_b2c", "brand_manager", "gerencia_retail", "operaciones_retail", "logistica",
+];
+
+/**
+ * Maps an app role + cargo to lifecycle ResponsibleRoles.
+ * super_user and gerencia see everything.
+ * negocio maps by cargo field (from profiles table).
+ */
+export function mapToLifecycleRoles(role: Role, cargo?: string | null): ResponsibleRole[] {
+  if (role === "super_user" || role === "gerencia") return ALL_LIFECYCLE_ROLES;
+
+  // Strip accents for matching (e.g. "Logística" → "logistica")
+  const c = (cargo ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (c.includes("brand") || c.includes("marca")) return ["brand_manager"];
+  if (c.includes("marketing")) return ["marketing_b2c"];
+  if (c.includes("operacion")) return ["operaciones_retail", "logistica"];
+  if (c.includes("logist")) return ["operaciones_retail", "logistica"];
+  if (c.includes("gerencia") || c.includes("gerente")) return ["gerencia_retail"];
+  // Default for negocio without specific cargo
+  return ["marketing_b2c", "brand_manager"];
+}
+
+/**
+ * Filters actions by the logged-in user's lifecycle roles.
+ * Movement actions without lifecycle roles are always visible (backward compat).
+ * Lifecycle actions are only visible if the user has at least one matching role.
+ */
+export function filterActionsByRole(
+  actions: ActionItemFull[],
+  role: Role,
+  cargo?: string | null,
+): ActionItemFull[] {
+  if (role === "super_user" || role === "gerencia") return actions;
+
+  const myRoles = new Set(mapToLifecycleRoles(role, cargo));
+  return actions.filter(a => {
+    // Movement actions without lifecycle roles: always visible
+    if (a.category === "movement" && a.responsibleRoles.length === 0) return true;
+    // Actions with roles: only if user has at least one matching role
+    return a.responsibleRoles.some(r => myRoles.has(r));
+  });
+}
+
 /** Label legible para el rol */
 export function getRoleLabel(role: Role): string {
   switch (role) {

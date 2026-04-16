@@ -33,9 +33,21 @@ const PHASES: PhaseStep[] = [
     icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
   },
   {
+    key: "fetching-doi",
+    label: "Edad de Inventario",
+    detail: () => "Calculando días desde último movimiento por SKU…",
+    icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
+  },
+  {
+    key: "fetching-sth",
+    label: "Sell-Through Rate",
+    detail: () => "Cargando linealidad de venta por cohorte…",
+    icon: "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6",
+  },
+  {
     key: "computing-waterfall",
-    label: "Algoritmo Waterfall",
-    detail: () => "Priorizando acciones por impacto económico…",
+    label: "Motor de Decisión",
+    detail: () => "Evaluando reglas de Rodrigo y priorizando acciones…",
     icon: "M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12",
   },
 ];
@@ -115,7 +127,7 @@ export function ActionQueueLoader({ progress }: { progress: LoadingProgress }) {
               Definiendo Acciones
             </h2>
             <p className="mt-0.5 text-sm text-gray-400 dark:text-gray-500">
-              Analizando inventario y ventas para priorizar acciones
+              Evaluando stock, ventas, linealidad y edad para cada SKU
             </p>
           </div>
         </div>

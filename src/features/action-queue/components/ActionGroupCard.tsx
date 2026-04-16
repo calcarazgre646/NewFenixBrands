@@ -20,6 +20,14 @@ import { CompactActionList } from "./CompactActionList";
 import { downloadGroupHtml } from "./exportHtml";
 import { Badge } from "@/components/ui/badge/Badge";
 import { Card } from "@/components/ui/card/Card";
+
+const ROLE_LABELS: Record<string, string> = {
+  marketing_b2c: "Marketing B2C",
+  brand_manager: "Brand Manager",
+  gerencia_retail: "Gerencia Retail",
+  operaciones_retail: "Operaciones",
+  logistica: "Logística",
+};
 import { formatPYGSuffix } from "@/utils/format";
 import type { StoreCluster } from "@/domain/actionQueue/types";
 
@@ -61,6 +69,26 @@ const INTENT_STYLES: Record<OperationalIntent, { color: string; bg: string; bord
     bg: "bg-emerald-50/80 dark:bg-emerald-500/5",
     border: "border-l-emerald-400 dark:border-l-emerald-500",
   },
+  lifecycle_review: {
+    color: "text-amber-700 dark:text-amber-400",
+    bg: "bg-amber-50/80 dark:bg-amber-500/5",
+    border: "border-l-amber-400 dark:border-l-amber-500",
+  },
+  lifecycle_commercial: {
+    color: "text-rose-700 dark:text-rose-400",
+    bg: "bg-rose-50/80 dark:bg-rose-500/5",
+    border: "border-l-rose-400 dark:border-l-rose-500",
+  },
+  lifecycle_exit: {
+    color: "text-red-700 dark:text-red-400",
+    bg: "bg-red-50/80 dark:bg-red-500/5",
+    border: "border-l-red-400 dark:border-l-red-500",
+  },
+  lifecycle_reposition: {
+    color: "text-indigo-700 dark:text-indigo-400",
+    bg: "bg-indigo-50/80 dark:bg-indigo-500/5",
+    border: "border-l-indigo-400 dark:border-l-indigo-500",
+  },
 };
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -94,6 +122,18 @@ function IntentIcon({ intent, className }: { intent: OperationalIntent; classNam
       return <svg {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M7 11l5-5m0 0l5 5m-5-5v12" /></svg>;
     case "ship_b2b":
       return <svg {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10m10 0H3m10 0a2 2 0 104 0m-4 0a2 2 0 114 0m6-6v6a1 1 0 01-1 1h-1m-6-1a2 2 0 104 0M15 6h5l2 5" /></svg>;
+    case "lifecycle_reposition":
+      // Grid/sizes icon
+      return <svg {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>;
+    case "lifecycle_review":
+      // Eye icon
+      return <svg {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>;
+    case "lifecycle_commercial":
+      // Tag/price icon
+      return <svg {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" /></svg>;
+    case "lifecycle_exit":
+      // Logout/exit icon
+      return <svg {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>;
   }
 }
 
@@ -118,9 +158,11 @@ interface Props {
   defaultExpanded?: boolean;
   /** Actual total units currently in the store (all SKUs). null if not available or not store view. */
   storeStock?: number | null;
+  /** View profile for age bracket formatting (Rule 10) */
+  viewProfile?: import("@/domain/auth/types").ViewProfile;
 }
 
-export function ActionGroupCard({ group, mode, channel, defaultExpanded = false, storeStock = null }: Props) {
+export function ActionGroupCard({ group, mode, channel, defaultExpanded = false, storeStock = null, viewProfile = "detail" }: Props) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
   const clusterInfo = group.cluster ? CLUSTER_STYLES[group.cluster] : null;
@@ -257,9 +299,11 @@ export function ActionGroupCard({ group, mode, channel, defaultExpanded = false,
             <p className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">
               {formatPYGSuffix(group.totalImpact)}
             </p>
-            <p className="text-[10px] tabular-nums text-gray-400 dark:text-gray-500">
-              {group.totalUnits.toLocaleString("es-PY")} u.
-            </p>
+            {group.totalUnits > 0 && (
+              <p className="text-[10px] tabular-nums text-gray-400 dark:text-gray-500">
+                {group.totalUnits.toLocaleString("es-PY")} u.
+              </p>
+            )}
           </div>
 
           {/* Export button */}
@@ -311,6 +355,7 @@ export function ActionGroupCard({ group, mode, channel, defaultExpanded = false,
               section={section}
               groupMode={mode}
               channel={channel}
+              viewProfile={viewProfile}
             />
           ))}
         </div>
@@ -376,6 +421,28 @@ function buildSectionDiagnosis(section: ActionSection, channel: "b2c" | "b2b"): 
     return null;
   }
 
+  // Lifecycle intents
+  if (intent === "lifecycle_reposition") {
+    const totalSizes = items.reduce((s, i) => s + (i.sourcableSizes?.length ?? 0), 0);
+    return totalSizes > 0
+      ? `${totalSizes} talla${totalSizes > 1 ? "s" : ""} faltante${totalSizes > 1 ? "s" : ""} disponible${totalSizes > 1 ? "s" : ""} en otras tiendas`
+      : null;
+  }
+
+  if (intent === "lifecycle_review") {
+    const avgAge = items.reduce((s, i) => s + (i.cohortAgeDays ?? 0), 0) / items.length;
+    return `Productos con ${Math.round(avgAge)}d promedio sin ventas esperadas`;
+  }
+
+  if (intent === "lifecycle_commercial") {
+    return `SKUs que requieren intervención comercial o markdown selectivo`;
+  }
+
+  if (intent === "lifecycle_exit") {
+    const avgAge = items.reduce((s, i) => s + (i.cohortAgeDays ?? 0), 0) / items.length;
+    return `${items.length} SKUs con ${Math.round(avgAge)}d promedio — salida obligatoria`;
+  }
+
   return null;
 }
 
@@ -385,21 +452,25 @@ function SectionCard({
   section,
   groupMode,
   channel,
+  viewProfile = "detail",
 }: {
   section: ActionSection;
   groupMode: GroupByMode;
   channel: "b2c" | "b2b";
+  viewProfile?: import("@/domain/auth/types").ViewProfile;
 }) {
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(0);
 
   const style = INTENT_STYLES[section.intent];
   const totalPages = Math.ceil(section.items.length / PAGE_SIZE);
+  // Reset pagination when items change (e.g., filter toggle)
+  const safePage = Math.min(page, Math.max(0, totalPages - 1));
 
   const paginatedItems = useMemo(() => {
-    const start = page * PAGE_SIZE;
+    const start = safePage * PAGE_SIZE;
     return section.items.slice(start, start + PAGE_SIZE);
-  }, [section.items, page]);
+  }, [section.items, safePage]);
 
   const diagnosis = useMemo(() => buildSectionDiagnosis(section, channel), [section, channel]);
 
@@ -419,14 +490,24 @@ function SectionCard({
             </span>
             <span className="ml-2 text-[11px] text-gray-500 dark:text-gray-400">
               {section.items.length} {section.items.length === 1 ? "acción" : "acciones"}
-              <span className="mx-1 text-gray-300 dark:text-gray-600">·</span>
-              {section.totalUnits.toLocaleString("es-PY")} u.
+              {section.totalUnits > 0 && (
+                <>
+                  <span className="mx-1 text-gray-300 dark:text-gray-600">·</span>
+                  {section.totalUnits.toLocaleString("es-PY")} u.
+                </>
+              )}
             </span>
             {section.criticalCount > 0 && (
               <Badge
                 text={`${section.criticalCount} sin stock`}
                 className="ml-2 bg-error-100 text-error-700 dark:bg-error-500/15 dark:text-error-400"
               />
+            )}
+            {/* Show default responsible roles in lifecycle section headers */}
+            {section.items[0]?.category === "lifecycle" && section.items[0]?.responsibleRoles.length > 0 && (
+              <span className="ml-2 text-[10px] text-violet-600 dark:text-violet-400">
+                {section.items[0].responsibleRoles.map(r => ROLE_LABELS[r] ?? r).join(" · ")}
+              </span>
             )}
           </div>
           {diagnosis && (
@@ -445,21 +526,23 @@ function SectionCard({
             items={paginatedItems}
             intent={section.intent}
             groupMode={groupMode}
+            sectionDefaultRoles={section.items[0]?.responsibleRoles}
+            viewProfile={viewProfile}
           />
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between border-t border-gray-100 px-5 py-2.5 dark:border-gray-700/30">
               <span className="text-[11px] tabular-nums text-gray-400 dark:text-gray-500">
-                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, section.items.length)} de {section.items.length}
+                {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, section.items.length)} de {section.items.length}
               </span>
               <div className="flex items-center gap-0.5">
-                <PageBtn onClick={() => setPage(0)} disabled={page === 0}>&laquo;</PageBtn>
-                <PageBtn onClick={() => setPage(p => p - 1)} disabled={page === 0}>&lsaquo;</PageBtn>
+                <PageBtn onClick={() => setPage(0)} disabled={safePage === 0}>&laquo;</PageBtn>
+                <PageBtn onClick={() => setPage(p => p - 1)} disabled={safePage === 0}>&lsaquo;</PageBtn>
                 <span className="px-2.5 text-[11px] font-semibold tabular-nums text-gray-600 dark:text-gray-400">
                   {page + 1}/{totalPages}
                 </span>
-                <PageBtn onClick={() => setPage(p => p + 1)} disabled={page >= totalPages - 1}>&rsaquo;</PageBtn>
-                <PageBtn onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1}>&raquo;</PageBtn>
+                <PageBtn onClick={() => setPage(p => p + 1)} disabled={safePage >= totalPages - 1}>&rsaquo;</PageBtn>
+                <PageBtn onClick={() => setPage(totalPages - 1)} disabled={safePage >= totalPages - 1}>&raquo;</PageBtn>
               </div>
             </div>
           )}

@@ -36,6 +36,7 @@ export const STORE_CLUSTERS: Record<string, StoreCluster> = {
   LARURAL:       "B",
   MVMORRA:       "B",
   SHOPFUENTE:    "B",
+  MARTELLUQUE:   "B",
   // Cluster OUT — outlets (40% sale / 60% outlet)
   TOSUR:         "OUT",
   FERIA:         "OUT",
@@ -51,16 +52,16 @@ export const STORE_ASSORTMENT: Record<string, number> = {
   MARTELMCAL:    5500,
   TOLUQ:         5500,
   TOSUR:         5500,
-  SHOPPINEDO:    4000,
+  SHOPPINEDO:    4000,   // Pinedo: dato combinado 4,309 — pendiente split con WRPINEDO
   WRPINEDO:      3500,
-  MARTELSSL:     3300,
+  ESTRELLA:      2997,   // Derlys 06/04/2026: capacidades_tiendas (era 3,000)
+  MARTELSSL:     2960,   // Derlys 06/04/2026 (era 3,300)
   CERROALTO:     3000,
-  ESTRELLA:      3000,
-  GALERIAWRLEE:  3000,
-  WRSSL:         3000,
   SHOPMARIANO:   2500,
+  GALERIAWRLEE:  2296,   // Derlys 06/04/2026 (era 3,000)
   WRMULTIPLAZA:  2000,
-  // SHOPMCAL: sin dato en tabla del cliente
+  SHOPMCAL:      1863,   // Derlys 06/04/2026 (antes sin dato)
+  WRSSL:         1811,   // Derlys 06/04/2026 (era 3,000)
 };
 
 /**

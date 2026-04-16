@@ -45,6 +45,8 @@ export const DEFAULT_WATERFALL_CONFIG: WaterfallConfig = {
   importedBrands: ["wrangler", "lee"],
   coverWeeksImported: 24,
   coverWeeksNational: 12,
+  doiStaleThreshold: 90,
+  doiDeadThreshold: 180,
 };
 
 // ─── Depots ────────────────────────────────────────────────────────────────

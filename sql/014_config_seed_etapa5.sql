@@ -48,6 +48,7 @@ INSERT INTO config_store (store_code, cluster, assortment, time_restriction, is_
 INSERT INTO config_store (store_code, cluster, assortment, time_restriction, is_excluded, is_b2b) VALUES ('LARURAL', 'B', NULL, NULL, false, false);
 INSERT INTO config_store (store_code, cluster, assortment, time_restriction, is_excluded, is_b2b) VALUES ('MVMORRA', 'B', NULL, NULL, false, false);
 INSERT INTO config_store (store_code, cluster, assortment, time_restriction, is_excluded, is_b2b) VALUES ('SHOPFUENTE', 'B', NULL, NULL, false, false);
+INSERT INTO config_store (store_code, cluster, assortment, time_restriction, is_excluded, is_b2b) VALUES ('MARTELLUQUE', 'B', NULL, NULL, false, false);
 
 -- Cluster OUT — outlets
 INSERT INTO config_store (store_code, cluster, assortment, time_restriction, is_excluded, is_b2b) VALUES ('TOSUR', 'OUT', 5500, 'Sin restricción (optimizar ruta)', false, false);

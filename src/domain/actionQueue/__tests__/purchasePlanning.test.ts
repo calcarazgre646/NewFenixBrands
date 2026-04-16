@@ -35,6 +35,9 @@ function makeItem(overrides: Partial<ActionItemFull> = {}): ActionItemFull {
     recommendedAction: "Mover stock",
     linea: "Camiseria",
     categoria: "camisa",
+    productType: "basicos",
+    category: "movement",
+    responsibleRoles: [],
     ...overrides,
   };
 }
