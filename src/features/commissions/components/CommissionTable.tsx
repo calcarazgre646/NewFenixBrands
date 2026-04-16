@@ -25,7 +25,7 @@ function CumplimientoBadge({ pct }: { pct: number }) {
 
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${cls}`}>
-      {pct.toFixed(1)}%
+      {pct.toFixed(2)}%
     </span>
   );
 }
@@ -83,6 +83,11 @@ export default function CommissionTable({ results }: Props) {
                   <span className="block text-[10px] text-gray-400 dark:text-gray-500">
                     {r.sucursal ?? "—"}
                   </span>
+                  {r.ventaReal === 0 && r.metaVentas > 0 && (
+                    <span className="inline-flex items-center rounded-full bg-blue-50 px-1.5 py-0.5 text-[9px] font-medium text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                      Sin ventas aún
+                    </span>
+                  )}
                 </td>
                 <td className="hidden sm:table-cell px-3 py-2.5 text-gray-600 dark:text-gray-300">
                   <span className="text-[11px]">{ROLE_LABELS[r.rolComision]}</span>
@@ -109,7 +114,7 @@ export default function CommissionTable({ results }: Props) {
                   {r.metaVentas > 0
                     ? r.tipoComision === "fixed"
                       ? formatPYGCompact(r.comisionTotalGs)
-                      : `${r.comisionVentasPct}%`
+                      : `${r.comisionVentasPct.toFixed(2)}%`
                     : <span className="text-[10px] text-gray-400">—</span>
                   }
                 </td>

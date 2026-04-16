@@ -32,9 +32,9 @@ import { useSidebar } from "@/context/SidebarContext";
 
 // ── Ship icon (inline SVG, matches src/icons/ship.svg) ──────────────────────
 
-function ShipIcon({ className = "h-4 w-4" }: { className?: string }) {
+function ShipIcon({ className = "h-4 w-4", style }: { className?: string; style?: React.CSSProperties }) {
   return (
-    <svg className={className} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg className={className} style={style} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M1.875 13.75L3.125 15.625C3.125 15.625 5 16.875 10 16.875C15 16.875 16.875 15.625 16.875 15.625L18.125 13.75" />
       <path d="M3.75 13.75L5 8.125H15L16.25 13.75" />
       <path d="M10 3.125V8.125" />
@@ -248,7 +248,173 @@ function DayTooltip({
   );
 }
 
+// ── Year Day Detail Panel ────────────────────────────────────────────────────
+
+interface YearDayDetailProps {
+  date: string;
+  events: CalendarEvent[];
+  categories: Record<string, DbCategory>;
+  arrivalItems: ArrivalCalendarItem[];
+  showEvents: boolean;
+  showArrivals: boolean;
+  onClose: () => void;
+  onEventClick: (ev: CalendarEvent) => void;
+  onArrivalClick: (item: ArrivalCalendarItem) => void;
+}
+
+function YearDayDetail({
+  date, events, categories, arrivalItems,
+  showEvents, showArrivals, onClose, onEventClick, onArrivalClick,
+}: YearDayDetailProps) {
+  const d = new Date(date + "T12:00:00");
+  const dateLabel = d.toLocaleDateString("es-PY", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+  const dayEvents = showEvents
+    ? events.filter((ev) => {
+        const start = ev.start as string;
+        const end = ev.end as string | undefined;
+        if (!end) return start === date;
+        return start <= date && date < end;
+      })
+    : [];
+
+  const dayArrivals = showArrivals
+    ? arrivalItems.filter((a) => a.date === date)
+    : [];
+
+  const isEmpty = dayEvents.length === 0 && dayArrivals.length === 0;
+
+  return (
+    <div className="border-t border-gray-200 bg-gray-50/50 dark:border-gray-800 dark:bg-white/[0.02]">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
+            <span className="text-lg font-bold leading-none">{d.getDate()}</span>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold capitalize text-gray-900 dark:text-white">{dateLabel}</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {dayEvents.length > 0 && `${dayEvents.length} evento${dayEvents.length !== 1 ? "s" : ""}`}
+              {dayEvents.length > 0 && dayArrivals.length > 0 && " · "}
+              {dayArrivals.length > 0 && `${dayArrivals.length} llegada${dayArrivals.length !== 1 ? "s" : ""}`}
+              {isEmpty && "Sin actividad programada"}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+          aria-label="Cerrar detalle del día"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Content */}
+      {!isEmpty && (
+        <div className="grid gap-4 px-6 pb-5 sm:grid-cols-2">
+          {/* Events column */}
+          {dayEvents.length > 0 && (
+            <div>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                Eventos
+              </p>
+              <div className="space-y-1.5">
+                {dayEvents.map((ev, i) => {
+                  const cat = categories[ev.extendedProps?.calendar ?? ""];
+                  const color = cat?.color ?? "#465fff";
+                  return (
+                    <button
+                      key={ev.id ?? i}
+                      onClick={() => onEventClick(ev)}
+                      className="flex w-full items-start gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-gray-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:hover:border-gray-600"
+                    >
+                      <span
+                        className="mt-1 block h-2.5 w-2.5 shrink-0 rounded-sm"
+                        style={{ backgroundColor: color }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-900 dark:text-white">{ev.title}</p>
+                        <div className="mt-0.5 flex items-center gap-2">
+                          {cat && (
+                            <span className="text-[11px] text-gray-500 dark:text-gray-400">{cat.label}</span>
+                          )}
+                          {ev.extendedProps?.budget != null && ev.extendedProps.budget > 0 && (
+                            <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                              {ev.extendedProps.currency === "USD" ? "$" : "₲"}
+                              {ev.extendedProps.budget.toLocaleString("es-PY")}
+                            </span>
+                          )}
+                        </div>
+                        {ev.extendedProps?.description && (
+                          <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-gray-400 dark:text-gray-500">
+                            {ev.extendedProps.description}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Arrivals column */}
+          {dayArrivals.length > 0 && (
+            <div>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                Llegadas
+              </p>
+              <div className="space-y-1.5">
+                {dayArrivals.map((a) => {
+                  const statusColor = getStatusColor(a.status);
+                  const statusLabels: Record<string, string> = {
+                    overdue: "Atrasado",
+                    this_month: "Este mes",
+                    next_month: "Próximo mes",
+                    upcoming: "Próximamente",
+                  };
+                  return (
+                    <button
+                      key={a.id}
+                      onClick={() => onArrivalClick(a)}
+                      className="flex w-full items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-gray-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:hover:border-gray-600"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-900 dark:text-white">{a.brand}</p>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                          <span>{a.totalUnits.toLocaleString("es-PY")} uds</span>
+                          <span>{a.supplier}</span>
+                          {a.costUSD > 0 && <span>US$ {a.costUSD.toLocaleString("es-PY")}</span>}
+                        </div>
+                        <p className="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">
+                          {a.categories.join(", ")} · {a.origin}
+                        </p>
+                      </div>
+                      <span
+                        className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
+                        style={{ backgroundColor: statusColor }}
+                      >
+                        {statusLabels[a.status] ?? a.status}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Calendar component ──────────────────────────────────────────────────
+
+type CalendarFilter = "todos" | "eventos" | "llegadas";
 
 export default function CalendarPage() {
   const {
@@ -259,15 +425,18 @@ export default function CalendarPage() {
 
   const {
     arrivalEvents, arrivalItems, arrivalDays,
-    showArrivals, toggleArrivals,
   } = useCalendarArrivals();
+
+  const [calendarFilter, setCalendarFilter] = useState<CalendarFilter>("todos");
 
   const navigate = useNavigate();
 
   // Year view
   const [yearViewActive, setYearViewActive] = useState(false);
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [selectedYearDate, setSelectedYearDate] = useState<string | null>(null);
   const today = new Date().toISOString().split("T")[0];
+  const dayDetailRef = useRef<HTMLDivElement>(null);
 
   // Event modal
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -285,10 +454,16 @@ export default function CalendarPage() {
   const { isOpen, openModal, closeModal } = useModal();
   const { isExpanded, isHovered } = useSidebar();
 
-  // Merge events + arrivals for FullCalendar
+  // Merge events + arrivals for FullCalendar based on active filter
+  const showEvents = calendarFilter !== "llegadas";
+  const showArrivals = calendarFilter !== "eventos";
+
   const allFCEvents = useMemo(
-    () => [...events, ...arrivalEvents],
-    [events, arrivalEvents],
+    () => [
+      ...(showEvents ? events : []),
+      ...(showArrivals ? arrivalEvents : []),
+    ],
+    [events, arrivalEvents, showEvents, showArrivals],
   );
 
   // ── Recalculate FC size after sidebar expand/collapse transition ────────
@@ -352,6 +527,7 @@ export default function CalendarPage() {
 
   const switchToFCView = (view: string, date?: string) => {
     setYearViewActive(false);
+    setSelectedYearDate(null);
     requestAnimationFrame(() => {
       const api = calendarRef.current?.getApi();
       if (!api) return;
@@ -476,46 +652,55 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* ── Arrivals toggle + legend ─────────────────────────────────────── */}
+      {/* ── Filter: Todos / Eventos / Llegadas + legend + Add Event ───── */}
       <div className="flex items-center justify-between border-b border-gray-200 px-6 py-2.5 dark:border-gray-800">
         <div className="flex items-center gap-4">
-          <button
-            onClick={toggleArrivals}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-              showArrivals
-                ? "bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400"
-                : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
-            }`}
-          >
-            <ShipIcon className="h-3.5 w-3.5" />
-            Llegadas
-            {arrivalItems.length > 0 && (
-              <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                showArrivals
-                  ? "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300"
-                  : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
-              }`}>
-                {arrivalItems.length}
-              </span>
-            )}
-          </button>
-          {showArrivals && arrivalItems.length > 0 && (
-            <div className="hidden items-center gap-2 sm:flex">
-              {["martel", "wrangler", "lee"].map(b => {
-                const count = arrivalItems.filter(i => i.brandNorm === b).length;
-                if (count === 0) return null;
-                return (
-                  <div key={b} className="flex items-center gap-1">
-                    <span className="block h-2 w-2 rounded-sm" style={{ backgroundColor: getBrandColor(b) }} />
-                    <span className="text-[10px] font-medium capitalize text-gray-500 dark:text-gray-400">
-                      {b} ({count})
+          <div className="flex rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900">
+            {([
+              { key: "todos", label: "Todos" },
+              { key: "eventos", label: "Eventos" },
+              { key: "llegadas", label: "Llegadas" },
+            ] as const).map(({ key, label }) => {
+              const active = calendarFilter === key;
+              const count = key === "llegadas" ? arrivalItems.length
+                          : key === "eventos" ? events.length
+                          : events.length + arrivalItems.length;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setCalendarFilter(key)}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    active
+                      ? "bg-white text-gray-900 shadow-theme-xs dark:bg-gray-800 dark:text-white"
+                      : "bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                  }`}
+                >
+                  {label}
+                  {count > 0 && (
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                      active
+                        ? "bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-300"
+                        : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+                    }`}>
+                      {count}
                     </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
+        <button
+          onClick={() => {
+            resetModalFields();
+            const t = new Date().toISOString().split("T")[0];
+            setModalStartDate(t); setModalEndDate(t);
+            openModal();
+          }}
+          className="rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
+        >
+          Agregar Evento +
+        </button>
       </div>
 
       {/* ── Year view ──────────────────────────────────────────────────────── */}
@@ -543,16 +728,6 @@ export default function CalendarPage() {
                   </svg>
                 </button>
               </div>
-              <button
-                onClick={() => {
-                  resetModalFields();
-                  setModalStartDate(today); setModalEndDate(today);
-                  openModal();
-                }}
-                className="rounded-lg border-0 bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600"
-              >
-                Agregar Evento +
-              </button>
             </div>
 
             {/* Center */}
@@ -586,14 +761,39 @@ export default function CalendarPage() {
                 key={m}
                 year={currentYear}
                 month={m}
-                events={events}
+                events={showEvents ? events : []}
                 categories={categories}
                 arrivalDays={showArrivals ? arrivalDays : new Map()}
                 today={today}
-                onDayClick={(date) => switchToFCView("timeGridDay", date)}
+                onDayClick={(date) => {
+                  setSelectedYearDate(prev => prev === date ? null : date);
+                  requestAnimationFrame(() => dayDetailRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+                }}
               />
             ))}
           </div>
+
+          {/* Day detail panel */}
+          {selectedYearDate && (
+            <div ref={dayDetailRef} key={selectedYearDate}>
+              <YearDayDetail
+                date={selectedYearDate}
+                events={events}
+                categories={categories}
+                arrivalItems={arrivalItems}
+                showEvents={showEvents}
+                showArrivals={showArrivals}
+                onClose={() => setSelectedYearDate(null)}
+                onEventClick={(ev) => {
+                  setSelectedEvent(ev);
+                  setModalStartDate(ev.start as string);
+                  setModalEndDate((ev.end as string) || (ev.start as string));
+                  openModal();
+                }}
+                onArrivalClick={(item) => setSelectedArrival(item)}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -605,7 +805,7 @@ export default function CalendarPage() {
           initialView="dayGridMonth"
           locale="es"
           headerToolbar={{
-            left: "prev,next addEventButton",
+            left: "prev,next",
             center: "title",
             right: "yearViewButton,dayGridMonth,timeGridWeek,timeGridDay",
           }}
@@ -625,15 +825,6 @@ export default function CalendarPage() {
           eventResize={handleEventResize}
           eventContent={renderEventContent}
           customButtons={{
-            addEventButton: {
-              text: "Agregar Evento +",
-              click: () => {
-                resetModalFields();
-                const t = new Date().toISOString().split("T")[0];
-                setModalStartDate(t); setModalEndDate(t);
-                openModal();
-              },
-            },
             yearViewButton: {
               text: "Año",
               click: enterYearView,

@@ -89,7 +89,14 @@ export function validateWaterfallConfig(v: unknown): ValidationResult<WaterfallC
     importedBrands: [],
     coverWeeksImported: n("coverWeeksImported", 1, 52),
     coverWeeksNational: n("coverWeeksNational", 1, 52),
+    doiStaleThreshold: n("doiStaleThreshold", 1, 365),
+    doiDeadThreshold: n("doiDeadThreshold", 1, 730),
   };
+
+  // Cross-field: stale < dead
+  if (result.doiStaleThreshold >= result.doiDeadThreshold) {
+    errs.push("doiStaleThreshold must be < doiDeadThreshold");
+  }
 
   // importedBrands
   if (!Array.isArray(v.importedBrands)) {

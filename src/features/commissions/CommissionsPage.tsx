@@ -12,37 +12,52 @@ import { formatPYGCompact } from "@/utils/format";
 import { StatCard } from "@/components/ui/stat-card/StatCard";
 import { CHANNEL_LABELS } from "@/domain/commissions/scales";
 import { useCommissionScales } from "@/hooks/useConfig";
-import type { CommissionChannel } from "@/domain/commissions/types";
+import type { CommissionChannel, CommissionRole } from "@/domain/commissions/types";
 import { useCommissions } from "./hooks/useCommissions";
 import { useFilters } from "@/context/FilterContext";
+import { useAuth } from "@/context/AuthContext";
 import { useDataFreshness } from "@/hooks/useDataFreshness";
 import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
 import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
 import CommissionTable from "./components/CommissionTable";
 import ScalesReference from "./components/ScalesReference";
 
+/** Roles de gerencia/liderazgo — solo visibles para super_user */
+const MANAGEMENT_ROLES: CommissionRole[] = [
+  "gerencia_retail",
+  "gerencia_mayorista",
+  "gerencia_utp",
+];
+
 const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
 export default function CommissionsPage() {
   const { lastDataDay, lastDataMonth, getStatus, getInfo } = useDataFreshness();
   const { filters } = useFilters();
+  const { profile } = useAuth();
+  const isSuperUser = profile?.role === "super_user";
   const scales = useCommissionScales();
   const allScales = Object.values(scales);
   const year = filters.year;
   const [selectedMonth, setSelectedMonth] = useState(() => {
-    const now = new Date();
-    // Default al último mes cerrado
-    return now.getMonth() >= 1 ? now.getMonth() : 12;
+    // Default al mes en curso (getMonth() es 0-indexed, +1 para 1-12)
+    return new Date().getMonth() + 1;
   });
   const [channelFilter, setChannelFilter] = useState<CommissionChannel | "todos">("todos");
   const [showScales, setShowScales] = useState(false);
 
   const { results, summary, isLoading, error } = useCommissions(year, selectedMonth);
 
+  // Filtrar roles de gerencia/liderazgo si no es super_user
+  const visibleResults = useMemo(() => {
+    if (isSuperUser) return results;
+    return results.filter(r => !MANAGEMENT_ROLES.includes(r.rolComision));
+  }, [results, isSuperUser]);
+
   const filtered = useMemo(() => {
-    if (channelFilter === "todos") return results;
-    return results.filter(r => r.canal === channelFilter);
-  }, [results, channelFilter]);
+    if (channelFilter === "todos") return visibleResults;
+    return visibleResults.filter(r => r.canal === channelFilter);
+  }, [visibleResults, channelFilter]);
 
   const filteredSummary = useMemo(() => {
     if (!summary) return null;

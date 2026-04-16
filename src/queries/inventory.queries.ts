@@ -13,6 +13,7 @@ import { dataClient } from "@/api/client";
 import { toNum, trimStr, normalizeBrand, classifyStore } from "@/api/normalize";
 import { fetchAllRows } from "@/queries/paginate";
 import type { InventoryRecord } from "@/domain/actionQueue/types";
+import { classifyProductType } from "@/domain/lifecycle/classify";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
@@ -161,5 +162,8 @@ export function toInventoryRecord(item: InventoryItem): InventoryRecord {
     cost:         item.cost,
     linea:        item.linea,
     categoria:    item.categoria,
+    estComercial: item.estComercial,
+    carryOver:    item.carryOver,
+    productType:  classifyProductType(item.estComercial, item.carryOver),
   };
 }

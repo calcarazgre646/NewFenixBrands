@@ -25,6 +25,10 @@ export interface WaterfallConfig {
   importedBrands: string[];
   coverWeeksImported: number;
   coverWeeksNational: number;
+  /** DOI threshold: SKUs above this are "stale" — deprioritized for restock (days) */
+  doiStaleThreshold: number;
+  /** DOI threshold: SKUs above this are "dead" — excluded from restock, liquidation only (days) */
+  doiDeadThreshold: number;
 }
 
 // ─── Depots ────────────────────────────────────────────────────────────────

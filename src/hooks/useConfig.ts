@@ -110,6 +110,10 @@ export function useWaterfallConfig(): WaterfallConfig {
         v => validateNumericParam(v, 1, 52), DEFAULT_WATERFALL_CONFIG.coverWeeksImported),
       coverWeeksNational: resolveParam(params, "waterfall.cover_weeks_national",
         v => validateNumericParam(v, 1, 52), DEFAULT_WATERFALL_CONFIG.coverWeeksNational),
+      doiStaleThreshold: resolveParam(params, "waterfall.doi_stale_threshold",
+        v => validateNumericParam(v, 1, 365), DEFAULT_WATERFALL_CONFIG.doiStaleThreshold),
+      doiDeadThreshold: resolveParam(params, "waterfall.doi_dead_threshold",
+        v => validateNumericParam(v, 1, 730), DEFAULT_WATERFALL_CONFIG.doiDeadThreshold),
     };
 
     // importedBrands: array of strings

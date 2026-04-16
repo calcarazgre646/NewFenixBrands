@@ -167,16 +167,13 @@ describe("year view arrival indicators", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Toggle visibility
+// Filter visibility (Todos / Eventos / Llegadas)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe("toggle visibility", () => {
-  it("showArrivals=false returns empty events and days", () => {
+describe("filter visibility", () => {
+  it("filter 'eventos' hides arrivals from calendar", () => {
     const items = [makeItem()];
-
-    // When showArrivals is false, hook returns empty arrays
-    // Simulating the hook behavior:
-    const showArrivals = false;
+    const showArrivals = false; // filter = "eventos"
     const visibleItems = showArrivals ? items : [];
     const visibleDays = arrivalsByDay(visibleItems);
 
@@ -184,10 +181,9 @@ describe("toggle visibility", () => {
     expect(visibleDays.size).toBe(0);
   });
 
-  it("showArrivals=true returns all items", () => {
+  it("filter 'llegadas' or 'todos' shows all arrival items", () => {
     const items = [makeItem(), makeItem({ id: "a2", date: "2026-04-01" })];
-
-    const showArrivals = true;
+    const showArrivals = true; // filter = "todos" or "llegadas"
     const visibleItems = showArrivals ? items : [];
 
     expect(visibleItems).toHaveLength(2);

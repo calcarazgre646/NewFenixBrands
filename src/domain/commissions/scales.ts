@@ -75,7 +75,7 @@ export const GERENCIA_UTP: CommissionScale = {
   role: "gerencia_utp",
   channel: "utp",
   type: "percentage",
-  label: "Gerencia UTP",
+  label: "Líder UTP",
   tiers: [
     { minPct: 0,   maxPct: 80,  value: 0 },
     { minPct: 80,  maxPct: 90,  value: 1.00 },

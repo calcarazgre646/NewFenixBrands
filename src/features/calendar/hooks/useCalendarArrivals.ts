@@ -7,7 +7,7 @@
  * Reutiliza el mismo query que useLogistics (TanStack Query deduplica).
  * Patrón: fetch → toArrivals → groupArrivals → groupsToCalendarItems.
  */
-import { useMemo, useState, useCallback } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchLogisticsImports } from "@/queries/logistics.queries";
 import { logisticsKeys } from "@/queries/keys";
@@ -64,17 +64,11 @@ export interface CalendarArrivalsData {
   arrivalItems: ArrivalCalendarItem[];
   /** Resumen por día para year view (Map<dateISO, summary>) */
   arrivalDays: Map<string, ArrivalDaySummary>;
-  /** Toggle de visibilidad */
-  showArrivals: boolean;
-  toggleArrivals: () => void;
   /** Loading state */
   isLoading: boolean;
 }
 
 export function useCalendarArrivals(): CalendarArrivalsData {
-  const [showArrivals, setShowArrivals] = useState(true);
-  const toggleArrivals = useCallback(() => setShowArrivals(p => !p), []);
-
   const importsQ = useQuery({
     queryKey: logisticsKeys.imports(),
     queryFn: fetchLogisticsImports,
@@ -91,21 +85,19 @@ export function useCalendarArrivals(): CalendarArrivalsData {
   }, [importsQ.data]);
 
   const arrivalEvents = useMemo(
-    () => (showArrivals ? arrivalItems.map(toFCEvent) : []),
-    [arrivalItems, showArrivals],
+    () => arrivalItems.map(toFCEvent),
+    [arrivalItems],
   );
 
   const arrivalDays = useMemo(
-    () => arrivalsByDay(showArrivals ? arrivalItems : []),
-    [arrivalItems, showArrivals],
+    () => arrivalsByDay(arrivalItems),
+    [arrivalItems],
   );
 
   return {
     arrivalEvents,
     arrivalItems,
     arrivalDays,
-    showArrivals,
-    toggleArrivals,
     isLoading: importsQ.isLoading,
   };
 }
