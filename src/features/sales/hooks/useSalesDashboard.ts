@@ -15,6 +15,7 @@ import { useMemo } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { useFilters } from "@/context/FilterContext";
 import { fetchMonthlySalesWide, fetchDailySalesWide } from "@/queries/sales.queries";
+import type { DailySalesRow } from "@/queries/sales.queries";
 import { fetchBudget } from "@/queries/budget.queries";
 import type { BudgetRow } from "@/queries/budget.queries";
 import { fetchAnnualTickets } from "@/queries/tickets.queries";
@@ -139,6 +140,25 @@ export function useSalesDashboard(): SalesDashboardData {
     gcTime: GC_60MIN,
   });
 
+  // Ventas diarias PY (para prorrateo del mes parcial — cache compartido con Executive)
+  const dailyPYQ = useQuery({
+    queryKey: salesKeys.dailyWide(filters.year - 1),
+    queryFn: () => fetchDailySalesWide(filters.year - 1),
+    staleTime: STALE_30MIN,
+    gcTime: GC_60MIN,
+  });
+
+  const filteredDailyPY = useMemo((): DailySalesRow[] => {
+    const rows = dailyPYQ.data ?? [];
+    const canonical = filters.brand !== "total" ? brandIdToCanonical(filters.brand) : null;
+    const ch = filters.channel !== "total" ? filters.channel.toUpperCase() : null;
+    return rows.filter(r => {
+      if (canonical && r.brand !== canonical) return false;
+      if (ch && r.channel !== ch) return false;
+      return true;
+    });
+  }, [dailyPYQ.data, filters.brand, filters.channel]);
+
   // ── Periodo resuelto ──────────────────────────────────────────────────────
   const { activeMonths, closedMonths, periodLabel, isPartial } = useMemo(() => {
     const allRows = salesQ.data ?? [];
@@ -180,6 +200,16 @@ export function useSalesDashboard(): SalesDashboardData {
     return { lastDataDay: maxDay || null, lastDataMonth: maxMonth || null };
   }, [dailyCYQ.data, prorata]);
 
+  // Prorata corregido: último día con datos reales (no calendario)
+  const correctedProrata = useMemo(() => {
+    if (!prorata) return null;
+    const effectiveDay = (lastDataMonth === prorata.month && lastDataDay != null)
+      ? lastDataDay
+      : new Date().getDate();
+    const dim = new Date(filters.year, prorata.month, 0).getDate();
+    return { month: prorata.month, factor: effectiveDay / dim };
+  }, [prorata, lastDataDay, lastDataMonth, filters.year]);
+
   // ── Calculo de metricas ──────────────────────────────────────────────────
   const metrics = useMemo((): SalesMetrics | null => {
     if (salesQ.isLoading) return null;
@@ -189,11 +219,23 @@ export function useSalesDashboard(): SalesDashboardData {
     let real = 0, cogs = 0, bruto = 0, dcto = 0;
     for (const r of currRows) { real += r.neto; cogs += r.cogs; bruto += r.bruto; dcto += r.dcto; }
 
-    // YoY: mes en curso parcial vs mes completo año anterior (sin prorrateo).
-    // Consistente con KPIs dashboard.
+    // YoY: meses cerrados PY completos + mes parcial PY prorrateado al mismo
+    // día de corte que CY (manzanas con manzanas).
     let prevNeto = 0;
-    for (const r of filteredPY.filter((r) => activeMonths.includes(r.month))) {
+    const partialMonth = correctedProrata?.month;
+    const isPartialInScope = partialMonth != null && activeMonths.includes(partialMonth);
+    for (const r of filteredPY) {
+      if (!activeMonths.includes(r.month)) continue;
+      if (isPartialInScope && r.month === partialMonth) continue;
       prevNeto += r.neto;
+    }
+    if (isPartialInScope) {
+      const cutoffDay = lastDataDay ?? new Date().getDate();
+      for (const r of filteredDailyPY) {
+        if (r.month === partialMonth && r.day <= cutoffDay) {
+          prevNeto += r.neto;
+        }
+      }
     }
 
     // Budget de los meses activos (sin prorrateo)
@@ -263,13 +305,13 @@ export function useSalesDashboard(): SalesDashboardData {
       globalAOV,
       isPartialMonth: isPartial,
     };
-  }, [filteredCY, filteredPY, salesQ.isLoading, activeMonths, closedMonths,
+  }, [filteredCY, filteredPY, filteredDailyPY, salesQ.isLoading, activeMonths, closedMonths,
       budgetQ.data, ticketsQ.data, storesQ.data, filters.brand, filters.channel, filters.store,
-      filters.period, isPartial]);
+      filters.period, isPartial, correctedProrata, lastDataDay]);
 
-  const isLoading = salesQ.isLoading || prevSalesQ.isLoading || budgetQ.isLoading || dailyCYQ.isLoading || ticketsQ.isLoading || storesQ.isLoading;
+  const isLoading = salesQ.isLoading || prevSalesQ.isLoading || budgetQ.isLoading || dailyCYQ.isLoading || dailyPYQ.isLoading || ticketsQ.isLoading || storesQ.isLoading;
   const error = salesQ.error?.message ?? prevSalesQ.error?.message
-    ?? budgetQ.error?.message ?? dailyCYQ.error?.message ?? null;
+    ?? budgetQ.error?.message ?? dailyCYQ.error?.message ?? dailyPYQ.error?.message ?? null;
 
   return { metrics, periodLabel, activeMonths, closedMonths, isLoading, error, lastDataDay, lastDataMonth };
 }

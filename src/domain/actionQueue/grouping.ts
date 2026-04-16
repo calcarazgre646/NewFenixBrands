@@ -35,7 +35,12 @@ export type OperationalIntent =
   | "receive_depot"       // Deficit store receiving from RETAILS depot
   | "resupply_depot"      // RETAILS needs resupply from STOCK central
   | "redistribute"        // Surplus store sending excess to others or liquidating
-  | "ship_b2b";           // Direct shipment from STOCK to B2B client
+  | "ship_b2b"            // Direct shipment from STOCK to B2B client
+  // Lifecycle intents
+  | "lifecycle_review"    // revisar_exhibicion, revisar_asignacion
+  | "lifecycle_commercial" // accion_comercial, markdown_selectivo
+  | "lifecycle_exit"      // transferencia_out_lifecycle, markdown_liquidacion
+  | "lifecycle_reposition"; // reposicion_tallas, consolidar_curva
 
 /** A work-order section within a group */
 export interface ActionSection {
@@ -78,6 +83,10 @@ const INTENT_ORDER: OperationalIntent[] = [
   "resupply_depot",
   "redistribute",
   "ship_b2b",
+  "lifecycle_reposition",
+  "lifecycle_review",
+  "lifecycle_commercial",
+  "lifecycle_exit",
 ];
 
 const INTENT_META: Record<OperationalIntent, { label: string; description: string }> = {
@@ -101,9 +110,36 @@ const INTENT_META: Record<OperationalIntent, { label: string; description: strin
     label: "Envio directo B2B",
     description: "Despacho desde STOCK central a cliente mayorista",
   },
+  lifecycle_review: {
+    label: "Revisar exhibicion y asignacion",
+    description: "SKUs que necesitan revision de exhibicion o reasignacion de tienda",
+  },
+  lifecycle_commercial: {
+    label: "Accion comercial / Markdown",
+    description: "SKUs que requieren intervencion comercial o markdown selectivo",
+  },
+  lifecycle_exit: {
+    label: "Salida de inventario",
+    description: "SKUs para transferir a outlet o liquidar con markdown progresivo",
+  },
+  lifecycle_reposition: {
+    label: "Curva de tallas",
+    description: "SKUs que necesitan reposicion o consolidacion de tallas",
+  },
 };
 
 function classifyIntent(item: ActionItemFull): OperationalIntent {
+  // Lifecycle actions (category check first — fast path)
+  if (item.category === "lifecycle") {
+    if (item.actionType === "reposicion_tallas" || item.actionType === "consolidar_curva")
+      return "lifecycle_reposition";
+    if (item.actionType === "revisar_exhibicion" || item.actionType === "revisar_asignacion")
+      return "lifecycle_review";
+    if (item.actionType === "accion_comercial" || item.actionType === "markdown_selectivo")
+      return "lifecycle_commercial";
+    return "lifecycle_exit";
+  }
+  // Movement actions (existing logic unchanged)
   if (item.actionType === "central_to_b2b") return "ship_b2b";
   if (item.actionType === "resupply_depot") return "resupply_depot";
   if (item.actionType === "restock_from_depot") return "receive_depot";

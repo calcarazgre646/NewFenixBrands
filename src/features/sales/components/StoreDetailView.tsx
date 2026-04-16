@@ -8,6 +8,7 @@ import { useMemo } from "react";
 import type { ApexOptions } from "apexcharts";
 import ResponsiveChart from "@/components/ui/chart/ResponsiveChart";
 import type { MonthlySalesRow, DailyDetailRow } from "@/queries/sales.queries";
+import type { TicketRow } from "@/queries/tickets.queries";
 import type { StoreBreakdownRow } from "../hooks/useSalesAnalytics";
 import { calcGrossMargin, classifyMarginHealth, marginHealthThresholds } from "@/domain/kpis/calculations";
 import { useMarginConfig } from "@/hooks/useConfig";
@@ -103,6 +104,51 @@ function deriveStoreBrands(
   return result.sort((a, b) => b.neto - a.neto);
 }
 
+// ─── Ticket derivation helpers ───────────────────────────────────────────────
+
+/** Resolve cosupc codes that map to a given cosujd store code. */
+function resolveCosupcCodes(
+  storeCosujd: string,
+  storeMap: Map<string, string>,
+): Set<string> {
+  const target = storeCosujd.trim().toUpperCase();
+  const codes = new Set<string>();
+  storeMap.forEach((cosujd, cosupc) => {
+    if (cosujd.trim().toUpperCase() === target) codes.add(cosupc);
+  });
+  return codes;
+}
+
+/** Tickets aggregated by month for a specific store. */
+function deriveStoreTicketsMonthly(
+  tickets: TicketRow[],
+  cosupcCodes: Set<string>,
+  activeMonths: number[],
+): Map<number, number> {
+  const acc = new Map<number, number>();
+  for (const t of tickets) {
+    if (!cosupcCodes.has(t.storeCode)) continue;
+    if (!activeMonths.includes(t.month)) continue;
+    acc.set(t.month, (acc.get(t.month) ?? 0) + t.tickets);
+  }
+  return acc;
+}
+
+/** Tickets aggregated by day for a specific store in a single month. */
+function deriveStoreTicketsDaily(
+  tickets: TicketRow[],
+  cosupcCodes: Set<string>,
+  month: number,
+): Map<number, number> {
+  const acc = new Map<number, number>();
+  for (const t of tickets) {
+    if (!cosupcCodes.has(t.storeCode)) continue;
+    if (t.month !== month) continue;
+    acc.set(t.day, (acc.get(t.day) ?? 0) + t.tickets);
+  }
+  return acc;
+}
+
 // ─── Store detail view (redesigned with charts) ──────────────────────────────
 
 export function StoreDetailView({
@@ -111,6 +157,8 @@ export function StoreDetailView({
   channelLabel,
   salesWideRaw,
   dailyDetailRaw,
+  ticketRows,
+  ticketStoreMap,
   activeMonths,
   channelMode,
   brand,
@@ -120,6 +168,8 @@ export function StoreDetailView({
   channelLabel: string;
   salesWideRaw?: MonthlySalesRow[];
   dailyDetailRaw?: DailyDetailRow[];
+  ticketRows?: TicketRow[];
+  ticketStoreMap?: Map<string, string>;
   activeMonths?: number[];
   channelMode?: string;
   brand?: string;
@@ -149,6 +199,26 @@ export function StoreDetailView({
       ? deriveStoreBrands(salesWideRaw, store.storeCode, activeMonths, channelMode ?? "total")
       : [],
     [salesWideRaw, activeMonths, store.storeCode, channelMode],
+  );
+
+  // ── Ticket data per period (for chart tooltips) ──
+  const cosupcCodes = useMemo(
+    () => ticketStoreMap ? resolveCosupcCodes(store.storeCode, ticketStoreMap) : new Set<string>(),
+    [store.storeCode, ticketStoreMap],
+  );
+
+  const monthlyTickets = useMemo(
+    () => ticketRows && activeMonths
+      ? deriveStoreTicketsMonthly(ticketRows, cosupcCodes, activeMonths)
+      : new Map<number, number>(),
+    [ticketRows, cosupcCodes, activeMonths],
+  );
+
+  const dailyTickets = useMemo(
+    () => isSingleMonth && ticketRows && activeMonths
+      ? deriveStoreTicketsDaily(ticketRows, cosupcCodes, activeMonths[0])
+      : new Map<number, number>(),
+    [ticketRows, cosupcCodes, activeMonths, isSingleMonth],
   );
 
   const hasMultipleMonths = monthly.filter((m) => m.neto > 0).length > 1;
@@ -193,7 +263,22 @@ export function StoreDetailView({
       padding: { left: 8, right: 8 },
     },
     tooltip: {
-      y: { formatter: (val: number) => formatPYGSuffix(val) },
+      custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
+        const point = monthly[dataPointIndex];
+        if (!point) return "";
+        const tkt = monthlyTickets.get(point.month) ?? 0;
+        return `<div style="font-family:Outfit,sans-serif;font-size:12px;padding:8px 12px">
+          <div style="font-weight:600;margin-bottom:4px;color:#344054">${point.label}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:${tkt > 0 ? "3px" : "0"}">
+            <span style="width:8px;height:8px;border-radius:50%;background:#465FFF;display:inline-block;flex-shrink:0"></span>
+            <span style="color:#475467">Ventas: <b style="color:#101828">${formatPYGSuffix(point.neto)}</b></span>
+          </div>
+          ${tkt > 0 ? `<div style="display:flex;align-items:center;gap:6px">
+            <span style="width:8px;height:8px;border-radius:50%;background:#98a2b3;display:inline-block;flex-shrink:0"></span>
+            <span style="color:#475467">Tickets: <b style="color:#101828">${tkt.toLocaleString("es-PY")}</b></span>
+          </div>` : ""}
+        </div>`;
+      },
     },
     markers: {
       size: 4,
@@ -210,7 +295,7 @@ export function StoreDetailView({
         markers: { size: 3 },
       },
     }],
-  }), [monthly]);
+  }), [monthly, monthlyTickets]);
 
   // ── Area chart: daily trend (single-month) ──
   const dailyTrendOptions: ApexOptions = useMemo(() => ({
@@ -252,8 +337,22 @@ export function StoreDetailView({
       padding: { left: 8, right: 8 },
     },
     tooltip: {
-      x: { formatter: (val: number) => `Día ${val}` },
-      y: { formatter: (val: number) => formatPYGSuffix(val) },
+      custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
+        const point = daily[dataPointIndex];
+        if (!point) return "";
+        const tkt = dailyTickets.get(point.day) ?? 0;
+        return `<div style="font-family:Outfit,sans-serif;font-size:12px;padding:8px 12px">
+          <div style="font-weight:600;margin-bottom:4px;color:#344054">Día ${point.day}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:${tkt > 0 ? "3px" : "0"}">
+            <span style="width:8px;height:8px;border-radius:50%;background:#465FFF;display:inline-block;flex-shrink:0"></span>
+            <span style="color:#475467">Ventas: <b style="color:#101828">${formatPYGSuffix(point.neto)}</b></span>
+          </div>
+          ${tkt > 0 ? `<div style="display:flex;align-items:center;gap:6px">
+            <span style="width:8px;height:8px;border-radius:50%;background:#98a2b3;display:inline-block;flex-shrink:0"></span>
+            <span style="color:#475467">Tickets: <b style="color:#101828">${tkt.toLocaleString("es-PY")}</b></span>
+          </div>` : ""}
+        </div>`;
+      },
     },
     markers: {
       size: 3,
@@ -270,7 +369,7 @@ export function StoreDetailView({
         markers: { size: 2 },
       },
     }],
-  }), [daily]);
+  }), [daily, dailyTickets]);
 
   // ── Margin health indicator (channel-aware thresholds) ──
   const ch = (channelMode === "b2b" ? "b2b" : "b2c") as "b2b" | "b2c";

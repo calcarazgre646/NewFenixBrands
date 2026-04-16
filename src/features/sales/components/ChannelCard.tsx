@@ -7,6 +7,7 @@ import { useState, useMemo } from "react";
 import type { ApexOptions } from "apexcharts";
 import ResponsiveChart from "@/components/ui/chart/ResponsiveChart";
 import type { ChannelMixRow, MonthlySalesRow } from "@/queries/sales.queries";
+import type { TicketRow } from "@/queries/tickets.queries";
 import type { StoreBreakdownRow } from "../hooks/useSalesAnalytics";
 import { formatPYGShort } from "@/utils/format";
 import { Card } from "@/components/ui/card/Card";
@@ -18,6 +19,8 @@ export function ChannelCard({
   storeBreakdown,
   channelMode,
   salesWideRaw,
+  ticketRows,
+  ticketStoreMap,
   activeMonths,
   brand,
 }: {
@@ -26,6 +29,8 @@ export function ChannelCard({
   channelMode: string;
   isStoresLoading: boolean;
   salesWideRaw?: MonthlySalesRow[];
+  ticketRows?: TicketRow[];
+  ticketStoreMap?: Map<string, string>;
   activeMonths?: number[];
   brand?: string;
 }) {
@@ -97,6 +102,8 @@ export function ChannelCard({
           onBack={() => setSelectedStore(null)}
           channelLabel={channelMode === "b2b" ? "B2B" : "B2C"}
           salesWideRaw={salesWideRaw}
+          ticketRows={ticketRows}
+          ticketStoreMap={ticketStoreMap}
           activeMonths={activeMonths}
           channelMode={channelMode}
           brand={brand}

@@ -3,10 +3,12 @@
  *
  * Queries para el módulo de comisiones.
  * Trae ventas reales por vendedor desde fjdhstvta1.
+ * Trae metas individuales desde comisiones_metas_vendedor.
  */
-import { dataClient } from "@/api/client";
+import { dataClient, authClient } from "@/api/client";
 import { fetchAllRows } from "@/queries/paginate";
 import { trimStr, toNum } from "@/api/normalize";
+import type { CommissionRole, CommissionChannel } from "@/domain/commissions/types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
@@ -24,6 +26,20 @@ export interface SellerSalesRow {
   ventaBruta:     number;     // sum(v_impbruto)
   unidades:       number;     // sum(abs(v_cantvend))
   transacciones:  number;
+}
+
+/** Meta individual de un vendedor (de comisiones_metas_vendedor) */
+export interface SellerGoalRow {
+  vendedorCodigo: number;
+  vendedorNombre: string;
+  rolComision:    CommissionRole;
+  canal:          CommissionChannel;
+  año:            number;
+  mes:            number;
+  trimestre:      number;
+  metaVentas:     number;
+  metaCobranza:   number;
+  zona:           string | null;
 }
 
 /**
@@ -73,4 +89,31 @@ export async function fetchSellerSales(year: number, month: number): Promise<Sel
   }
 
   return Array.from(map.values());
+}
+
+/**
+ * Trae metas individuales de vendedores para un año+mes.
+ * Fuente: comisiones_metas_vendedor (tabla creada en migration 016).
+ */
+export async function fetchSellerGoals(year: number, month: number): Promise<SellerGoalRow[]> {
+  const { data, error } = await authClient
+    .from("comisiones_metas_vendedor")
+    .select("vendedor_codigo, vendedor_nombre, rol_comision, canal, año, mes, trimestre, meta_ventas, meta_cobranza, zona")
+    .eq("año", year)
+    .eq("mes", month);
+
+  if (error) throw new Error(`fetchSellerGoals: ${error.message}`);
+
+  return (data ?? []).map((r: Row) => ({
+    vendedorCodigo: toNum(r.vendedor_codigo),
+    vendedorNombre: trimStr(r.vendedor_nombre),
+    rolComision:    trimStr(r.rol_comision) as CommissionRole,
+    canal:          trimStr(r.canal) as CommissionChannel,
+    año:            toNum(r.año),
+    mes:            toNum(r.mes),
+    trimestre:      toNum(r.trimestre),
+    metaVentas:     toNum(r.meta_ventas),
+    metaCobranza:   toNum(r.meta_cobranza),
+    zona:           r.zona ? trimStr(r.zona) : null,
+  }));
 }

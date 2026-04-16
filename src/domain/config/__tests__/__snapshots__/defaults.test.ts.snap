@@ -62,6 +62,8 @@ exports[`defaults golden tests > DEFAULT_WATERFALL_CONFIG matches snapshot 1`] =
   "b2cStoreCoverWeeks": 13,
   "coverWeeksImported": 24,
   "coverWeeksNational": 12,
+  "doiDeadThreshold": 180,
+  "doiStaleThreshold": 90,
   "highStockRatio": 2.5,
   "importedBrands": [
     "wrangler",

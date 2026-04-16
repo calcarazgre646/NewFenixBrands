@@ -2,11 +2,19 @@ import { describe, it, expect } from 'vitest'
 import {
   cleanStr,
   toInt,
+  toNum,
+  trimStr,
   parsePYGString,
   parseUSDString,
-  normalizeBrand,
-  classifyStore,
+  parsePct,
   parseDDMMYYYY,
+  parseDMonYYYY,
+  parseEUCost,
+  parsePeriodYYYYMM,
+  normalizeBrand,
+  brandIdToCanonical,
+  classifyStore,
+  normalizeChannel,
 } from '../normalize'
 
 describe('cleanStr', () => {
@@ -76,4 +84,108 @@ describe('parseDDMMYYYY', () => {
   it('null → null', () => expect(parseDDMMYYYY(null)).toBeNull())
   it('"" → null', () => expect(parseDDMMYYYY("")).toBeNull())
   it('malformed → null', () => expect(parseDDMMYYYY("2025-09-10")).toBeNull())
+})
+
+// ─── trimStr ──────────────────────────────────────────────────────────────
+
+describe('trimStr', () => {
+  it('null → ""', () => expect(trimStr(null)).toBe(""))
+  it('undefined → ""', () => expect(trimStr(undefined)).toBe(""))
+  it('"  hello  " → "hello"', () => expect(trimStr("  hello  ")).toBe("hello"))
+  it('"" → ""', () => expect(trimStr("")).toBe(""))
+})
+
+// ─── toNum ────────────────────────────────────────────────────────────────
+
+describe('toNum', () => {
+  it('null → 0', () => expect(toNum(null)).toBe(0))
+  it('undefined → 0', () => expect(toNum(undefined)).toBe(0))
+  it('42.5 → 42.5', () => expect(toNum(42.5)).toBe(42.5))
+  it('"3.14" → 3.14', () => expect(toNum("3.14")).toBe(3.14))
+  it('"abc" → NaN', () => expect(toNum("abc")).toBeNaN())
+})
+
+// ─── parsePct ─────────────────────────────────────────────────────────────
+
+describe('parsePct', () => {
+  it('"64%" → 64', () => expect(parsePct("64%")).toBe(64))
+  it('"0%" → 0', () => expect(parsePct("0%")).toBe(0))
+  it('null → 0', () => expect(parsePct(null)).toBe(0))
+  it('"" → 0', () => expect(parsePct("")).toBe(0))
+})
+
+// ─── parseDMonYYYY ────────────────────────────────────────────────────────
+
+describe('parseDMonYYYY', () => {
+  it('"9-Oct-2025" → Date(2025, 9, 9)', () => {
+    const result = parseDMonYYYY("9-Oct-2025")
+    expect(result).not.toBeNull()
+    expect(result!.getFullYear()).toBe(2025)
+    expect(result!.getMonth()).toBe(9)
+    expect(result!.getDate()).toBe(9)
+  })
+  it('"15-Mar-2026" → Date(2026, 2, 15)', () => {
+    const result = parseDMonYYYY("15-Mar-2026")
+    expect(result).not.toBeNull()
+    expect(result!.getFullYear()).toBe(2026)
+    expect(result!.getMonth()).toBe(2)
+    expect(result!.getDate()).toBe(15)
+  })
+  it('Spanish month "1-Ene-2026" → Date(2026, 0, 1)', () => {
+    const result = parseDMonYYYY("1-Ene-2026")
+    expect(result).not.toBeNull()
+    expect(result!.getFullYear()).toBe(2026)
+    expect(result!.getMonth()).toBe(0)
+  })
+  it('null → null', () => expect(parseDMonYYYY(null)).toBeNull())
+  it('"" → null', () => expect(parseDMonYYYY("")).toBeNull())
+  it('invalid month name → null', () => expect(parseDMonYYYY("9-Xyz-2025")).toBeNull())
+  it('year < 2000 → null', () => expect(parseDMonYYYY("1-Ene-1999")).toBeNull())
+  it('day > 31 → null', () => expect(parseDMonYYYY("32-Ene-2026")).toBeNull())
+  it('day < 1 → null', () => expect(parseDMonYYYY("0-Ene-2026")).toBeNull())
+})
+
+// ─── parseEUCost ──────────────────────────────────────────────────────────
+
+describe('parseEUCost', () => {
+  it('"68.450,00" → 68450', () => expect(parseEUCost("68.450,00")).toBe(68450))
+  it('null → 0', () => expect(parseEUCost(null)).toBe(0))
+  it('"" → 0', () => expect(parseEUCost("")).toBe(0))
+  it('"1.234.567,89" → 1234567.89', () => expect(parseEUCost("1.234.567,89")).toBeCloseTo(1234567.89, 2))
+})
+
+// ─── parsePeriodYYYYMM ────────────────────────────────────────────────────
+
+describe('parsePeriodYYYYMM', () => {
+  it('"202601" → { year: 2026, month: 1 }', () => {
+    expect(parsePeriodYYYYMM("202601")).toEqual({ year: 2026, month: 1 })
+  })
+  it('"202512" → { year: 2025, month: 12 }', () => {
+    expect(parsePeriodYYYYMM("202512")).toEqual({ year: 2025, month: 12 })
+  })
+  it('"202600" → { year: 2026, month: 0 } (no validation)', () => {
+    expect(parsePeriodYYYYMM("202600")).toEqual({ year: 2026, month: 0 })
+  })
+  it('"202613" → { year: 2026, month: 13 } (no validation)', () => {
+    expect(parsePeriodYYYYMM("202613")).toEqual({ year: 2026, month: 13 })
+  })
+})
+
+// ─── brandIdToCanonical ───────────────────────────────────────────────────
+
+describe('brandIdToCanonical', () => {
+  it('"martel" → "Martel"', () => expect(brandIdToCanonical("martel")).toBe("Martel"))
+  it('"wrangler" → "Wrangler"', () => expect(brandIdToCanonical("wrangler")).toBe("Wrangler"))
+  it('"lee" → "Lee"', () => expect(brandIdToCanonical("lee")).toBe("Lee"))
+  it('"total" → null', () => expect(brandIdToCanonical("total")).toBeNull())
+})
+
+// ─── normalizeChannel ─────────────────────────────────────────────────────
+
+describe('normalizeChannel', () => {
+  it('"B2C" → "B2C"', () => expect(normalizeChannel("B2C")).toBe("B2C"))
+  it('"B2B" → "B2B"', () => expect(normalizeChannel("B2B")).toBe("B2B"))
+  it('"b2c" (lowercase) → "B2C"', () => expect(normalizeChannel("b2c")).toBe("B2C"))
+  it('null → null', () => expect(normalizeChannel(null)).toBeNull())
+  it('"Batas" → null', () => expect(normalizeChannel("Batas")).toBeNull())
 })

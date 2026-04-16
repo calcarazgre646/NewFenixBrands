@@ -5,6 +5,7 @@
  */
 import { useState, useMemo } from "react";
 import type { MonthlySalesRow, DailyDetailRow } from "@/queries/sales.queries";
+import type { TicketRow } from "@/queries/tickets.queries";
 import type { StoreBreakdownRow } from "../hooks/useSalesAnalytics";
 import { classifyMarginHealth } from "@/domain/kpis/calculations";
 import { useMarginConfig } from "@/hooks/useConfig";
@@ -29,6 +30,8 @@ export function StoresTable({
   onDeselectStore,
   salesWideRaw,
   dailyDetailRaw,
+  ticketRows,
+  storeMap: ticketStoreMap,
   activeMonths,
   brand,
 }: {
@@ -40,6 +43,8 @@ export function StoresTable({
   onDeselectStore?: () => void;
   salesWideRaw?: MonthlySalesRow[];
   dailyDetailRaw?: DailyDetailRow[];
+  ticketRows?: TicketRow[];
+  storeMap?: Map<string, string>;
   activeMonths?: number[];
   brand?: string;
 }) {
@@ -105,6 +110,8 @@ export function StoresTable({
           channelLabel={selectedChannel === "b2b" ? "B2B" : selectedChannel === "b2c" ? "B2C" : "Total"}
           salesWideRaw={salesWideRaw}
           dailyDetailRaw={dailyDetailRaw}
+          ticketRows={ticketRows}
+          ticketStoreMap={ticketStoreMap}
           activeMonths={activeMonths}
           channelMode={selectedChannel ?? channelMode}
           brand={brand}

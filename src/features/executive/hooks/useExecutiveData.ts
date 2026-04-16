@@ -464,12 +464,26 @@ export function useExecutiveData(): ExecutiveData {
     // Pronóstico = proyección anual vs meta anual (forward-looking)
     const forecastProgressPct = annualTarget > 0 ? (forecastYearEnd / annualTarget) * 100 : 0;
 
-    // ── 5. YoY vs meses completos del año anterior ────────────────────
-    // Siempre comparar contra el mes COMPLETO del año anterior (sin prorrateo).
-    // Consistente con la tabla de Performance Mensual que muestra meses PY completos.
+    // ── 5. YoY vs año anterior (prorrateado en mes parcial) ───────────
+    // Meses cerrados: PY completo (sin prorrateo).
+    // Mes parcial (actual con datos incompletos): PY prorrateado al mismo
+    // día de corte que CY usando datos diarios — manzanas con manzanas.
+    // NOTA: La tabla Performance Mensual NO se toca — sigue meses completos.
     let priorYtd = 0;
+    const partialMonth = correctedProrata?.month;
+    const isPartialInScope = partialMonth != null && activeMonths.includes(partialMonth);
     for (const [m, neto] of monthlyPY) {
-      if (activeMonths.includes(m)) priorYtd += neto;
+      if (!activeMonths.includes(m)) continue;
+      if (isPartialInScope && m === partialMonth) continue;
+      priorYtd += neto;
+    }
+    if (isPartialInScope) {
+      const cutoffDay = lastDataDay ?? new Date().getDate();
+      for (const r of filteredDailyPY) {
+        if (r.month === partialMonth && r.day <= cutoffDay) {
+          priorYtd += r.neto;
+        }
+      }
     }
     const yoyDelta = ytd - priorYtd;
     const yoyPct = priorYtd > 0 ? (yoyDelta / priorYtd) * 100 : 0;

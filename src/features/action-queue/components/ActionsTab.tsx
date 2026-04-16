@@ -13,6 +13,9 @@ import type { GroupByMode } from "@/domain/actionQueue/grouping";
 import { StatCard } from "@/components/ui/stat-card/StatCard";
 import type { ActionItemFull } from "@/domain/actionQueue/waterfall";
 import { useStoreConfig } from "@/hooks/useConfig";
+import { useAuth } from "@/context/AuthContext";
+import { getUserViewProfile } from "@/domain/auth/types";
+import type { ViewProfile } from "@/domain/auth/types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -24,14 +27,15 @@ interface Props {
   items: ActionItemFull[];
   storeStockMap: Map<string, number>;
   totalItems: number;
-  paretoCount: number;
-  criticalCount: number;
+  stockoutCount: number;
+  lifecycleCriticalCount: number;
   lowCount: number;
   overstockCount: number;
   uniqueSkus: number;
+  movementCount: number;
+  lifecycleCount: number;
   channel: "b2c" | "b2b";
   brand: string;
-  isHistoryLoading: boolean;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -40,18 +44,23 @@ export function ActionsTab({
   items,
   storeStockMap,
   totalItems,
-  paretoCount,
-  criticalCount,
+  stockoutCount,
+  lifecycleCriticalCount,
   lowCount,
   overstockCount,
   uniqueSkus,
+  movementCount,
+  lifecycleCount,
   channel,
   brand,
-  isHistoryLoading,
 }: Props) {
   const storeConfig = useStoreConfig();
+  const { profile } = useAuth();
+  const defaultProfile = getUserViewProfile(profile?.role ?? "negocio", profile?.cargo);
   const [viewMode, setViewMode] = useState<ViewMode>("store");
   const [showParetoOnly, setShowParetoOnly] = useState(true);
+  const [viewProfile, setViewProfile] = useState<ViewProfile>(defaultProfile);
+  const canToggleProfile = profile?.role === "super_user" || profile?.role === "gerencia";
 
   const visibleItems = useMemo(() => {
     if (!showParetoOnly) return items;
@@ -74,18 +83,12 @@ export function ActionsTab({
             <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
               Pareto 20/80 · Umbral Gs. 500K
             </span>
-            {isHistoryLoading && (
-              <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px] text-gray-400">
-                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-brand-500" />
-                Cargando historial…
-              </span>
-            )}
-            {!isHistoryLoading && totalItems > 0 && (
+            {totalItems > 0 && (
               <span className="inline-flex items-center gap-1 text-[11px] font-medium text-success-600 dark:text-success-400">
                 <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
-                Historial 6m
+                Linealidad STH activa
               </span>
             )}
           </div>
@@ -109,35 +112,63 @@ export function ActionsTab({
               active={viewMode}
               onChange={(v) => setViewMode(v as ViewMode)}
             />
+            {/* Profile bracket toggle (Rule 10 — only for super_user/gerencia) */}
+            {canToggleProfile && (
+              <SegmentedControl
+                options={[
+                  { value: "detail", label: "Detalle 15d" },
+                  { value: "executive", label: "Ejecutivo 45d" },
+                ]}
+                active={viewProfile}
+                onChange={(v) => setViewProfile(v as ViewProfile)}
+              />
+            )}
           </div>
         </div>
       </div>
 
-      {/* ═══ STATS ROW ═══ */}
-      <div className="exec-anim-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard
-          label="Total Acciones"
-          value={String(totalItems)}
-          sub={showParetoOnly && visibleCount < totalItems ? `${visibleCount} visibles` : undefined}
-        />
-        <StatCard label="SKUs Únicos" value={String(uniqueSkus)} />
-        <StatCard
-          label="Pareto 80%"
-          value={String(paretoCount)}
-          sub={paretoCount > 0 ? `${((paretoCount / totalItems) * 100).toFixed(0)}% del total` : undefined}
-          variant={paretoCount > 0 ? "accent-positive" : "neutral"}
-        />
-        <StatCard
-          label="Sin Stock"
-          value={String(criticalCount)}
-          variant={criticalCount > 0 ? "negative" : "neutral"}
-        />
-        <StatCard
-          label="Stock Bajo"
-          value={String(lowCount)}
-          variant={lowCount > 0 ? "accent-negative" : "neutral"}
-        />
-        <StatCard label="Sobrestock" value={String(overstockCount)} />
+      {/* ═══ STATS ═══ */}
+      <div className="exec-anim-2 space-y-3">
+        {/* Row 1: Resumen ejecutivo — qué produce el motor */}
+        <div className="grid grid-cols-3 gap-3">
+          <StatCard
+            label="Movimientos"
+            value={String(movementCount)}
+            sub="Mover stock entre ubicaciones"
+          />
+          <StatCard
+            label="Intervenciones"
+            value={String(lifecycleCount)}
+            sub={lifecycleCriticalCount > 0 ? `${lifecycleCriticalCount} de salida obligatoria` : "Requieren decisión comercial"}
+            variant={lifecycleCount > 0 ? "accent-negative" : "neutral"}
+          />
+          <StatCard
+            label="SKUs Afectados"
+            value={String(uniqueSkus)}
+            sub={`${totalItems.toLocaleString("es-PY")} acciones en total`}
+          />
+        </div>
+        {/* Row 2: Detalle de riesgo — dónde está el problema */}
+        <div className="grid grid-cols-3 gap-3">
+          <StatCard
+            label="Sin Stock"
+            value={String(stockoutCount)}
+            sub="SKUs con 0 unidades en tienda"
+            variant={stockoutCount > 0 ? "negative" : "neutral"}
+          />
+          <StatCard
+            label="Stock Bajo"
+            value={String(lowCount)}
+            sub="SKUs bajo cobertura objetivo"
+            variant={lowCount > 0 ? "accent-negative" : "neutral"}
+          />
+          <StatCard
+            label="Sobrestock"
+            value={String(overstockCount)}
+            sub="SKUs sobre cobertura objetivo"
+          />
+        </div>
+        {/* Row 3 removed: analyses are integrated into the decision engine, not shown as stats */}
       </div>
 
       {/* ═══ GROUPS ═══ */}
@@ -176,6 +207,7 @@ export function ActionsTab({
                   channel={channel}
                   defaultExpanded={groups.length === 1}
                   storeStock={viewMode === "store" ? storeStockMap.get(group.key) ?? null : null}
+                  viewProfile={viewProfile}
                 />
               </div>
             ))}

@@ -65,6 +65,8 @@ export default function SalesPage() {
     storeBreakdownB2B,
     salesWideRaw,
     dailyDetailRaw,
+    ticketRows,
+    storeMap,
     activeMonths: analyticsActiveMonths,
     isDowLoading,
     isSkusLoading,
@@ -315,6 +317,8 @@ export default function SalesPage() {
             onDeselectStore={() => setSelectedStore(null)}
             salesWideRaw={salesWideRaw}
             dailyDetailRaw={dailyDetailRaw}
+            ticketRows={ticketRows}
+            storeMap={storeMap}
             activeMonths={analyticsActiveMonths}
             brand={filters.brand}
           />
@@ -329,6 +333,8 @@ export default function SalesPage() {
             onDeselectStore={() => setSelectedStore(null)}
             salesWideRaw={salesWideRaw}
             dailyDetailRaw={dailyDetailRaw}
+            ticketRows={ticketRows}
+            storeMap={storeMap}
             activeMonths={analyticsActiveMonths}
             brand={filters.brand}
           />
@@ -349,6 +355,8 @@ export default function SalesPage() {
                     channelMode={filters.channel}
                     isStoresLoading={isStoresLoading}
                     salesWideRaw={salesWideRaw}
+                    ticketRows={ticketRows}
+                    ticketStoreMap={storeMap}
                     activeMonths={analyticsActiveMonths}
                     brand={filters.brand}
                   />

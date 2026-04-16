@@ -12,6 +12,14 @@ import type { RiskLevel } from "@/domain/actionQueue/types";
 import type { ActionSection, OperationalIntent } from "@/domain/actionQueue/grouping";
 import { WEEKS_PER_MONTH } from "@/domain/config/defaults";
 
+const ROLE_LABEL_MAP: Record<string, string> = {
+  marketing_b2c: "Marketing B2C",
+  brand_manager: "Brand Manager",
+  gerencia_retail: "Gerencia Retail",
+  operaciones_retail: "Operaciones",
+  logistica: "Logística",
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function esc(str: string): string {
@@ -50,6 +58,10 @@ const INTENT_COLORS: Record<OperationalIntent, { border: string; bg: string; tex
   resupply_depot:   { border: "#F97316", bg: "#FFF7ED", text: "#C2410C" },
   redistribute:     { border: "#3B82F6", bg: "#EFF6FF", text: "#1D4ED8" },
   ship_b2b:         { border: "#10B981", bg: "#ECFDF5", text: "#047857" },
+  lifecycle_review:  { border: "#F59E0B", bg: "#FFFBEB", text: "#B45309" },
+  lifecycle_commercial: { border: "#F43F5E", bg: "#FFF1F2", text: "#BE123C" },
+  lifecycle_exit:    { border: "#EF4444", bg: "#FEF2F2", text: "#B91C1C" },
+  lifecycle_reposition: { border: "#6366F1", bg: "#EEF2FF", text: "#4338CA" },
 };
 
 // ─── Row renderer ─────────────────────────────────────────────────────────────
@@ -96,7 +108,11 @@ function actionRow(item: ActionItemFull, idx: number, showStore: boolean): strin
     <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;${item.daysOfInventory > 180 ? "color:#DC2626;font-weight:600;" : item.daysOfInventory > 90 ? "color:#D97706;" : "color:#6B7280;"}text-align:center;">${item.daysOfInventory > 0 ? `${item.daysOfInventory.toFixed(0)}d` : "—"}</td>
     <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;color:#6B7280;">${item.historicalAvg > 0 ? item.historicalAvg.toFixed(1) : "—"}</td>
     <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;${mosStyle}">${coverValue > 0 ? `${coverValue.toFixed(1)} ${coverLabel}` : item.historicalAvg > 0 ? `0.0 ${coverLabel}` : "—"}</td>
-    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;color:#374151;">${esc(item.recommendedAction)}${counterparts}</td>
+    <td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:11px;color:#374151;">${esc(item.recommendedAction)}${counterparts}${
+      item.responsibleRoles.length > 0
+        ? `<br>${item.responsibleRoles.map(r => `<span style="display:inline-block;background:#EDE9FE;color:#6D28D9;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:500;margin-right:3px;">${esc(ROLE_LABEL_MAP[r] ?? r)}</span>`).join("")}`
+        : ""
+    }</td>
   </tr>`;
 }
 

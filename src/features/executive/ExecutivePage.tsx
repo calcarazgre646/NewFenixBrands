@@ -386,7 +386,17 @@ export default function ExecutivePage() {
                 {formatPYGSuffix(ytd)}
               </p>
               <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                {periodDateRange}
+                {(() => {
+                  const yr = new Date().getFullYear();
+                  if (isMonthView && isClosedMonth) return `${viewMonthName} ${yr}`;
+                  if (isMonthView) {
+                    const cutoff = lastDataDay ?? new Date().getDate();
+                    return `1–${cutoff} ${viewMonthName} ${yr}`;
+                  }
+                  const endMonth = lastDataMonth ?? calendarMonth;
+                  const cutoff = lastDataDay ?? new Date().getDate();
+                  return `1 Ene – ${cutoff} ${MONTH_SHORT[endMonth]} ${yr}`;
+                })()}
               </p>
             </div>
           </Card>
@@ -414,7 +424,22 @@ export default function ExecutivePage() {
                 {yoyDelta >= 0 ? "+" : "−"}{formatPYGSuffix(Math.abs(yoyDelta))}
               </p>
               <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                {periodDateRange}
+                {(() => {
+                  const py = new Date().getFullYear() - 1;
+                  if (isMonthView && isClosedMonth) {
+                    // Mes cerrado: "Marzo 2025" (completo, sin corte)
+                    return `${viewMonthName} ${py}`;
+                  }
+                  if (isMonthView) {
+                    // Mes actual parcial: "1–12 Abril 2025"
+                    const cutoff = lastDataDay ?? new Date().getDate();
+                    return `1–${cutoff} ${viewMonthName} ${py}`;
+                  }
+                  // YTD: "1 Ene – 12 Abr 2025"
+                  const endMonth = lastDataMonth ?? calendarMonth;
+                  const cutoff = lastDataDay ?? new Date().getDate();
+                  return `1 Ene – ${cutoff} ${MONTH_SHORT[endMonth]} ${py}`;
+                })()}
               </p>
             </div>
           </Card>

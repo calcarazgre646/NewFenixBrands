@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import type { WaterfallInput, InventoryRecord } from '../types'
+import type { WaterfallInput, InventoryRecord, ComputeActionQueueOptions } from '../types'
 import { computeActionQueue } from '../waterfall'
+
+/** Helper to build options with sensible defaults for tests. impactThreshold=0 so nothing is filtered. */
+function opts(overrides: Partial<ComputeActionQueueOptions> = {}): ComputeActionQueueOptions {
+  return { mode: 'b2c', impactThreshold: 0, ...overrides }
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -10,6 +15,7 @@ function inv(overrides: Partial<InventoryRecord> = {}): InventoryRecord {
     brand: 'Martel', store: 'TIENDA1', storeCluster: 'A',
     channel: 'b2c', units: 10, price: 100, priceMay: 70, cost: 50,
     linea: 'Camiseria', categoria: 'camisa',
+    estComercial: '', carryOver: false, productType: 'basicos',
     ...overrides,
   }
 }
@@ -29,7 +35,7 @@ function makeInput(
 describe('computeActionQueue', () => {
   // 1. Empty input
   it('empty inventory returns empty array', () => {
-    const result = computeActionQueue(makeInput([]), 'b2c', null, null, null, null, 0)
+    const result = computeActionQueue(makeInput([]), opts())
     expect(result).toEqual([])
   })
 
@@ -37,7 +43,7 @@ describe('computeActionQueue', () => {
   it('single store with moderate stock produces no actions', () => {
     const result = computeActionQueue(
       makeInput([inv({ units: 10 })]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // Only one store → avgQty = 10, not <= MIN_STOCK_ABS(3), not > avgQty*2.5
     expect(result).toEqual([])
@@ -56,7 +62,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 100 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n1 = result.filter(a => a.waterfallLevel === 'store_to_store')
     expect(n1.length).toBeGreaterThanOrEqual(1)
@@ -72,7 +78,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'RETAILS', units: 50 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n2 = result.filter(a => a.waterfallLevel === 'depot_to_store')
     expect(n2.length).toBeGreaterThanOrEqual(1)
@@ -88,7 +94,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 0 }),
         inv({ store: 'STOCK', units: 50 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n3 = result.filter(a => a.waterfallLevel === 'central_to_depot')
     expect(n3.length).toBeGreaterThanOrEqual(1)
@@ -103,7 +109,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 0 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n3 = result.filter(a => a.waterfallLevel === 'central_to_depot')
     expect(n3.length).toBe(0)
@@ -115,7 +121,7 @@ describe('computeActionQueue', () => {
       makeInput([
         inv({ store: 'CLIENTEB2B', units: 0, channel: 'b2b' }),
       ]),
-      'b2b', null, null, null, null, 0,
+      opts({ mode: 'b2b' }),
     )
     const n4 = result.filter(a => a.waterfallLevel === 'central_to_b2b')
     expect(n4.length).toBeGreaterThanOrEqual(1)
@@ -131,7 +137,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 30, brand: 'Martel' }),
         inv({ store: 'TIENDA3', units: 0, brand: 'Wrangler', sku: 'SKU002' }),
       ]),
-      'b2c', 'Martel', null, null, null, 0,
+      opts({ brandFilter: 'Martel' }),
     )
     const brands = new Set(result.map(a => a.brand))
     expect(brands.has('Wrangler')).toBe(false)
@@ -145,7 +151,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 30 }),
       ]),
-      'b2c', null, null, null, 'TIENDA1', 0,
+      opts({ storeFilter: 'TIENDA1' }),
     )
     // With store filter only TIENDA1 passes; single store with 0 units triggers deficit
     for (const a of result) {
@@ -163,7 +169,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 30, sku: 'A01' }),
         inv({ store: 'TIENDA3', units: 2, sku: 'A01' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     if (result.length >= 2) {
       const riskOrder = { critical: 0, low: 1, overstock: 2, balanced: 3 }
@@ -193,7 +199,7 @@ describe('computeActionQueue', () => {
       rows[i * 2].store = `TDEFICIT${i}`
       rows[i * 2 + 1].store = `TSURPLUS${i}`
     }
-    const result = computeActionQueue(makeInput(rows), 'b2c', null, null, null, null, 0)
+    const result = computeActionQueue(makeInput(rows), opts())
     if (result.length > 2) {
       const totalImpact = result.reduce((s, a) => s + a.impactScore, 0)
       let cum = 0
@@ -222,7 +228,7 @@ describe('computeActionQueue', () => {
       sales.set(`TD${i}|SK${i}`, 5)
       sales.set(`TS${i}|SK${i}`, 5)
     }
-    const result = computeActionQueue(makeInput(rows, sales), 'b2c', null, null, null, null, 0)
+    const result = computeActionQueue(makeInput(rows, sales), opts())
     // Should have actions for all 60 deficit stores (no artificial MAX_ACTIONS limit)
     expect(result.length).toBeGreaterThanOrEqual(60)
   })
@@ -234,7 +240,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 30 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     for (let i = 0; i < result.length; i++) {
       expect(result[i].rank).toBe(i + 1)
@@ -249,7 +255,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 30, linea: 'Camiseria' }),
         inv({ store: 'TIENDA3', units: 0, linea: 'Vaqueria', sku: 'SKU002' }),
       ]),
-      'b2c', null, 'Camiseria', null, null, 0,
+      opts({ lineaFilter: 'Camiseria' }),
     )
     for (const a of result) {
       expect(a.linea).toBe('Camiseria')
@@ -264,7 +270,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 30, categoria: 'camisa' }),
         inv({ store: 'TIENDA3', units: 0, categoria: 'jean', sku: 'SKU002' }),
       ]),
-      'b2c', null, null, 'camisa', null, 0,
+      opts({ categoriaFilter: 'camisa' }),
     )
     for (const a of result) {
       expect(a.categoria).toBe('camisa')
@@ -281,7 +287,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 2 }),
         inv({ store: 'STOCK', units: 100 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n3 = result.filter(a => a.waterfallLevel === 'central_to_depot')
     expect(n3.length).toBeGreaterThanOrEqual(1)
@@ -301,7 +307,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 100 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const overstock = result.filter(a => a.risk === 'overstock')
     expect(overstock.length).toBeGreaterThanOrEqual(1)
@@ -314,7 +320,7 @@ describe('computeActionQueue', () => {
       makeInput([
         inv({ store: 'B2BCLIENT', units: 0, channel: 'b2b', sku: 'SKU_B2B' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const b2bActions = result.filter(a => a.sku === 'SKU_B2B')
     expect(b2bActions).toEqual([])
@@ -326,7 +332,7 @@ describe('computeActionQueue', () => {
       makeInput([
         inv({ store: 'TIENDA1', units: 0, channel: 'b2c', sku: 'SKU_B2C' }),
       ]),
-      'b2b', null, null, null, null, 0,
+      opts({ mode: 'b2b' }),
     )
     const b2cActions = result.filter(a => a.sku === 'SKU_B2C')
     expect(b2cActions).toEqual([])
@@ -339,7 +345,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, price: 200, cost: 50 }),
         inv({ store: 'TIENDA2', units: 30, price: 200, cost: 50 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     for (const a of result) {
       expect(a.impactScore).toBeGreaterThan(0)
@@ -355,7 +361,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, brand: 'Martel', sku: 'MT01' }),
         inv({ store: 'TIENDA2', units: 30, brand: 'Martel', sku: 'MT01' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const wr = result.find(a => a.brand === 'Wrangler')
     const mt = result.find(a => a.brand === 'Martel')
@@ -370,7 +376,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, talle: '' }),
         inv({ store: 'TIENDA2', units: 30, talle: '' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     for (const a of result) {
       expect(a.talle).toBe('S/T')
@@ -386,7 +392,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA3', units: 0 }),
         inv({ store: 'STOCK', units: 100 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n3 = result.filter(
       a => a.waterfallLevel === 'central_to_depot' && a.sku === 'SKU001' && a.talle === 'M',
@@ -407,14 +413,14 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 2, price: 100, cost: 50 }),
         inv({ store: 'TIENDA2', units: 100, price: 100, cost: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 500_000,
+      opts({ impactThreshold: 500_000 }),
     )
     const withoutThreshold = computeActionQueue(
       makeInput([
         inv({ store: 'TIENDA1', units: 2, price: 100, cost: 50 }),
         inv({ store: 'TIENDA2', units: 100, price: 100, cost: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // With threshold, low-impact non-critical actions are filtered
     expect(withThreshold.length).toBeLessThan(withoutThreshold.length)
@@ -428,7 +434,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 0, price: 1, cost: 1 }),  // critical, price=1
         inv({ store: 'STOCK', units: 50, price: 1, cost: 1 }),   // depot stock to enable N3
       ]),
-      'b2c', null, null, null, null, 999_999_999,  // absurdly high threshold
+      opts({ impactThreshold: 999_999_999 }),
     )
     // Critical actions (units=0) should still appear
     const critical = result.filter(a => a.risk === 'critical')
@@ -447,14 +453,14 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 2, price: 100, cost: 50 }),
         inv({ store: 'TIENDA2', units: 100, price: 100, cost: 50 }),
       ], sales),
-      'b2c', null, null, null, null,  // uses default MIN_IMPACT_THRESHOLD
+      opts(),
     )
     const resultNoThreshold = computeActionQueue(
       makeInput([
         inv({ store: 'TIENDA1', units: 2, price: 100, cost: 50 }),
         inv({ store: 'TIENDA2', units: 100, price: 100, cost: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // Default threshold should filter more than threshold=0
     expect(resultDefault.length).toBeLessThanOrEqual(resultNoThreshold.length)
@@ -475,7 +481,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 20 }),
         inv({ store: 'TIENDA3', units: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const deficit = result.find(a => a.store === 'TIENDA1' && a.risk === 'critical')
     if (deficit) {
@@ -497,7 +503,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 0 }),
         inv({ store: 'TIENDA3', units: 20 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const fromT3 = result
       .filter(a => a.risk !== 'overstock')
@@ -516,7 +522,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA3', units: 0 }),
         inv({ store: 'RETAILS', units: 5 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const fromDepot = result
       .filter(a => a.waterfallLevel === 'depot_to_store')
@@ -536,7 +542,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 0 }),
         inv({ store: 'STOCK', units: 30 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n3 = result.filter(a => a.waterfallLevel === 'central_to_depot')
     expect(n3).toHaveLength(1)
@@ -557,7 +563,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'RETAILS', units: 12 }),
         inv({ store: 'STOCK', units: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n3 = result.find(a => a.waterfallLevel === 'central_to_depot')
     if (n3) {
@@ -578,7 +584,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA_CRIT', units: 0 }),     // critical!
         inv({ store: 'TIENDA_SURPLUS', units: 50 }), // surplus
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // TIENDA_CRIT (stock=0) must get counterpart allocation, not TIENDA_LOW
     const critAction = result.find(
@@ -604,7 +610,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, sku: 'SKU_B', price: 200 }),
         inv({ store: 'TIENDA2', units: 50, sku: 'SKU_B', price: 200 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const skuA = result.filter(a => a.sku === 'SKU_A')
     const skuB = result.filter(a => a.sku === 'SKU_B')
@@ -624,7 +630,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 50, talle: 'M' }),
         inv({ store: 'TIENDA2', units: 50, talle: 'L' }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const talleM = result.filter(a => a.talle === 'M' && a.store === 'TIENDA1')
     const talleL = result.filter(a => a.talle === 'L' && a.store === 'TIENDA1')
@@ -643,7 +649,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const overstockActions = result.filter(a => a.risk === 'overstock' && a.store === 'TIENDA2')
     expect(overstockActions.length).toBeGreaterThanOrEqual(1)
@@ -665,7 +671,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 200 }), // huge surplus
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const liquidation = result.filter(
       a => a.risk === 'overstock' && a.counterpartStores.length === 0
@@ -686,7 +692,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA_SMALL', units: 50 }), // excess but only 1u available after calculation
         inv({ store: 'TIENDA_BIG', units: 100 }),   // big excess
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const deficit = result.find(a => a.store === 'TIENDA1' && a.risk === 'critical')
     if (deficit) {
@@ -712,7 +718,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 20 }),  // surplus of ~14
         inv({ store: 'RETAILS', units: 100 }), // depot has stock
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // TIENDA1 should get N1 from TIENDA2 (partial) and N2 from RETAILS (remainder)
     const n1 = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'store_to_store')
@@ -729,7 +735,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 0, price: 0, cost: 0 }),
         inv({ store: 'STOCK', units: 50, price: 0, cost: 0 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const critical = result.filter(a => a.risk === 'critical')
     expect(critical.length).toBeGreaterThanOrEqual(1)
@@ -743,7 +749,7 @@ describe('computeActionQueue', () => {
           inv({ store: 'TIENDA1', units: -5 }),
           inv({ store: 'TIENDA2', units: 30 }),
         ]),
-        'b2c', null, null, null, null, 0,
+        opts(),
       )
     }).not.toThrow()
   })
@@ -763,7 +769,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 5 }),
         inv({ store: 'TIENDA3', units: 5 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // target=3.46, qty=5 → 1.73 < 5 < 6.92 → balanced, no deficit, no surplus
     expect(result.length).toBe(0)
@@ -776,7 +782,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'RETAILS', units: 50 }),
       ]),
-      'b2c', null, null, null, 'TIENDA1', 0,
+      opts({ storeFilter: 'TIENDA1' }),
     )
     // TIENDA1 should still get depot restock even with store filter
     const n2 = result.filter(a => a.waterfallLevel === 'depot_to_store' && a.store === 'TIENDA1')
@@ -792,7 +798,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 50 }),
         inv({ store: 'TIENDA2', units: 50 }), // duplicate
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // Should not produce duplicate actions for same store+sku+talle
     const t1Actions = result.filter(a => a.store === 'TIENDA1' && a.risk !== 'overstock')
@@ -817,7 +823,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 20 }),   // surplus of 14
         inv({ store: 'RETAILS', units: 100 }),   // plenty of depot stock
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // TIENDA1 gets N1 from TIENDA2 (14 units) AND N2 from RETAILS for remainder
     const n1 = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'store_to_store')
@@ -841,7 +847,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 50 }),
         inv({ store: 'RETAILS', units: 100 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n1 = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'store_to_store')
     expect(n1).toBeDefined()
@@ -857,7 +863,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'RETAILS', units: 100 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n2 = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'depot_to_store')
     expect(n2).toBeDefined()
@@ -875,7 +881,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'B2BCLIENT', units: 0, channel: 'b2b' }),
         inv({ store: 'B2BSURPLUS', units: 100, channel: 'b2b' }), // surplus exists
       ], sales),
-      'b2b', null, null, null, null, 0,
+      opts({ mode: 'b2b' }),
     )
     const n4 = result.filter(a => a.waterfallLevel === 'central_to_b2b')
     // N4 is suppressed because surplusStores.length > 0
@@ -888,7 +894,7 @@ describe('computeActionQueue', () => {
       makeInput([
         inv({ store: 'B2BCLIENT', units: 0, channel: 'b2b' }),
       ]),
-      'b2b', null, null, null, null, 0,
+      opts({ mode: 'b2b' }),
     )
     const n4 = result.filter(a => a.waterfallLevel === 'central_to_b2b')
     expect(n4.length).toBeGreaterThanOrEqual(1)
@@ -903,7 +909,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'B2B_B', units: 0, channel: 'b2b', sku: 'SKU001' }),
         inv({ store: 'B2B_C', units: 0, channel: 'b2b', sku: 'SKU001' }),
       ]),
-      'b2b', null, null, null, null, 0,
+      opts({ mode: 'b2b' }),
     )
     const n4 = result.filter(a => a.waterfallLevel === 'central_to_b2b')
     // All 3 get N4 — no STOCK data means uncapped
@@ -922,7 +928,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'B2B_C', units: 0, channel: 'b2b', sku: 'SKU001' }),
         inv({ store: 'STOCK', units: 5, channel: 'b2c', sku: 'SKU001' }),
       ]),
-      'b2b', null, null, null, null, 0,
+      opts({ mode: 'b2b' }),
     )
     const n4 = result.filter(a => a.waterfallLevel === 'central_to_b2b')
     const totalAllocated = n4.reduce((s, a) => s + a.suggestedUnits, 0)
@@ -938,7 +944,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, brand: 'Martel' }),
         inv({ store: 'RETAILS', units: 50, brand: 'Wrangler' }), // different brand
       ]),
-      'b2c', 'Martel', null, null, null, 0,
+      opts({ brandFilter: 'Martel' }),
     )
     // RETAILS should still provide N2 even though its brand doesn't match filter
     const n2 = result.filter(a => a.waterfallLevel === 'depot_to_store')
@@ -952,7 +958,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, linea: 'Camiseria' }),
         inv({ store: 'RETAILS', units: 50, linea: 'Vaqueria' }),
       ]),
-      'b2c', null, 'Camiseria', null, null, 0,
+      opts({ lineaFilter: 'Camiseria' }),
     )
     const n2 = result.filter(a => a.waterfallLevel === 'depot_to_store')
     expect(n2.length).toBeGreaterThanOrEqual(1)
@@ -965,7 +971,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, categoria: 'camisa' }),
         inv({ store: 'STOCK', units: 50, categoria: 'jean' }),
       ]),
-      'b2c', null, null, 'camisa', null, 0,
+      opts({ categoriaFilter: 'camisa' }),
     )
     // STOCK should still be available for N3
     const n3 = result.filter(a => a.waterfallLevel === 'central_to_depot')
@@ -982,7 +988,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'RETAILS', units: 50 }),
         inv({ store: 'STOCK', units: 50 }),
       ]),
-      'b2c', 'Martel', 'Camiseria', 'camisa', 'TIENDA1', 0,
+      opts({ brandFilter: 'Martel', lineaFilter: 'Camiseria', categoriaFilter: 'camisa', storeFilter: 'TIENDA1' }),
     )
     // Only TIENDA1 should appear in non-depot actions
     for (const a of result) {
@@ -1000,7 +1006,7 @@ describe('computeActionQueue', () => {
       makeInput([
         inv({ store: 'B2BCLIENT', units: 0, channel: 'b2b' }),
       ]),
-      'b2b', null, null, null, null, 0,
+      opts({ mode: 'b2b' }),
     )
     // B2B deficit with no surplus → N4
     const n4 = result.filter(a => a.waterfallLevel === 'central_to_b2b')
@@ -1016,7 +1022,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'RETAILS', units: 500 }),  // RETAILS has plenty of stock
         inv({ store: 'STOCK', units: 100 }),
       ], sales),
-      'b2b', null, null, null, null, 0,
+      opts({ mode: 'b2b' }),
     )
     // No N2 actions (RETAILS excluded from B2B)
     const n2 = result.filter(a => a.waterfallLevel === 'depot_to_store')
@@ -1034,7 +1040,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'RETAILS', units: 500 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n2 = result.filter(a => a.waterfallLevel === 'depot_to_store')
     expect(n2.length).toBeGreaterThanOrEqual(1)
@@ -1052,7 +1058,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 5, brand: 'Martel', sku: 'MT01' }),
         inv({ store: 'STOCK', units: 100, sku: 'MT01' }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const action = result.find(a => a.sku === 'MT01' && a.store !== 'RETAILS')
     if (action) {
@@ -1075,7 +1081,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'STOCK', units: 200, sku: 'WR01' }),
         inv({ store: 'STOCK', units: 200, sku: 'MT01' }),
       ], sales),
-      'b2b', null, null, null, null, 0,
+      opts({ mode: 'b2b' }),
     )
     // B2B uses brand-based coverWeeks: Wrangler=24w→target≈55.4, Martel=12w→target≈27.7
     const wrAction = result.find(a => a.sku === 'WR01')
@@ -1096,7 +1102,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 6 }),
         inv({ store: 'STOCK', units: 100 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const deficit = result.find(a => a.store === 'TIENDA1' && (a.risk === 'critical' || a.risk === 'low'))
     expect(deficit).toBeUndefined()
@@ -1114,7 +1120,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 6 }),  // 6 < 6.92 → no surplus
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const surplus = result.find(a => a.store === 'TIENDA2' && a.risk === 'overstock')
     expect(surplus).toBeUndefined()
@@ -1128,7 +1134,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 8 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const surplus = result.find(a => a.store === 'TIENDA2' && a.risk === 'overstock')
     expect(surplus).toBeUndefined()
@@ -1144,7 +1150,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 0 }),
         inv({ store: 'TIENDA3', units: 60 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const surplus = result.find(a => a.store === 'TIENDA3' && a.risk === 'overstock')
     expect(surplus).toBeDefined()
@@ -1161,7 +1167,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA3', units: 3 }),
         inv({ store: 'STOCK', units: 100 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // All deficit → unmetDeficit accumulated → N3 from STOCK
     const n3 = result.filter(a => a.waterfallLevel === 'central_to_depot')
@@ -1180,7 +1186,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA3', units: 20 }),
         inv({ store: 'STOCK', units: 50 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // T1 deficit → unmetDeficit → N3 from STOCK. Check N3 exists.
     const n3 = result.find(a => a.waterfallLevel === 'central_to_depot')
@@ -1200,7 +1206,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 13 }),
         inv({ store: 'TIENDA2', units: 10 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // MIN_TRANSFER_UNITS guard with last units edge case
     // need = max(ceil(13.85 - 13), 3) = 3 because of MIN_STOCK_ABS
@@ -1215,7 +1221,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA3', units: 0, sku: 'SKU001' }),
         inv({ store: 'RETAILS', units: 4, sku: 'SKU001' }),  // only 4 units for 3 stores
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n2 = result.filter(a => a.waterfallLevel === 'depot_to_store')
     const totalFromDepot = n2.reduce((s, a) => s + a.suggestedUnits, 0)
@@ -1237,7 +1243,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 5 }),
         inv({ store: 'RETAILS', units: 10 }),  // limited depot
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n2_t1 = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'depot_to_store')
     const n2_t2 = result.find(a => a.store === 'TIENDA2' && a.waterfallLevel === 'depot_to_store')
@@ -1260,7 +1266,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 200 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const t2Actions = result.filter(a => a.store === 'TIENDA2' && a.risk === 'overstock')
     // Should have mirror (with counterparts) AND liquidation (without counterparts)
@@ -1283,7 +1289,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 10 }), // excess=3, consumed by T1 need
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // After allocation to TIENDA1, remaining should be ≤2 → no liquidation (threshold=3)
     const liquidation = result.filter(
@@ -1307,7 +1313,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, sku: 'SK_LOW', price: 100, cost: 50 }),
         inv({ store: 'TIENDA2', units: 50, sku: 'SK_LOW', price: 100, cost: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // SK_HIGH should have pareto=true, SK_LOW might not
     const highItem = result.find(a => a.sku === 'SK_HIGH' && a.risk === 'critical')
@@ -1325,7 +1331,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'RETAILS', units: 100, sku: 'SKU_A' }),
         inv({ store: 'RETAILS', units: 0, sku: 'SKU_B' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n2_a = result.find(a => a.sku === 'SKU_A' && a.waterfallLevel === 'depot_to_store')
     const n2_b = result.find(a => a.sku === 'SKU_B' && a.waterfallLevel === 'depot_to_store')
@@ -1344,7 +1350,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 30 }),
         inv({ store: 'STOCK', units: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // hist=0 → falsy → falls to else branch → qty=0 → deficit → N3 from STOCK
     const n3 = result.find(a => a.waterfallLevel === 'central_to_depot')
@@ -1358,7 +1364,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'STOCK', units: 50 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n3 = result.find(a => a.waterfallLevel === 'central_to_depot')
     expect(n3).toBeDefined()
@@ -1372,7 +1378,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 3 }),
         inv({ store: 'STOCK', units: 50 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // qty=3 <= MIN_STOCK_ABS(3) → deficit (no history path)
     const deficits = result.filter(a => a.risk === 'critical' || a.risk === 'low')
@@ -1387,7 +1393,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 1 }),
         inv({ store: 'STOCK', units: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const action = result.find(a => a.store === 'TIENDA1' || a.store === 'RETAILS')
     if (action && action.store === 'RETAILS') {
@@ -1407,7 +1413,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, price: 0, cost: 100 }),
         inv({ store: 'TIENDA2', units: 50, price: 0, cost: 100 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // price=0 → effectivePrice = cost*2 = 200
     const action = result.find(a => a.store === 'TIENDA1')
@@ -1422,7 +1428,7 @@ describe('computeActionQueue', () => {
       makeInput([
         inv({ store: 'B2B1', units: 0, channel: 'b2b', price: 200, priceMay: 0, cost: 50 }),
       ]),
-      'b2b', null, null, null, null, 0,
+      opts({ mode: 'b2b' }),
     )
     const action = result.find(a => a.store === 'B2B1')
     if (action) {
@@ -1441,7 +1447,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, price: 50, cost: 100 }),  // negative margin
         inv({ store: 'TIENDA2', units: 50, price: 50, cost: 100 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const action = result.find(a => a.store === 'TIENDA1')
     if (action) {
@@ -1458,7 +1464,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 30 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     for (const a of result) {
       if (a.historicalAvg === 0) {
@@ -1475,7 +1481,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 5 }),
         inv({ store: 'STOCK', units: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const action = result.find(a => a.store === 'TIENDA1' || a.store === 'RETAILS')
     if (action && action.historicalAvg > 0) {
@@ -1491,7 +1497,7 @@ describe('computeActionQueue', () => {
           inv({ store: '', units: 0 }),
           inv({ store: 'TIENDA1', units: 30 }),
         ]),
-        'b2c', null, null, null, null, 0,
+        opts(),
       )
     }).not.toThrow()
   })
@@ -1503,7 +1509,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, sku: '' }),
         inv({ store: 'TIENDA2', units: 30, sku: '' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // Empty SKU rows should be skipped → no actions
     expect(result.length).toBe(0)
@@ -1516,7 +1522,7 @@ describe('computeActionQueue', () => {
         inv({ store: '  TIENDA1  ', units: 0 }),
         inv({ store: 'TIENDA2', units: 30 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // Should treat as TIENDA1
     for (const a of result) {
@@ -1531,7 +1537,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'tienda1', units: 0 }),
         inv({ store: 'tienda2', units: 30 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // Stores should be uppercased
     for (const a of result) {
@@ -1546,7 +1552,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'RETAILS', units: 50 }),
       ]),
-      'b2c', null, null, null, 'tienda1', 0,  // lowercase filter
+      opts({ storeFilter: 'tienda1' }),  // lowercase filter
     )
     const n2 = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'depot_to_store')
     expect(n2).toBeDefined()
@@ -1559,7 +1565,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, brand: 'Martel' }),
         inv({ store: 'TIENDA2', units: 30, brand: 'Martel' }),
       ]),
-      'b2c', 'martel', null, null, null, 0,  // lowercase filter
+      opts({ brandFilter: 'martel' }),  // lowercase filter
     )
     expect(result.length).toBeGreaterThanOrEqual(0)
     for (const a of result) {
@@ -1578,7 +1584,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'STOCK', units: 100, sku: 'A01' }),
         inv({ store: 'STOCK', units: 100, sku: 'B01' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // Both are critical with same price, so sort by suggestedUnits desc, then impact, then sku
     // Verify no duplicates and proper ordering
@@ -1604,7 +1610,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, price: 1000, cost: 400 }),
         inv({ store: 'TIENDA2', units: 50, price: 1000, cost: 400 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const critical = result.find(a => a.store === 'TIENDA1' && a.risk === 'critical')
     if (critical) {
@@ -1630,7 +1636,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'T_SMALL', units: 20 }),   // excess ~17
         inv({ store: 'T_BIG', units: 100 }),     // excess ~97
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const deficit = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'store_to_store')
     if (deficit && deficit.counterpartStores.length >= 2) {
@@ -1648,7 +1654,7 @@ describe('computeActionQueue', () => {
       makeInput([
         inv({ store: 'TIENDA1', units: 200 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const liquidation = result.find(
       a => a.store === 'TIENDA1' && a.risk === 'overstock' && a.counterpartStores.length === 0
@@ -1671,7 +1677,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'T5', units: 0 }),
         inv({ store: 'STOCK', units: 200 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n3 = result.filter(a => a.waterfallLevel === 'central_to_depot')
     expect(n3.length).toBe(1)
@@ -1686,7 +1692,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'T2', units: 0 }),
         inv({ store: 'STOCK', units: 5 }),  // very limited
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n3 = result.find(a => a.waterfallLevel === 'central_to_depot')
     if (n3) {
@@ -1701,7 +1707,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'STOCK', units: 50 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n3 = result.find(a => a.waterfallLevel === 'central_to_depot')
     if (n3) {
@@ -1723,7 +1729,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 0 }),
         inv({ store: 'TSURPLUS', units: 100 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const mirror = result.find(
       a => a.store === 'TSURPLUS' && a.risk === 'overstock' && a.counterpartStores.length > 0
@@ -1747,7 +1753,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 2, price: 1, cost: 1 }),
         inv({ store: 'TIENDA2', units: 50, price: 1, cost: 1 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     expect(result.length).toBeGreaterThan(0)
   })
@@ -1763,7 +1769,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, price: 10, cost: 5 }),
         inv({ store: 'TIENDA2', units: 100, price: 10, cost: 5 }),
       ], sales),
-      'b2c', null, null, null, null, 999_999_999,
+      opts({ impactThreshold: 999_999_999 }),
     )
     // Overstock actions with low price should be filtered
     const overstock = withThreshold.filter(a => a.risk === 'overstock')
@@ -1779,7 +1785,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 0 }),
         inv({ store: 'STOCK', units: 50 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // TIENDA1 should have currentStock=20 (aggregated)
     const t1 = result.find(a => a.store === 'TIENDA1')
@@ -1796,7 +1802,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'RETAILS', units: 25 }),
         inv({ store: 'RETAILS', units: 25 }),  // total=50
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n2 = result.filter(a => a.waterfallLevel === 'depot_to_store')
     const total = n2.reduce((s, a) => s + a.suggestedUnits, 0)
@@ -1814,7 +1820,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     for (const a of result) {
       if (a.counterpartStores.length > 0) {
@@ -1830,7 +1836,7 @@ describe('computeActionQueue', () => {
       makeInput([
         inv({ store: 'TIENDA1', units: 200 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const liq = result.find(a => a.counterpartStores.length === 0)
     if (liq) {
@@ -1845,7 +1851,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, brand: 'Lee', sku: 'LEE01' }),
         inv({ store: 'TIENDA2', units: 30, brand: 'Lee', sku: 'LEE01' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const action = result.find(a => a.brand === 'Lee')
     if (action) {
@@ -1863,7 +1869,7 @@ describe('computeActionQueue', () => {
           inv({ store: 'TIENDA1', units: 999_999, price: 999_999 }),
           inv({ store: 'TIENDA2', units: 0, price: 999_999 }),
         ]),
-        'b2c', null, null, null, null, 0,
+        opts(),
       )
     }).not.toThrow()
   })
@@ -1873,7 +1879,7 @@ describe('computeActionQueue', () => {
     const sales = new Map([['TIENDA1|SKU001', 5]])
     const result = computeActionQueue(
       makeInput([inv({ store: 'TIENDA1', units: 100 })], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // Single store can be surplus but no N1 target
     const n1 = result.filter(a => a.waterfallLevel === 'store_to_store' && a.risk !== 'overstock')
@@ -1893,7 +1899,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'T1', units: 0, sku: 'S2', price: 500, cost: 200 }),
         inv({ store: 'T2', units: 50, sku: 'S2', price: 500, cost: 200 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // All items with same price/cost should have impact proportional to units
     const criticals = result.filter(a => a.risk === 'critical')
@@ -1913,7 +1919,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 30 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     if (result.length === 1) {
       // Single item = 100% of impact → always pareto
@@ -1929,7 +1935,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 0, price: 0, cost: 0 }),
         inv({ store: 'STOCK', units: 50, price: 0, cost: 0 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // price=0 → effectivePrice = max(price, 1) = 1, so impact won't be exactly 0
     // But test that it doesn't crash
@@ -1947,7 +1953,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'STOCK', units: 50, talle: 'M' }),
         inv({ store: 'STOCK', units: 50, talle: 'L' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const talles = new Set(result.filter(a => a.store === 'RETAILS').map(a => a.talle))
     // Each talle should generate independent N3
@@ -1961,7 +1967,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'CERROALTO', units: 0 }),
         inv({ store: 'WRSSL', units: 30 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     for (const a of result) {
       if (a.store === 'CERROALTO') expect(a.storeCluster).toBe('B')
@@ -1976,7 +1982,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'UNKNOWNSTORE', units: 0 }),
         inv({ store: 'TIENDA2', units: 30 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const unknown = result.find(a => a.store === 'UNKNOWNSTORE')
     if (unknown) {
@@ -1991,7 +1997,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'GALERIAWRLEE', units: 0 }),
         inv({ store: 'TIENDA2', units: 30 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const gal = result.find(a => a.store === 'GALERIAWRLEE')
     if (gal) {
@@ -2012,7 +2018,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'RETAILS', units: 50 }),
         inv({ store: 'STOCK', units: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     for (const a of result) {
       expect(a.recommendedAction.length).toBeGreaterThan(0)
@@ -2032,7 +2038,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'RETAILS', units: 50 }),
         inv({ store: 'STOCK', units: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const ids = result.map(a => a.id)
     expect(new Set(ids).size).toBe(ids.length)
@@ -2042,11 +2048,11 @@ describe('computeActionQueue', () => {
   it('LOW: id counter resets between invocations', () => {
     const r1 = computeActionQueue(
       makeInput([inv({ store: 'T1', units: 0 }), inv({ store: 'T2', units: 30 })]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const r2 = computeActionQueue(
       makeInput([inv({ store: 'T1', units: 0 }), inv({ store: 'T2', units: 30 })]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // Both should have similar id patterns (counter reset)
     if (r1.length > 0 && r2.length > 0) {
@@ -2064,7 +2070,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'T1', units: 0, skuComercial: 'MACA999' }),
         inv({ store: 'T2', units: 30, skuComercial: 'MACA999' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     for (const a of result) {
       expect(a.skuComercial).toBe('MACA999')
@@ -2078,7 +2084,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'T1', units: 0, description: 'Camisa Azul XL' }),
         inv({ store: 'T2', units: 30, description: 'Camisa Azul XL' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     for (const a of result) {
       expect(a.description).toBe('Camisa Azul XL')
@@ -2093,7 +2099,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'B2BCLIENT', units: 0, channel: 'b2b', sku: 'SKU_B2B' }),
         inv({ store: 'TIENDA2', units: 30, channel: 'b2c' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     for (const a of result) {
       expect(a.sku).not.toBe('SKU_B2B')
@@ -2107,7 +2113,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, price: 100 }),
         inv({ store: 'TIENDA2', units: 30, price: 500 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const critical = result.find(a => a.risk === 'critical')
     if (critical) {
@@ -2124,13 +2130,13 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, channel: 'b2c', price: 200, priceMay: 80, cost: 40 }),
         inv({ store: 'TIENDA2', units: 50, channel: 'b2c', price: 200, priceMay: 80, cost: 40 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const b2bResult = computeActionQueue(
       makeInput([
         inv({ store: 'CLIENTEB2B', units: 0, channel: 'b2b', price: 200, priceMay: 80, cost: 40 }),
       ]),
-      'b2b', null, null, null, null, 0,
+      opts({ mode: 'b2b' }),
     )
     // B2B impact should be lower than B2C for same units (80 vs 200 price)
     if (b2cResult.length > 0 && b2bResult.length > 0) {
@@ -2150,7 +2156,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 30 }),
         inv({ store: 'STOCK', units: 50 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // NaN row skipped — TIENDA2 is the only operational store, no deficit
     // No crash, algorithm completes
@@ -2167,7 +2173,7 @@ describe('computeActionQueue', () => {
           inv({ store: 'TIENDA1', units: Infinity }),
           inv({ store: 'TIENDA2', units: 30 }),
         ]),
-        'b2c', null, null, null, null, 0,
+        opts(),
       )
     }).not.toThrow()
   })
@@ -2186,7 +2192,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 10 }),    // surplus ~7 (not enough for full need)
         inv({ store: 'RETAILS', units: 100 }),   // plenty for N2
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n1 = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'store_to_store')
     const n2 = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'depot_to_store')
@@ -2206,7 +2212,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'B2B_Y', units: 0, channel: 'b2b', sku: 'SKU001' }),
         inv({ store: 'STOCK', units: 3, channel: 'b2c', sku: 'SKU001' }),
       ]),
-      'b2b', null, null, null, null, 0,
+      opts({ mode: 'b2b' }),
     )
     const n4 = result.filter(a => a.waterfallLevel === 'central_to_b2b')
     const totalAllocated = n4.reduce((s, a) => s + a.suggestedUnits, 0)
@@ -2219,7 +2225,7 @@ describe('computeActionQueue', () => {
       makeInput([
         inv({ store: 'RETAILS', units: 100, sku: 'ORPHAN_SKU' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // No operational stores → no skuMap entries → no actions
     expect(result).toEqual([])
@@ -2231,7 +2237,7 @@ describe('computeActionQueue', () => {
       makeInput([
         inv({ store: 'STOCK', units: 200, sku: 'ORPHAN_SKU' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     expect(result).toEqual([])
   })
@@ -2249,7 +2255,7 @@ describe('computeActionQueue', () => {
       rows.push(inv({ store: `TD${i}`, units: 0, sku: `SK${i}`, price: 100000 }))
       rows.push(inv({ store: `TS${i}`, units: 50, sku: `SK${i}`, price: 100000 }))
     }
-    const result = computeActionQueue(makeInput(rows, sales), 'b2c', null, null, null, null, 500_000)
+    const result = computeActionQueue(makeInput(rows, sales), opts({ impactThreshold: 500_000 }))
     if (result.length > 2) {
       // Pareto flags exist on the filtered set
       const pareto = result.filter(a => a.paretoFlag)
@@ -2273,7 +2279,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const deficitN1 = result.find(
       a => a.store === 'TIENDA1' && a.waterfallLevel === 'store_to_store'
@@ -2305,7 +2311,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 0 }),
         inv({ store: 'TIENDA3', units: 20 }), // excess ≈ 18 with 3w WOI
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // Total units sourced from TIENDA3 across all actions
     const fromT3 = result
@@ -2325,7 +2331,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: -10 }),
         inv({ store: 'STOCK', units: 50 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // TIENDA2 with -10 units should not generate surplus
     const surplus = result.filter(a => a.store === 'TIENDA2' && a.risk === 'overstock')
@@ -2340,7 +2346,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 0, price: 0, cost: 0 }),
         inv({ store: 'STOCK', units: 50, price: 0, cost: 0 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     for (const a of result) {
       expect(Number.isFinite(a.impactScore)).toBe(true)
@@ -2355,7 +2361,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, price: -100, cost: 50 }),
         inv({ store: 'STOCK', units: 50, price: -100, cost: 50 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     for (const a of result) {
       expect(Number.isFinite(a.impactScore)).toBe(true)
@@ -2370,7 +2376,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'HYBRID', units: 0, channel: 'b2c', sku: 'SKU_C' }),
         inv({ store: 'HYBRID', units: 50, channel: 'b2b', sku: 'SKU_C' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // In B2C mode, only B2C rows enter — single store with 0 units
     for (const a of result) {
@@ -2396,7 +2402,7 @@ describe('computeActionQueue', () => {
       }
     }
     const start = performance.now()
-    const result = computeActionQueue(makeInput(rows, sales), 'b2c', null, null, null, null)
+    const result = computeActionQueue(makeInput(rows, sales), opts())
     const elapsed = performance.now() - start
     expect(result).toBeDefined()
     expect(elapsed).toBeLessThan(100) // 100ms budget
@@ -2412,7 +2418,7 @@ describe('computeActionQueue', () => {
       sales.set(`TD${i}|EQ${i}`, 5)
       sales.set(`TS${i}|EQ${i}`, 2)
     }
-    const result = computeActionQueue(makeInput(rows, sales), 'b2c', null, null, null, null, 0)
+    const result = computeActionQueue(makeInput(rows, sales), opts())
     if (result.length > 3) {
       const pareto = result.filter(a => a.paretoFlag)
       const nonPareto = result.filter(a => !a.paretoFlag)
@@ -2435,7 +2441,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'T4', units: 5 }),
         inv({ store: 'T5', units: 100 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // T5 with 100u, avg=24, 100 > 24*2.5=60 AND 100>10 → surplus triggered
     const surplus = result.find(a => a.store === 'T5' && a.risk === 'overstock')
@@ -2452,7 +2458,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0, brand: 'UnknownBrand' }),
         inv({ store: 'TIENDA2', units: 30, brand: 'UnknownBrand' }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     for (const a of result) {
       expect(a.coverWeeks).toBe(12)
@@ -2468,7 +2474,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'STOCK', units: 50 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // Empty store rows should be skipped, not crash
     const emptyStoreActions = result.filter(a => a.store === '' || a.store === '  ')
@@ -2489,7 +2495,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA3', units: 10 }),   // surplus ~7
         inv({ store: 'RETAILS', units: 20 }),    // limited depot
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // Total N2 from RETAILS should not exceed 20
     const n2Total = result
@@ -2511,7 +2517,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'RETAILS', units: 50 }),
         inv({ store: 'STOCK', units: 100 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n3 = result.find(a => a.waterfallLevel === 'central_to_depot')
     if (n3) {
@@ -2540,7 +2546,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 70 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const deficit = result.find(a => a.store === 'TIENDA1' && a.risk === 'critical')
     expect(deficit).toBeDefined()
@@ -2569,7 +2575,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'RETAILS', units: 50, brand: 'Martel' }),
         inv({ store: 'STOCK', units: 100, brand: 'Martel' }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // B2C stores should have coverWeeks = 13 (B2C_STORE_COVER_WEEKS)
     const storeActions = result.filter(a => a.store !== 'RETAILS' && a.store !== 'STOCK')
@@ -2595,7 +2601,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 30, brand: 'Wrangler' }),
         inv({ store: 'STOCK', units: 100, brand: 'Wrangler' }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const storeActions = result.filter(a => a.store !== 'RETAILS' && a.store !== 'STOCK')
     for (const a of storeActions) {
@@ -2623,7 +2629,7 @@ describe('computeActionQueue', () => {
     }
     rows.push(inv({ store: 'TS1', units: 200 }))
 
-    const result = computeActionQueue(makeInput(rows, sales), 'b2c', null, null, null, null, 0)
+    const result = computeActionQueue(makeInput(rows, sales), opts())
 
     // Total units transferred from TS1 via N1 should not exceed its excess (184)
     const n1FromTS1 = result.filter(
@@ -2658,7 +2664,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA2', units: 80 }),
         inv({ store: 'RETAILS', units: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     // N1 should transfer from TIENDA2 (excess 74) to TIENDA1 (need 31) → takes 31
     const n1 = result.find(a => a.store === 'TIENDA1' && a.waterfallLevel === 'store_to_store')
@@ -2688,7 +2694,7 @@ describe('computeActionQueue', () => {
       sales.set(`TDL${i}|LV${i}`, 10)
       sales.set(`TSL${i}|LV${i}`, 3)
     }
-    const result = computeActionQueue(makeInput(rows, sales), 'b2c', null, null, null, null)
+    const result = computeActionQueue(makeInput(rows, sales), opts())
     // Pareto flags should only exist among the filtered (high-value) items
     const paretoItems = result.filter(a => a.paretoFlag)
     const nonPareto = result.filter(a => !a.paretoFlag)
@@ -2718,7 +2724,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'T3', units: 100 }),        // overstock (100 > 30.02*2=60.05)
         inv({ store: 'RETAILS', units: 20 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const critical = result.filter(a => a.risk === 'critical').length
     const low = result.filter(a => a.risk === 'low').length
@@ -2741,7 +2747,7 @@ describe('computeActionQueue', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 70 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const t1 = result.find(a => a.store === 'TIENDA1')
     expect(t1).toBeDefined()
@@ -2769,7 +2775,7 @@ describe('idealUnits, gapUnits, daysOfInventory', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 50 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const t1 = result.find(a => a.store === 'TIENDA1' && a.risk === 'critical')
     expect(t1).toBeDefined()
@@ -2786,7 +2792,7 @@ describe('idealUnits, gapUnits, daysOfInventory', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'RETAILS', units: 5 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const t1 = result.find(a => a.store === 'TIENDA1')
     expect(t1).toBeDefined()
@@ -2802,7 +2808,7 @@ describe('idealUnits, gapUnits, daysOfInventory', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'RETAILS', units: 100 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const t1 = result.find(a => a.store === 'TIENDA1')
     expect(t1).toBeDefined()
@@ -2824,7 +2830,7 @@ describe('idealUnits, gapUnits, daysOfInventory', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 100 }),
       ], salesHistory: sales, doiAge },
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const t2 = result.find(a => a.store === 'TIENDA2')
     expect(t2).toBeDefined()
@@ -2845,7 +2851,7 @@ describe('idealUnits, gapUnits, daysOfInventory', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 100 }),
       ], salesHistory: sales, doiAge },
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const t2 = result.find(a => a.store === 'TIENDA2')
     expect(t2).toBeDefined()
@@ -2860,7 +2866,7 @@ describe('idealUnits, gapUnits, daysOfInventory', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 100 }),
       ]),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     for (const action of result) {
       expect(action.daysOfInventory).toBe(0)
@@ -2877,7 +2883,7 @@ describe('idealUnits, gapUnits, daysOfInventory', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'TIENDA2', units: 100 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const overstock = result.filter(a => a.risk === 'overstock')
     for (const action of overstock) {
@@ -2893,7 +2899,7 @@ describe('idealUnits, gapUnits, daysOfInventory', () => {
         inv({ store: 'TIENDA1', units: 0 }),
         inv({ store: 'STOCK', units: 100 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     const n3 = result.find(a => a.waterfallLevel === 'central_to_depot')
     expect(n3).toBeDefined()
@@ -2914,7 +2920,7 @@ describe('idealUnits, gapUnits, daysOfInventory', () => {
         inv({ store: 'RETAILS', units: 10 }),
         inv({ store: 'STOCK', units: 100 }),
       ], sales),
-      'b2c', null, null, null, null, 0,
+      opts(),
     )
     for (const action of result) {
       expect(Number.isFinite(action.idealUnits)).toBe(true)

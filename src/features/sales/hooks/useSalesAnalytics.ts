@@ -27,6 +27,7 @@ import type {
   MonthlySalesRow,
 } from "@/queries/sales.queries";
 import { fetchAnnualTickets, filterTicketsByChannel } from "@/queries/tickets.queries";
+import type { TicketRow } from "@/queries/tickets.queries";
 import { fetchStores } from "@/queries/stores.queries";
 import { salesKeys, storeKeys, STALE_30MIN, GC_60MIN } from "@/queries/keys";
 import { brandIdToCanonical } from "@/api/normalize";
@@ -79,6 +80,10 @@ export interface SalesAnalyticsData {
   salesWideRaw: MonthlySalesRow[];
   /** Raw daily detail rows — for single-month store sparklines/charts. */
   dailyDetailRaw: DailyDetailRow[];
+  /** Raw ticket rows (annual, all stores) — for store detail tooltips. */
+  ticketRows: TicketRow[];
+  /** Map cosupc → cosujd — for resolving ticket store codes. */
+  storeMap: Map<string, string>;
   activeMonths: number[];
   isLoading: boolean;
   isDowLoading: boolean;
@@ -445,6 +450,8 @@ export function useSalesAnalytics({
     storeBreakdownB2B,
     salesWideRaw: salesCYQ.data ?? [],
     dailyDetailRaw: dailyQ.data ?? [],
+    ticketRows: ticketsQ.data ?? [],
+    storeMap,
     activeMonths,
     isLoading,
     isDowLoading,

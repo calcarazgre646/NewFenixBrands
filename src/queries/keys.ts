@@ -117,6 +117,12 @@ export const doiAgeKeys = {
   list: () => ["doiAge", "list"] as const,
 };
 
+// ─── STH Cohort (sell-through rate por cohorte) ─────────────────────────────
+export const sthKeys = {
+  all: ["sth"] as const,
+  cohort: () => ["sth", "cohort"] as const,
+};
+
 // ─── Depósitos & Cobertura ────────────────────────────────────────────────────
 export const depotKeys = {
   all: ["depots"] as const,
@@ -140,6 +146,8 @@ export const commissionKeys = {
   all: ["commissions"] as const,
   storeLevel: (year: number) =>
     ["commissions", "storeLevel", year] as const,
+  sellerGoals: (year: number, month: number) =>
+    ["commissions", "sellerGoals", year, month] as const,
 };
 
 // ─── Freshness ──────────────────────────────────────────────────────────────
@@ -154,6 +162,15 @@ export const configKeys = {
   params: () => ["config", "params"] as const,
   stores: () => ["config", "stores"] as const,
   commissions: () => ["config", "commissions"] as const,
+};
+
+// ─── Decisions (trazabilidad) ────────────────────────────────────────────────
+export const decisionKeys = {
+  all: ["decisions"] as const,
+  runs: () => [...decisionKeys.all, "runs"] as const,
+  run: (id: string) => [...decisionKeys.all, "run", id] as const,
+  actions: (runId: string) => [...decisionKeys.all, "actions", runId] as const,
+  activeConfigVersion: () => ["config", "activeVersion"] as const,
 };
 
 // ─── Cache durations ──────────────────────────────────────────────────────────
