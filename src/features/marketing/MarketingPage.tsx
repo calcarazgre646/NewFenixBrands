@@ -17,6 +17,7 @@ import { useState } from "react";
 import { PageHeader } from "@/components/ui/page-header/PageHeader";
 import { Tabs, type TabItem } from "@/components/ui/tabs/Tabs";
 import { Spinner } from "@/components/ui/spinner/Spinner";
+import { ExecutiveFilters } from "@/features/executive/components/ExecutiveFilters";
 import { MarketingStatsBar } from "./components/MarketingStatsBar";
 import { SyncStatusBar } from "./components/SyncStatusBar";
 import { TriggerInsights } from "./components/TriggerInsights";
@@ -96,6 +97,10 @@ export default function MarketingPage() {
         title="Marketing"
         description="Motor Automatizado de Marketing (SAM)"
       />
+
+      {/* Filtros consistentes con el Motor Comercial — afectan Inventario y Productos.
+          Clientes/Triggers son cross-channel por diseño (metadata no filtrada). */}
+      <ExecutiveFilters />
 
       {/* Sync status — sutil, siempre visible */}
       <SyncStatusBar
