@@ -173,6 +173,24 @@ export const decisionKeys = {
   activeConfigVersion: () => ["config", "activeVersion"] as const,
 };
 
+// ─── Marketing (SAM) ────────────────────────────────────────────────────────
+export const marketingKeys = {
+  all: ["marketing"] as const,
+  customers: (filters?: Record<string, unknown>) =>
+    ["marketing", "customers", filters ?? {}] as const,
+  triggers: () => ["marketing", "triggers"] as const,
+  templates: (channel?: string) =>
+    ["marketing", "templates", channel ?? "all"] as const,
+  executions: (filters?: Record<string, unknown>) =>
+    ["marketing", "executions", filters ?? {}] as const,
+  segments: () => ["marketing", "segments"] as const,
+  campaigns: () => ["marketing", "campaigns"] as const,
+  dashboard: () => ["marketing", "dashboard"] as const,
+  etlStats: () => ["marketing", "etlStats"] as const,
+  inventory: () => ["marketing", "inventory"] as const,
+  products: () => ["marketing", "products"] as const,
+};
+
 // ─── Cache durations ──────────────────────────────────────────────────────────
 // 30 min staleTime: dato cambia ~cada 6h, 30 min es conservador.
 // 60 min gcTime: mantener en memoria tras unmount.

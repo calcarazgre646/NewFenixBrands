@@ -27,9 +27,10 @@ export function cleanStr(val: string | null | undefined): string | null {
   return t;
 }
 
-/** Trim obligatorio — retorna string vacío si falla */
-export function trimStr(val: string | null | undefined): string {
-  return val?.trim() ?? "";
+/** Trim obligatorio — retorna string vacío si falla. Acepta number (resiliente a cambios de tipo en BD). */
+export function trimStr(val: string | number | null | undefined): string {
+  if (val == null) return "";
+  return String(val).trim();
 }
 
 /** float/string → entero */
@@ -47,9 +48,11 @@ export function toNum(val: number | string | null | undefined): number {
 /**
  * Parsea monto paraguayo en string: "6.263.380" → 6263380
  * El separador de miles en Paraguay es el punto.
+ * Acepta number directamente (resiliente a cambios de tipo en BD).
  */
-export function parsePYGString(val: string | null | undefined): number {
-  if (!val) return 0;
+export function parsePYGString(val: string | number | null | undefined): number {
+  if (val == null) return 0;
+  if (typeof val === "number") return val;
   return parseInt(val.replace(/\./g, "").trim(), 10) || 0;
 }
 
