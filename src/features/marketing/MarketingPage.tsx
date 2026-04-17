@@ -6,14 +6,18 @@
  * UX: El sistema YA funciona. Los triggers están pre-cargados, los datos
  * se sincronizan automáticamente, y el dashboard muestra insights reales.
  *
- * Tabs: Resumen | Clientes | Inventario | Productos | Automatizaciones | Outbound
+ * Tabs: Resumen | Inventario | Productos | Automatizaciones | Outbound
+ *
+ * NOTA: La lista de clientes NO se expone en UI (decisión de Rodrigo, 27/03/2026).
+ * Los datos de clientes (sam_customers) siguen alimentando el sistema: triggers
+ * evaluan contra ellos, dry-run los matchea, ETL los sincroniza. Pero ningún
+ * rol (ni super_user) ve el listado con datos personales.
  */
 import { useState } from "react";
 import { PageHeader } from "@/components/ui/page-header/PageHeader";
 import { Tabs, type TabItem } from "@/components/ui/tabs/Tabs";
 import { Spinner } from "@/components/ui/spinner/Spinner";
 import { MarketingStatsBar } from "./components/MarketingStatsBar";
-import { CustomerTable } from "./components/CustomerTable";
 import { SyncStatusBar } from "./components/SyncStatusBar";
 import { TriggerInsights } from "./components/TriggerInsights";
 import { TriggerList } from "./components/TriggerList";
@@ -25,7 +29,6 @@ import { InventoryHealth } from "./components/InventoryHealth";
 import { ProductIntelligence } from "./components/ProductIntelligence";
 import { CommercialInsights } from "./components/CommercialInsights";
 import { useMarketingDashboard } from "./hooks/useMarketingDashboard";
-import { useCustomers } from "./hooks/useCustomers";
 import { useTriggers } from "./hooks/useTriggers";
 import { useTemplates } from "./hooks/useTemplates";
 import { useTriggerDryRun } from "./hooks/useTriggerDryRun";
@@ -34,11 +37,10 @@ import { useExecutions } from "./hooks/useExecutions";
 import { useMarketingInventory } from "./hooks/useMarketingInventory";
 import { useMarketingProducts } from "./hooks/useMarketingProducts";
 
-type MarketingTab = "resumen" | "clientes" | "inventario" | "productos" | "automatizaciones" | "outbound";
+type MarketingTab = "resumen" | "inventario" | "productos" | "automatizaciones" | "outbound";
 
 const TAB_ITEMS: TabItem<MarketingTab>[] = [
   { key: "resumen",           label: "Resumen" },
-  { key: "clientes",          label: "Clientes" },
   { key: "inventario",        label: "Inventario" },
   { key: "productos",         label: "Productos" },
   { key: "automatizaciones",  label: "Automatizaciones" },
@@ -49,7 +51,6 @@ export default function MarketingPage() {
   const [activeTab, setActiveTab] = useState<MarketingTab>("resumen");
 
   const dashboard = useMarketingDashboard();
-  const customers = useCustomers();
   const triggers = useTriggers();
   const templates = useTemplates();
   const dryRun = useTriggerDryRun();
@@ -128,22 +129,6 @@ export default function MarketingPage() {
 
             <MarketingCharts metrics={dashboard.metrics} etlStats={dashboard.etlStats} />
           </div>
-        )}
-
-        {/* ════════ CLIENTES ════════ */}
-        {activeTab === "clientes" && (
-          <CustomerTable
-            customers={customers.customers}
-            total={customers.total}
-            isLoading={customers.isLoading}
-            search={customers.search}
-            onSearchChange={customers.setSearch}
-            tierFilter={customers.tierFilter}
-            onTierFilterChange={customers.setTierFilter}
-            page={customers.page}
-            onPageChange={customers.setPage}
-            pageSize={customers.pageSize}
-          />
         )}
 
         {/* ════════ INVENTARIO (ITR) ════════ */}
