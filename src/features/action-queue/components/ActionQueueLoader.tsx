@@ -35,7 +35,7 @@ const PHASES: PhaseStep[] = [
   {
     key: "fetching-doi",
     label: "Edad de Inventario",
-    detail: () => "Calculando días desde último movimiento por SKU…",
+    detail: () => "Calculando desde llegada a depósito Stock…",
     icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
   },
   {

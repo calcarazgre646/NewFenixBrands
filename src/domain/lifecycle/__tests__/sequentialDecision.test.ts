@@ -128,15 +128,14 @@ describe("analyzeSequentially", () => {
     expect(result.outcome).toBe("maintain_until_sold");
   });
 
-  // 90d+ mandatory exit: even with high STH above store average, must get action (NOT maintain_until_sold)
-  it("90d mandatory exit — high STH above store avg still gets action, not maintain", () => {
+  // 90d+ with high STH: Rodrigo says "revisar curva, consolidar si posible, sino mantener"
+  it("90d with high STH → maintain_until_sold (not markdown, not no_action)", () => {
     const result = analyzeSequentially(
-      { store: "TIENDA1", storeCluster: "A", productType: "carry_over", storeSth: 95, networkAvgSth: 40, storeAvgSth: 40, ageDays: 95 },
-      null,
+      { store: "TIENDA1", storeCluster: "A", productType: "carry_over", storeSth: 96, networkAvgSth: 40, storeAvgSth: 40, ageDays: 95 },
+      null, // no size curve → can't consolidate → maintain
     );
-    expect(result.outcome).not.toBe("maintain_until_sold");
-    expect(result.outcome).not.toBe("no_action");
-    expect(result.lifecycleAction).toBe("markdown_liquidacion");
+    expect(result.outcome).toBe("maintain_until_sold");
+    expect(result.reason).toContain("mantener hasta agotar");
   });
 
   // STH below threshold AND below network average at 60d+ in A store → cascade to B

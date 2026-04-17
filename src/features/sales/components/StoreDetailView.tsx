@@ -13,7 +13,7 @@ import type { StoreBreakdownRow } from "../hooks/useSalesAnalytics";
 import { calcGrossMargin, classifyMarginHealth, marginHealthThresholds } from "@/domain/kpis/calculations";
 import { useMarginConfig } from "@/hooks/useConfig";
 import { formatPYGShort, formatPYGSuffix, formatPct, formatChange } from "@/utils/format";
-import { useFilters } from "@/context/FilterContext";
+import { useFilters } from "@/hooks/useFilters";
 import { MONTH_SHORT } from "@/domain/period/helpers";
 import { brandIdToCanonical } from "@/api/normalize";
 import {

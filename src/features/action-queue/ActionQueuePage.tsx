@@ -10,7 +10,8 @@
  *
  * REGLA: Sin logica de negocio. Solo layout + composicion.
  */
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useSearchParams } from "react-router";
 import { useActionQueue } from "./hooks/useActionQueue";
 import { useDataFreshness } from "@/hooks/useDataFreshness";
 import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
@@ -28,6 +29,8 @@ export default function ActionQueuePage() {
   const data = useActionQueue();
   const { lastDataDay, lastDataMonth, worstStatus, getInfo } = useDataFreshness();
   const [activeTab, setActiveTab] = useState<ActiveTab>("actions");
+  const [searchParams] = useSearchParams();
+  const expandStore = useMemo(() => searchParams.get("store"), [searchParams]);
 
   if (data.isLoading) return <ActionQueueLoader progress={data.loadingProgress} />;
 
@@ -42,17 +45,10 @@ export default function ActionQueuePage() {
   }
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      {/* ═══ PAGE HEADER: Channel + Tab bar + Freshness ═══ */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <DataFreshnessTag
-          lastDataDay={lastDataDay}
-          lastDataMonth={lastDataMonth}
-          freshnessStatus={worstStatus(["mv_stock_tienda", "mv_doi_edad"])}
-          refreshedAt={getInfo("mv_stock_tienda")?.refreshedAt}
-        />
-        {/* Tab bar */}
-        <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-800" role="tablist">
+    <div className="space-y-6">
+      {/* ═══ TAB BAR — full width, top ═══ */}
+      <div className="flex items-center justify-between border-b border-gray-200 px-4 sm:px-6 dark:border-gray-700">
+        <div className="flex items-center gap-0" role="tablist">
           <TabButton
             active={activeTab === "actions"}
             onClick={() => setActiveTab("actions")}
@@ -93,49 +89,24 @@ export default function ActionQueuePage() {
             )}
           </TabButton>
         </div>
-
-        {/* Channel selector (shared — affects waterfall for both tabs) */}
-        <div className="inline-flex overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-          <button
-            type="button"
-            onClick={() => data.setChannel("b2c")}
-            className={`px-3 py-1.5 text-xs font-medium transition-colors duration-[var(--duration-fast)] ${
-              data.filters.channel === "b2c"
-                ? "bg-brand-500 font-semibold text-white"
-                : "bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
-            }`}
-          >
-            B2C
-          </button>
-          <button
-            type="button"
-            onClick={() => data.setChannel("b2b")}
-            className={`px-3 py-1.5 text-xs font-medium transition-colors duration-[var(--duration-fast)] ${
-              data.filters.channel === "b2b"
-                ? "bg-brand-500 font-semibold text-white"
-                : "bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
-            }`}
-          >
-            B2B
-          </button>
-        </div>
+        <DataFreshnessTag
+          lastDataDay={lastDataDay}
+          lastDataMonth={lastDataMonth}
+          freshnessStatus={worstStatus(["mv_stock_tienda", "mv_doi_edad"])}
+          refreshedAt={getInfo("mv_stock_tienda")?.refreshedAt}
+        />
       </div>
 
       {/* ═══ TAB CONTENT ═══ */}
+      <div className="px-4 sm:px-6">
       {activeTab === "actions" && (
         <ActionsTab
           items={data.items}
           storeStockMap={data.storeStockMap}
           totalItems={data.totalItems}
-          stockoutCount={data.stockoutCount}
-          lifecycleCriticalCount={data.lifecycleCriticalCount}
-          lowCount={data.lowCount}
-          overstockCount={data.overstockCount}
-          uniqueSkus={data.uniqueSkus}
-          movementCount={data.movementCount}
-          lifecycleCount={data.lifecycleCount}
           channel={data.filters.channel}
           brand={data.filters.brand}
+          expandStore={expandStore}
         />
       )}
       {activeTab === "planning" && (
@@ -144,6 +115,7 @@ export default function ActionQueuePage() {
           avgDOI={data.avgDOI}
         />
       )}
+      </div>
     </div>
   );
 }
@@ -165,10 +137,10 @@ function TabButton({
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`flex items-center rounded-lg px-4 py-2 text-xs font-medium transition-all duration-200 ${
+      className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-all duration-200 border-b-2 -mb-px ${
         active
-          ? "bg-white text-gray-900 shadow-theme-xs dark:bg-gray-700 dark:text-white"
-          : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+          ? "border-brand-500 text-gray-900 dark:text-white"
+          : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:border-gray-600"
       }`}
     >
       {children}

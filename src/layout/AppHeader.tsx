@@ -6,12 +6,12 @@
  */
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
-import { useSidebar } from "@/context/SidebarContext";
+import { useSidebar } from "@/hooks/useSidebar";
 import { useScrollDirection } from "@/hooks/useScrollDirection";
 import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
 import NotificationDropdown from "@/components/header/NotificationDropdown";
-import { useFilters } from "@/context/FilterContext";
-import { useAuth } from "@/context/AuthContext";
+import { useFilters } from "@/hooks/useFilters";
+import { useAuth } from "@/hooks/useAuth";
 import FilterBar from "@/components/filters/FilterBar";
 import GlobalSearch from "@/components/search/GlobalSearch";
 
@@ -151,6 +151,7 @@ const AppHeader: React.FC = () => {
         {!hideFilters && (
           <div className="hidden lg:flex lg:items-center lg:gap-3 lg:flex-1">
             <FilterBar filters={filters} compact brandOnly={hasInPageFilters} />
+            {pathname === "/acciones" && <ChannelSelector />}
           </div>
         )}
         {hideFilters && <div className="hidden lg:flex lg:flex-1" />}
@@ -191,5 +192,36 @@ const AppHeader: React.FC = () => {
     </>
   );
 };
+
+function ChannelSelector() {
+  const { filters, setChannel } = useFilters();
+  const channel = filters.channel;
+  return (
+    <div className="inline-flex overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+      <button
+        type="button"
+        onClick={() => setChannel("b2c")}
+        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+          channel === "b2c"
+            ? "bg-brand-500 font-semibold text-white"
+            : "bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+        }`}
+      >
+        B2C
+      </button>
+      <button
+        type="button"
+        onClick={() => setChannel("b2b")}
+        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+          channel === "b2b"
+            ? "bg-brand-500 font-semibold text-white"
+            : "bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+        }`}
+      >
+        B2B
+      </button>
+    </div>
+  );
+}
 
 export default AppHeader;

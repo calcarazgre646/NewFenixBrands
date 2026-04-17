@@ -28,7 +28,7 @@ import { EventFormModal } from "./components/EventFormModal";
 import { ArrivalDetailPopover } from "./components/ArrivalDetailPopover";
 import { getBrandColor, getStatusColor } from "@/domain/logistics/calendar";
 import type { ArrivalCalendarItem } from "@/domain/logistics/calendar";
-import { useSidebar } from "@/context/SidebarContext";
+import { useSidebar } from "@/hooks/useSidebar";
 
 // ── Ship icon (inline SVG, matches src/icons/ship.svg) ──────────────────────
 

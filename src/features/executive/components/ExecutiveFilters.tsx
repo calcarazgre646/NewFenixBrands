@@ -9,7 +9,7 @@
  * Mobile (<lg): 3 selects — Canal, Marca, Período.
  *   (El header FilterBar está oculto en mobile, así que Marca se muestra aquí.)
  */
-import { useFilters } from "@/context/FilterContext";
+import { useFilters } from "@/hooks/useFilters";
 import type { BrandFilter, ChannelFilter, PeriodFilter } from "@/domain/filters/types";
 
 const CHANNELS: { value: ChannelFilter; label: string }[] = [

@@ -5,7 +5,7 @@
  * para la que no tiene permisos.
  */
 import { useNavigate } from "react-router";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { getDefaultRoute, getRoleLabel } from "@/domain/auth/types";
 import Button from "@/components/ui/button/Button";
 

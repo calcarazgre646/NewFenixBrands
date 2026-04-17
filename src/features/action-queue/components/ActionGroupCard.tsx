@@ -16,7 +16,7 @@
  */
 import { useState, useMemo } from "react";
 import type { ActionGroup, ActionSection, GroupByMode, OperationalIntent } from "@/domain/actionQueue/grouping";
-import { CompactActionList } from "./CompactActionList";
+import { ActionCardList } from "./ActionCardList";
 import { downloadGroupHtml } from "./exportHtml";
 import { Badge } from "@/components/ui/badge/Badge";
 import { Card } from "@/components/ui/card/Card";
@@ -31,11 +31,7 @@ const ROLE_LABELS: Record<string, string> = {
 import { formatPYGSuffix } from "@/utils/format";
 import type { StoreCluster } from "@/domain/actionQueue/types";
 
-import { WEEKS_PER_MONTH, DOI_AGE_THRESHOLDS, FEATURE_PAGE_SIZE } from "@/domain/config/defaults";
-
-// ─── Constants ───────────────────────────────────────────────────────────────
-
-const PAGE_SIZE = FEATURE_PAGE_SIZE;
+import { WEEKS_PER_MONTH, DOI_AGE_THRESHOLDS } from "@/domain/config/defaults";
 
 const CLUSTER_STYLES: Record<StoreCluster, { bg: string; label: string }> = {
   A:   { bg: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400", label: "Premium" },
@@ -429,18 +425,23 @@ function buildSectionDiagnosis(section: ActionSection, channel: "b2c" | "b2b"): 
       : null;
   }
 
+  const uniqueSkus = new Set(items.map(i => i.sku)).size;
+  const tallesVsSkus = items.length !== uniqueSkus
+    ? ` (${uniqueSkus} ${uniqueSkus === 1 ? "SKU" : "SKUs"} · ${items.length} talles)`
+    : ` (${uniqueSkus} ${uniqueSkus === 1 ? "SKU" : "SKUs"})`;
+
   if (intent === "lifecycle_review") {
     const avgAge = items.reduce((s, i) => s + (i.cohortAgeDays ?? 0), 0) / items.length;
-    return `Productos con ${Math.round(avgAge)}d promedio sin ventas esperadas`;
+    return `Productos con ${Math.round(avgAge)}d promedio sin ventas esperadas${tallesVsSkus}`;
   }
 
   if (intent === "lifecycle_commercial") {
-    return `SKUs que requieren intervención comercial o markdown selectivo`;
+    return `Intervención comercial o markdown selectivo${tallesVsSkus}`;
   }
 
   if (intent === "lifecycle_exit") {
     const avgAge = items.reduce((s, i) => s + (i.cohortAgeDays ?? 0), 0) / items.length;
-    return `${items.length} SKUs con ${Math.round(avgAge)}d promedio — salida obligatoria`;
+    return `${Math.round(avgAge)}d promedio — salida obligatoria${tallesVsSkus}`;
   }
 
   return null;
@@ -460,17 +461,8 @@ function SectionCard({
   viewProfile?: import("@/domain/auth/types").ViewProfile;
 }) {
   const [open, setOpen] = useState(false);
-  const [page, setPage] = useState(0);
 
   const style = INTENT_STYLES[section.intent];
-  const totalPages = Math.ceil(section.items.length / PAGE_SIZE);
-  // Reset pagination when items change (e.g., filter toggle)
-  const safePage = Math.min(page, Math.max(0, totalPages - 1));
-
-  const paginatedItems = useMemo(() => {
-    const start = safePage * PAGE_SIZE;
-    return section.items.slice(start, start + PAGE_SIZE);
-  }, [section.items, safePage]);
 
   const diagnosis = useMemo(() => buildSectionDiagnosis(section, channel), [section, channel]);
 
@@ -519,33 +511,14 @@ function SectionCard({
         <ChevronIcon open={open} className="h-4 w-4 text-gray-400" />
       </button>
 
-      {/* Section table */}
+      {/* Section content — card grid */}
       {open && (
-        <div>
-          <CompactActionList
-            items={paginatedItems}
-            intent={section.intent}
+        <div className="px-4 py-3">
+          <ActionCardList
+            items={section.items}
             groupMode={groupMode}
-            sectionDefaultRoles={section.items[0]?.responsibleRoles}
             viewProfile={viewProfile}
           />
-
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-gray-100 px-5 py-2.5 dark:border-gray-700/30">
-              <span className="text-[11px] tabular-nums text-gray-400 dark:text-gray-500">
-                {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, section.items.length)} de {section.items.length}
-              </span>
-              <div className="flex items-center gap-0.5">
-                <PageBtn onClick={() => setPage(0)} disabled={safePage === 0}>&laquo;</PageBtn>
-                <PageBtn onClick={() => setPage(p => p - 1)} disabled={safePage === 0}>&lsaquo;</PageBtn>
-                <span className="px-2.5 text-[11px] font-semibold tabular-nums text-gray-600 dark:text-gray-400">
-                  {page + 1}/{totalPages}
-                </span>
-                <PageBtn onClick={() => setPage(p => p + 1)} disabled={safePage >= totalPages - 1}>&rsaquo;</PageBtn>
-                <PageBtn onClick={() => setPage(totalPages - 1)} disabled={safePage >= totalPages - 1}>&raquo;</PageBtn>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -595,16 +568,3 @@ function OccupancyIndicator({ stock, capacity }: { stock: number | null; capacit
   );
 }
 
-// ─── Page button ─────────────────────────────────────────────────────────────
-
-function PageBtn({ onClick, disabled, children }: { onClick: () => void; disabled: boolean; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      disabled={disabled}
-      className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-30 dark:text-gray-400 dark:hover:bg-gray-700"
-    >
-      {children}
-    </button>
-  );
-}

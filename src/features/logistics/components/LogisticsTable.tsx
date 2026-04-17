@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge/Badge";
 import { Card } from "@/components/ui/card/Card";
 import { statusLabel } from "@/domain/logistics/arrivals";
 import type { LogisticsArrival, LogisticsGroup, StatusSection } from "@/domain/logistics/types";
-import { STATUS_STYLE, STATUS_ACCENT, ERP_STATUS_STYLE, erpStatusLabel, pvpRange, marginRange, ChevronIcon } from "./logistics.shared";
+import { STATUS_STYLE, STATUS_ACCENT, ERP_STATUS_STYLE, erpStatusLabel, pvpRange, marginRange } from "./logistics.shared";
+import { ChevronIcon } from "./ChevronIcon";
 
 // ─── Column definitions with responsive visibility ──────────────────────────
 

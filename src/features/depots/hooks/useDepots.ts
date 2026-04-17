@@ -17,7 +17,7 @@ import { fetchSalesHistory } from "@/queries/salesHistory.queries";
 import { inventoryKeys, depotKeys, STALE_30MIN, GC_60MIN } from "@/queries/keys";
 import { buildDepotData } from "@/domain/depots/calculations";
 import type { DepotData } from "@/domain/depots/types";
-import { useFilters } from "@/context/FilterContext";
+import { useFilters } from "@/hooks/useFilters";
 import { useDepotConfig, useStoreConfig } from "@/hooks/useConfig";
 
 export interface UseDepotsResult {

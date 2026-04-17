@@ -13,7 +13,7 @@
 import { useState, useCallback } from "react";
 import { Link } from "react-router";
 import PageMeta from "@/components/common/PageMeta";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { getVisibleSections, type GuideSection } from "@/domain/help/guide";
 import { getRoleLabel } from "@/domain/auth/types";
 import {

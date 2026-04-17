@@ -9,8 +9,6 @@
  *   - isLoading = true hasta que AMBOS estén resueltos
  */
 import {
-  createContext,
-  useContext,
   useEffect,
   useState,
   useCallback,
@@ -21,24 +19,8 @@ import type { User, Session } from "@supabase/supabase-js";
 import { authClient } from "@/api/client";
 import { queryClient } from "@/lib/queryClient";
 import { useProfileQuery } from "@/hooks/useProfileQuery";
-import {
-  derivePermissions,
-  type UserProfile,
-  type Permissions,
-} from "@/domain/auth/types";
-
-interface AuthContextValue {
-  user:            User | null;
-  session:         Session | null;
-  profile:         UserProfile | null;
-  permissions:     Permissions;
-  isAuthenticated: boolean;
-  isLoading:       boolean;
-  login:  (email: string, password: string) => Promise<{ error: string | null }>;
-  logout: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+import { derivePermissions, type UserProfile } from "@/domain/auth/types";
+import { AuthContext, type AuthContextValue } from "@/context/auth.context";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]                       = useState<User | null>(null);
@@ -133,10 +115,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
 }

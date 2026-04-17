@@ -17,7 +17,7 @@ import {
   type ProfileUpdate,
   type CreateUserData,
 } from "@/queries/users.queries";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { canEditProfile, canDeleteUser } from "@/domain/users/validation";
 import type { Role } from "@/domain/auth/types";
 

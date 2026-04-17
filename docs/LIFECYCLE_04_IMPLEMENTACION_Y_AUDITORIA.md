@@ -1,8 +1,8 @@
 # Lifecycle SKU — Implementacion y Auditoria
 
-**Fecha:** 2026-04-16
-**Sesion:** Implementacion de reglas de Rodrigo + auditoria end-to-end + bug hunting adversarial
-**Estado:** Funcional con 8 preguntas pendientes para Rodrigo
+**Fecha:** 2026-04-16 (actualizado 2026-04-16 tarde)
+**Sesion:** Implementacion de reglas de Rodrigo + auditoria + respuestas del cliente
+**Estado:** Funcional. 6 de 8 preguntas respondidas por Rodrigo. 2 pendientes (capacidades + perfil gerencia).
 
 ---
 
@@ -15,7 +15,10 @@ El Centro de Acciones ahora implementa las reglas de lifecycle de Rodrigo:
 - Cascade A->B->OUT con routing por cluster
 - Edad por cohorte original (primera entrada a la red)
 - Perfiles DOI 15d/45d
-- Salida obligatoria a 90d+
+- Accion definida obligatoria a 90d+ (maintain si STH alto, markdown si STH bajo)
+- Evaluacion lifecycle por talla individual (no por SKU completo)
+- Cascade destino por mejor vendedor del SKU
+- Pareto eliminado — priorizacion 100% por urgencia operativa
 
 Se audito contra cada regla del cliente y se ejecuto bug hunting adversarial con multiples agentes independientes.
 
@@ -28,9 +31,14 @@ Se audito contra cada regla del cliente y se ejecuto bug hunting adversarial con
 
 La tabla detallada por tipo de producto (R2) es la que manda. La regla simple de Rodrigo (45/60/75/90d) coincide con "basicos" en los brackets correspondientes.
 
-**Fix aplicado:** A 90d+ se fuerza accion obligatoria sin importar STH (`forcedAt90` en `linealidad.ts:127`). El `maintain_until_sold` en `sequentialDecision.ts:238` se salta cuando `bracket === 90`.
+**Respuesta de Rodrigo (pregunta #1):** "Revisar curva de tallas, consolidar si es posible. Caso contrario mantener hasta agotar stock."
 
-**Pregunta pendiente para Rodrigo:** Un SKU con 90d y STH 96% recibe "markdown liquidacion". Puede que sea mas apropiado una accion mas suave. Ver pregunta #1.
+**Implementacion:** A 90d+ con STH alto (por encima del umbral), el sistema:
+1. Primero intenta completar curva de tallas (consolidar/reponer)
+2. Si no hay curva que completar → `maintain_until_sold` (mantener hasta agotar)
+3. Solo si STH esta DEBAJO del umbral → `markdown_liquidacion`
+
+Todo SKU de 90d+ tiene una accion definida — la diferencia es que no se aplica markdown a un producto que vendio bien.
 
 ### R2 — Tabla de linealidad: 3 tipos x 6 tramos
 **Estado:** IMPLEMENTADO + AUDITADO (18/18 celdas exactas)
@@ -65,7 +73,7 @@ Archivo: `src/domain/lifecycle/sequentialDecision.ts`
 | 3b. STH vs promedio tienda | OK | `storeAvgSth` (promedio de todos los SKUs en la tienda) |
 | 4. Sugerir accion | OK | 10 outcomes posibles, todos cubiertos |
 
-**Gap:** "cuando tuvo curva completa" — el best performer no filtra por historial de curva completa. Usa ventas totales como proxy. Ver pregunta #4.
+**Respuesta de Rodrigo (pregunta #4):** "Al no tener historicos, comparar contra la tienda que mejor vendio ese SKU independiente de si la curva estuvo completa o no." — Ya funciona asi. Sin cambio necesario.
 
 ### R5 — Reglas por cluster
 **Estado:** IMPLEMENTADO + AUDITADO (10/10)
@@ -76,9 +84,10 @@ Archivos: `clusterRouting.ts`, `sequentialDecision.ts:253`, `waterfall.ts:669-69
 - B -> OUT desde bracket 60
 - OUT no cascadea (markdown en lugar)
 - Flujo inverso bloqueado (OUT->A, OUT->B)
-- Destino por capacidad disponible (headroom), no primera tienda alfabeticamente
+- Destino por mejor vendedor del SKU en el cluster destino (Rodrigo: "siempre priorizar donde mejor se vende")
+- Tiendas llenas se excluyen como filtro secundario
 
-**Pregunta pendiente:** Criterio de eleccion de tienda destino en cascade. Ver pregunta #2.
+**Respuesta de Rodrigo (pregunta #2):** "Siempre debe priorizarse donde mejor se vende." — Implementado.
 
 ### R6 — Edad por cohorte original
 **Estado:** IMPLEMENTADO + FIX APLICADO
@@ -133,7 +142,7 @@ El ERP solo tiene `tipo_doc = "ST"` (526K filas). No hay forma de distinguir mer
 
 | Fix | Descripcion | Archivos |
 |-----|-------------|----------|
-| R1 | 90d mandatory exit: `forcedAt90` en linealidad + skip maintain_until_sold | linealidad.ts, sequentialDecision.ts |
+| R1 | 90d+: STH alto → revisar curva, consolidar o mantener. STH bajo → markdown. | linealidad.ts, sequentialDecision.ts |
 | R6 | Cohort age fallback busca en cualquier tienda antes de usar DOI | waterfall.ts |
 
 ### Del bug hunting adversarial
@@ -141,7 +150,7 @@ El ERP solo tiene `tipo_doc = "ST"` (526K filas). No hay forma de distinguir mer
 | Fix | Descripcion | Archivos |
 |-----|-------------|----------|
 | B1 | Capacity check acumula inflow (antes usaba stock original, permitia overflow) | waterfall.ts |
-| B2 | Cascade destino por capacidad disponible, no primera tienda del config | waterfall.ts |
+| B2 | Cascade destino por mejor vendedor del SKU (Rodrigo), con capacidad como filtro | waterfall.ts |
 | BUG-1 | FERIA y MARTELLUQUE removidos de EXCLUDED_STORES en STH query | sth.queries.ts |
 
 ### Datos actualizados
@@ -156,29 +165,40 @@ El ERP solo tiene `tipo_doc = "ST"` (526K filas). No hay forma de distinguir mer
 
 ## Bugs pendientes (priorizados)
 
-### Dependen de respuesta de Rodrigo
+### Resueltos con respuestas de Rodrigo
 
-| Bug | Descripcion | Pregunta |
-|-----|-------------|----------|
-| STH mejor talla | `byStoreSku` fallback toma talla con MEJOR STH. Tallas muertas quedan invisibles. | #3 (usar peor, promedio, o por talla?) |
-| WOI como proxy de edad | Producto nuevo con carga grande -> WOI alto -> marcado para liquidacion | Relacionado con #1 (accion apropiada) |
+| Bug | Respuesta de Rodrigo | Estado |
+|-----|---------------------|--------|
+| STH mejor talla | "Evaluar por talla individual. UX: mostrar promedio pero abrir detalle por talla." | IMPLEMENTADO — lifecycle ahora evalua per (sku, talle, store) |
+| 90d+ con STH alto | "Revisar curva, consolidar si posible, sino mantener hasta agotar." | IMPLEMENTADO |
+| Cascade destino | "Siempre priorizar donde mejor se vende." | IMPLEMENTADO |
+| Mejor vendedor sin curva completa | "Comparar contra la tienda que mejor vendio, independiente de curva." | Ya funcionaba asi |
 
-### Mejoras de performance (no afectan resultados)
+### Pendientes menores
 
-| Bug | Descripcion | Esfuerzo |
-|-----|-------------|----------|
-| O(n*m) cohort fallback | Itera sthData por cada sku sin age. Pre-computar Map<sku, age>. | 10 min |
-| importedSet recreado | `new Set(importedBrands)` dentro del loop. Mover fuera. | 2 min |
-| DOI sin cap | STH cercano a 0% produce DOI de millones. Agregar `Math.min(..., 9999)`. | 2 min |
+| Bug | Descripcion |
+|-----|-------------|
+| WOI como proxy de edad | Producto nuevo con carga grande -> WOI alto -> puede sobreestimar edad. Mitigado con threshold 52 semanas. |
 
-### Mejoras de UX (no afectan datos)
+### Mejoras de performance y UX (RESUELTAS)
 
-| Bug | Descripcion | Esfuerzo |
-|-----|-------------|----------|
-| setState en useMemo | Anti-patron React. Mover a useEffect. | 30 min |
-| Paginacion stale | Page no se resetea al cambiar filtros. Agregar useEffect reset. | 5 min |
-| storeStockMap ambos canales | Ocupacion no refleja canal activo. Filtrar por channel. | 10 min |
-| Cache 30min sin refresh | Agregar boton "actualizar" + indicador "hace X min". | 15 min |
+| Bug | Estado |
+|-----|--------|
+| O(n*m) cohort fallback | RESUELTO — pre-computado Map<sku, age> con O(1) lookup |
+| importedSet recreado | RESUELTO — movido fuera del loop |
+| DOI sin cap | RESUELTO — cap a 9999 |
+| setState en useMemo | RESUELTO — separado a useEffect |
+| Paginacion stale | RESUELTO — safePage clamp |
+| storeStockMap ambos canales | RESUELTO — usa inventory completa para capacidad |
+| Pareto eliminado | RESUELTO — priorizacion 100% por risk (urgencia) |
+| Stats no reactivas a filtros | RESUELTO — se recalculan desde filteredItems |
+| Buscador eliminado | RESUELTO — se redisena con nuevo UX |
+
+### Pendientes menores de UX
+
+| Bug | Descripcion |
+|-----|-------------|
+| Cache 30min sin refresh | Agregar boton "actualizar" + indicador "hace X min". Sera parte del rediseno UX. |
 
 ### No arreglables (limitaciones de datos)
 
@@ -190,49 +210,62 @@ El ERP solo tiene `tipo_doc = "ST"` (526K filas). No hay forma de distinguir mer
 
 ---
 
-## Preguntas pendientes para Rodrigo
+## Preguntas para Rodrigo — Estado
 
-1. **Salida obligatoria 90d con STH alto:** Un SKU con 90d y 96% STH (quedan 2-3 unidades) -> "markdown liquidacion" o algo mas suave?
-
-2. **Destino de cascade A->B:** A cual tienda B? Por capacidad? Por ventas del SKU? Por proximidad?
-
-3. **STH por talla:** Tomar la mejor talla (actual), la peor, o el promedio?
-
-4. **"Cuando tuvo curva completa":** No hay datos historicos de curva por tienda. Usamos ventas totales como proxy. Aceptable?
-
-5. **Gerencia de Producto vs Comercial:** Que valor de `cargo` distingue a uno del otro para el toggle 15d/45d?
-
-6. **B2C a MAYORISTA:** Mostrar como opcion cuando MAYORISTA es el mejor vendedor de un SKU?
-
-7. **Capacidades faltantes:** Derlys relevo 6 de 21 tiendas. Cuando se completa?
-
-8. **MARTELLUQUE:** Tienda B normal o deposito disfrazado? (8,913 unidades, 151 WOI promedio)
+| # | Pregunta | Respuesta | Estado |
+|---|----------|-----------|--------|
+| 1 | 90d+ con STH alto → markdown o algo mas suave? | "Revisar curva, consolidar si posible, sino mantener hasta agotar" | IMPLEMENTADO |
+| 2 | Destino cascade A→B → por capacidad, ventas o proximidad? | "Siempre priorizar donde mejor se vende" | IMPLEMENTADO |
+| 3 | STH por talla → mejor, peor o promedio? | "Evaluar por talla individual. UX: promedio + abrir detalle" | IMPLEMENTADO |
+| 4 | Best performer sin curva completa? | "Comparar contra mejor vendedor independiente de curva" | Ya funcionaba asi |
+| 5 | Gerencia de Producto vs Comercial para toggle 15d/45d | SIN RESPUESTA | PENDIENTE |
+| 6 | B2C → MAYORISTA cuando es mejor vendedor? | SIN RESPUESTA | PENDIENTE (excluido por ahora) |
+| 7 | Capacidades faltantes (15 tiendas) | Rodrigo derivo a Derlys con Madeleine | ESPERANDO DATOS |
+| 8 | MARTELLUQUE: tienda o deposito? | "Aunque no lo creas, es una tienda. Considerar como B." | IMPLEMENTADO |
 
 ---
 
 ## Verificacion
 
 ```
-Tests:  1340 passing (40 suites)
+Tests:  1338 passing (40 suites)
 TSC:    0 errores
 Build:  OK
+Deploy: https://fenix-brands-one.vercel.app (via CLI, auto-deploy deshabilitado)
+PR:     #18 merged (lifecycle engine + sync pendientes)
 ```
 
-## Archivos clave modificados
+## Cambios posteriores a respuestas de Rodrigo
+
+| Cambio | Descripcion |
+|--------|-------------|
+| 90d+ con STH alto | Revertido `forcedAt90`. Ahora: revisar curva → consolidar → maintain. No markdown. |
+| Cascade por ventas | Destino por mejor vendedor del SKU (no por capacidad). Capacidad como filtro secundario. |
+| STH por talla | Lifecycle evalua per (sku, talle, store). `precomputeSkuStoreAvgSth` para promedio por SKU. |
+| Pareto eliminado | Toggle, badge, stat card, computo. Risk es el unico eje de priorizacion. |
+| Stats reactivas | Stat cards se recalculan desde filteredItems (responden a filtros de tipo). |
+| Brand filter fix | storeStockTotals usa inventory completa (no filtrada por marca) para capacidad. |
+| Buscador eliminado | Sera parte del rediseno UX con sistema de tickets/cards. |
+| Loading text | "Calculando desde llegada a deposito Stock" (pedido de Rodrigo). |
+
+## Archivos clave modificados (sesion completa)
 
 ```
-src/domain/lifecycle/linealidad.ts         — forcedAt90, thresholds (no change to values)
-src/domain/lifecycle/sequentialDecision.ts  — Step 3 consolidar/mover, cascade 30d, maintain skip at 90d
-src/domain/lifecycle/classify.ts           — sin cambios (ya estaba correcto)
-src/domain/lifecycle/clusterRouting.ts     — sin cambios (ya estaba correcto)
-src/domain/lifecycle/sth.ts               — sin cambios (formula correcta)
+src/domain/lifecycle/linealidad.ts         — 90d: no forcedAt90, linealidad pura
+src/domain/lifecycle/sequentialDecision.ts  — Step 3 consolidar/mover, cascade 30d, 90d+ maintain
+src/domain/lifecycle/sth.ts               — DOI cap 9999
 src/domain/lifecycle/roles.ts             — ELIMINADO (duplicado)
-src/domain/actionQueue/waterfall.ts        — storeAvgSth, bestPerformer, capacity acumulativa, cascade por headroom, cohort fallback
-src/domain/actionQueue/clusters.ts         — MARTELLUQUE en clusters, capacidades actualizadas con Derlys
-src/domain/actionQueue/types.ts            — +transferencia_lifecycle ActionType
-src/queries/sth.queries.ts                — FERIA y MARTELLUQUE removidos de EXCLUDED_STORES
-src/features/action-queue/hooks/useActionQueue.ts    — stockoutCount separado, G6 removido (integrado en motor)
-src/features/action-queue/components/ActionsTab.tsx   — labels toggle, stat cards actualizadas
-src/features/action-queue/ActionQueuePage.tsx         — props actualizadas
-sql/014_config_seed_etapa5.sql            — +MARTELLUQUE row
+src/domain/actionQueue/waterfall.ts        — lifecycle per-talle, storeAvgSth, bestPerformer, capacity acumulativa, cascade por ventas, cohort O(1), importedSet fuera loop, Pareto eliminado, brand filter fix
+src/domain/actionQueue/clusters.ts         — MARTELLUQUE + capacidades Derlys
+src/domain/actionQueue/types.ts            — +transferencia_lifecycle, paretoFlag deprecated, sizeUnits/presentSizes/networkSizes
+src/domain/actionQueue/grouping.ts         — paretoCount eliminado
+src/queries/sth.queries.ts                — FERIA/MARTELLUQUE removidos de EXCLUDED_STORES
+src/features/action-queue/hooks/useActionQueue.ts    — setState→useEffect, paretoCount eliminado, stats simplificadas
+src/features/action-queue/components/ActionsTab.tsx   — Pareto UI eliminado, stats reactivas a filtros, buscador eliminado
+src/features/action-queue/components/ActionFilters.tsx — Buscador eliminado, solo chips de tipo
+src/features/action-queue/components/ActionCard.tsx    — Nuevo sistema de tickets (otro agente)
+src/features/action-queue/components/CompactActionList.tsx — Curva visual con pills + unidades
+src/features/action-queue/components/ActionQueueLoader.tsx — Texto "desde llegada a deposito Stock"
+src/features/action-queue/components/exportHtml.ts — "Priorizado por urgencia" (no Pareto)
+vercel.json — github.enabled: false
 ```

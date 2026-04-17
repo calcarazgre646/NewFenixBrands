@@ -12,7 +12,7 @@ import { useMemo, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchLogisticsImports } from "@/queries/logistics.queries";
 import { logisticsKeys } from "@/queries/keys";
-import { useFilters } from "@/context/FilterContext";
+import { useFilters } from "@/hooks/useFilters";
 import {
   toArrivals,
   groupArrivals,

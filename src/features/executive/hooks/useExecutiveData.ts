@@ -14,7 +14,7 @@
  */
 import { useMemo, useCallback } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
-import { useFilters } from "@/context/FilterContext";
+import { useFilters } from "@/hooks/useFilters";
 import { fetchMonthlySalesWide, fetchDailySalesWide } from "@/queries/sales.queries";
 import type { MonthlySalesRow, DailySalesRow } from "@/queries/sales.queries";
 import { fetchBudget } from "@/queries/budget.queries";
@@ -535,9 +535,9 @@ export function useExecutiveData(): ExecutiveData {
     };
   }, [salesQ.isLoading, budgetQ.isLoading, goalsQ.isLoading, goalsQ.data, inventoryQ.data,
       monthlyReal, monthlyBudget, monthlyPY, monthlyCost, monthlyPYCost,
-      activeMonths, closedMonths,
-      isCurrentYear, calMonth, year, filters.brand, filters.channel, filters.store,
-      filters.period, correctedProrata, lastDataDay, filteredDailyPY,
+      activeMonths,
+      isCurrentYear, year, filters.brand, filters.channel, filters.store,
+      filters.period, correctedProrata, lastDataDay, lastDataMonth, filteredDailyPY,
       execConfig.annualTargetFallback]);
 
   // ── Series del gráfico (siempre muestra 12 meses para contexto anual) ──

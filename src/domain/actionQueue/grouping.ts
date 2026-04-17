@@ -24,7 +24,33 @@ import {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type GroupByMode = "store" | "brand";
+export type GroupByMode = "store" | "brand" | "priority";
+
+/** Priority level for urgency-based grouping */
+export type PriorityLevel = "critical" | "high" | "normal";
+
+const PRIORITY_ORDER: PriorityLevel[] = ["critical", "high", "normal"];
+
+const PRIORITY_META: Record<PriorityLevel, { label: string; description: string }> = {
+  critical: { label: "Crítico", description: "Sin stock o salida obligatoria (90d+)" },
+  high:     { label: "Alto", description: "Stock bajo o intervención lifecycle requerida" },
+  normal:   { label: "Normal", description: "Acciones de optimización y rebalanceo" },
+};
+
+/**
+ * Classify an action item into a priority level.
+ * Uses risk level + lifecycle age — NOT impactScore (which is financial, not operational urgency).
+ */
+export function classifyPriority(item: ActionItemFull): PriorityLevel {
+  // Critical: stockout or forced exit (90d+)
+  if (item.risk === "critical") return "critical";
+  if (item.category === "lifecycle" && (item.cohortAgeDays ?? 0) >= 90) return "critical";
+  // High: low stock or lifecycle needing commercial intervention (45d+)
+  if (item.risk === "low") return "high";
+  if (item.category === "lifecycle" && (item.cohortAgeDays ?? 0) >= 45) return "high";
+  // Normal: everything else (overstock redistribution, review, reposition)
+  return "normal";
+}
 
 /**
  * Operational intent — what the person needs to DO.
@@ -67,7 +93,6 @@ export interface ActionGroup {
   criticalCount: number;
   lowCount: number;
   overstockCount: number;
-  paretoCount: number;
   totalImpact: number;
   uniqueSkus: number;
   totalUnits: number;
@@ -128,7 +153,7 @@ const INTENT_META: Record<OperationalIntent, { label: string; description: strin
   },
 };
 
-function classifyIntent(item: ActionItemFull): OperationalIntent {
+export function classifyIntent(item: ActionItemFull): OperationalIntent {
   // Lifecycle actions (category check first — fast path)
   if (item.category === "lifecycle") {
     if (item.actionType === "reposicion_tallas" || item.actionType === "consolidar_curva")
@@ -206,6 +231,11 @@ export function groupActions(
 ): ActionGroup[] {
   if (items.length === 0) return [];
 
+  // Priority mode: group by urgency level, sorted by priority order (not impact)
+  if (mode === "priority") {
+    return groupByPriority(items, clusters, timeRestrictions, assortments);
+  }
+
   const map = new Map<string, ActionItemFull[]>();
   for (const item of items) {
     const key = mode === "store" ? item.store : item.brand;
@@ -226,6 +256,36 @@ export function groupActions(
   return groups;
 }
 
+/** Group by priority level (critical → high → normal). Within each group, items sorted by impactScore desc. */
+function groupByPriority(
+  items: ActionItemFull[],
+  clusters: Record<string, StoreCluster>,
+  timeRestrictions: Record<string, string>,
+  assortments: Record<string, number>,
+): ActionGroup[] {
+  const byPriority = new Map<PriorityLevel, ActionItemFull[]>();
+  for (const item of items) {
+    const priority = classifyPriority(item);
+    const list = byPriority.get(priority);
+    if (list) list.push(item);
+    else byPriority.set(priority, [item]);
+  }
+
+  const groups: ActionGroup[] = [];
+  for (const priority of PRIORITY_ORDER) {
+    const priorityItems = byPriority.get(priority);
+    if (!priorityItems || priorityItems.length === 0) continue;
+    // Sort items within priority by impact desc
+    priorityItems.sort((a, b) => b.impactScore - a.impactScore);
+    const meta = PRIORITY_META[priority];
+    const group = buildGroup(priority, priorityItems, "priority", clusters, timeRestrictions, assortments);
+    group.label = meta.label;
+    groups.push(group);
+  }
+
+  return groups; // Already in priority order, do NOT re-sort by impact
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function buildGroup(
@@ -239,7 +299,6 @@ function buildGroup(
   let critical = 0;
   let low = 0;
   let overstock = 0;
-  let pareto = 0;
   let totalImpact = 0;
   let totalUnits = 0;
   let totalGap = 0;
@@ -251,7 +310,6 @@ function buildGroup(
     if (item.risk === "critical") critical++;
     else if (item.risk === "low") low++;
     else if (item.risk === "overstock") overstock++;
-    if (item.paretoFlag) pareto++;
     totalImpact += item.impactScore;
     totalUnits += item.suggestedUnits;
     totalGap += item.gapUnits;
@@ -276,7 +334,6 @@ function buildGroup(
     criticalCount: critical,
     lowCount: low,
     overstockCount: overstock,
-    paretoCount: pareto,
     totalImpact,
     uniqueSkus: skuSet.size,
     totalUnits,

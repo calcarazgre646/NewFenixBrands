@@ -14,7 +14,7 @@
  * REGLA: Este componente NO tiene estado propio.
  * Lee y escribe en FilterContext. Todos los hooks se actualizan automáticamente.
  */
-import { useFilters } from "@/context/FilterContext";
+import { useFilters } from "@/hooks/useFilters";
 import type { BrandFilter, ChannelFilter, PeriodFilter } from "@/domain/filters/types";
 
 const BRANDS: { value: BrandFilter; label: string; initial: string; bg: string }[] = [

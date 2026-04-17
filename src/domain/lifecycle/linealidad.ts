@@ -123,16 +123,13 @@ export function evaluateLinealidad(
 
   const requiredSth = thresholds[productType][bracket];
   const isBelowThreshold = sth < requiredSth;
-  // Rodrigo's rule: at 90d+, ALL SKUs must have a defined action — mandatory exit
-  const forcedAt90 = bracket === 90;
-  const triggersAction = isBelowThreshold || forcedAt90;
 
   return {
     bracket,
     requiredSth,
     actualSth: sth,
-    isBelowThreshold: triggersAction,
-    action: triggersAction ? ACTION_BY_BRACKET[bracket] : null,
-    responsibleRoles: triggersAction ? ROLES_BY_BRACKET[bracket][productType] : [],
+    isBelowThreshold,
+    action: isBelowThreshold ? ACTION_BY_BRACKET[bracket] : null,
+    responsibleRoles: isBelowThreshold ? ROLES_BY_BRACKET[bracket][productType] : [],
   };
 }

@@ -41,17 +41,13 @@ describe("evaluateLinealidad", () => {
       expect(result.responsibleRoles.length).toBeGreaterThan(0);
     });
 
-    it(`${type} at ${bracket}d with STH at ${threshold}% → ${bracket === 90 ? "forced action (mandatory exit)" : "no action"}`, () => {
+    it(`${type} at ${bracket}d with STH at ${threshold}% → no action (at threshold)`, () => {
       const result = evaluateLinealidad(type, bracket, threshold);
-      if (bracket === 90) {
-        // Rodrigo's rule: at 90d+, ALL SKUs must have action — mandatory exit
-        expect(result.isBelowThreshold).toBe(true);
-        expect(result.action).toBe("markdown_liquidacion");
-      } else {
-        expect(result.isBelowThreshold).toBe(false);
-        expect(result.action).toBeNull();
-        expect(result.responsibleRoles).toEqual([]);
-      }
+      // At threshold = not below → no action from linealidad
+      // (at 90d+, sequentialDecision handles maintain_until_sold separately)
+      expect(result.isBelowThreshold).toBe(false);
+      expect(result.action).toBeNull();
+      expect(result.responsibleRoles).toEqual([]);
     });
   }
 
@@ -75,15 +71,10 @@ describe("evaluateLinealidad", () => {
     expect(result.action).toBe("markdown_liquidacion");
   });
 
-  it("STH = 100% at bracket < 90 passes", () => {
-    const result = evaluateLinealidad("carry_over", 75, 100);
-    expect(result.isBelowThreshold).toBe(false);
-  });
-
-  it("STH = 100% at bracket 90 still triggers (mandatory exit)", () => {
+  it("STH = 100% always passes linealidad (no action from threshold)", () => {
     const result = evaluateLinealidad("carry_over", 90, 100);
-    expect(result.isBelowThreshold).toBe(true);
-    expect(result.action).toBe("markdown_liquidacion");
+    expect(result.isBelowThreshold).toBe(false);
+    // At 90d+, sequentialDecision handles the maintain_until_sold logic
   });
 
   it("STH = 0% always fails when bracket exists", () => {

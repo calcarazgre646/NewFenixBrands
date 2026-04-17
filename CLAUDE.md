@@ -834,3 +834,84 @@ Todos los dominios con loop completo BD→UI:
 | Store clusters (41 stores) | config_store | 41 | 014 |
 
 Totales: 24 filas en app_params + 8 en config_commission_scale + 41 en config_store = 73 filas de config en producción.
+
+---
+
+## Sesión 16/04/2026 — Lifecycle per-talle + Rediseño UI tickets + Deploy
+
+### 1. Engine: Lifecycle por talle (enfoque híbrido)
+
+**Problema:** Las acciones lifecycle se evaluaban por SKU en tienda usando la talla con mejor STH como representativa. Si un SKU tenía talla S al 90% y talla L al 5%, ambas se evaluaban como "SKU al 90% → bueno" y la talla L quedaba invisible.
+
+**Solución (pedido de Rodrigo):** Evaluar STH por talla individual, mostrar "promedio del SKU" como contexto.
+
+**Enfoque híbrido en `waterfall.ts`:**
+- Curva de tallas (Steps 1-3 de `sequentialDecision`) → sigue per-(sku, store) — no tiene sentido analizar la curva talla por talla
+- STH (Steps 4-5: STH vs umbral, vs promedio tienda, cascade, markdown) → per-(sku, talle, store) usando `sthData.exact[talle]`
+
+**Implementación:**
+- `precomputeSkuStoreAvgSth(sthData)` computa promedio STH de todas las tallas de un SKU en una tienda
+- 2 Maps de decisión: `curveDecisions: Map<"STORE|sku">` y `talleDecisions: Map<"STORE|sku|talle">`
+- Cuando outcome de curva no produce decisión, se llama `analyzeSequentially(ctx, null)` por cada talla con su STH específico
+- Dedup de emisión: `"STORE|sku"` para curve, `"STORE|sku|talle"` para STH
+- `makeItem` setea `skuAvgSthInStore` para items no-depósito
+
+### 2. Rediseño UI: sistema de tickets/cards
+
+Refactor de la pestaña "Acciones" de tabla compacta a tickets auto-contenidos.
+
+**Archivos creados:**
+
+| Archivo | Propósito |
+|---------|-----------|
+| `features/action-queue/components/ActionCard.tsx` | Ticket auto-contenido. 5 variantes por intent (movimientos, lifecycle review/commercial/exit, size curve). Layout: header (verbo + risk badge) → body (producto + contenido específico) → footer (impacto $ solo en movimientos) |
+| `features/action-queue/components/ActionCardList.tsx` | Grid de tickets reemplazo de la tabla |
+| `features/action-queue/components/ActionFilters.tsx` | Filtros de la pestaña (intent, marca, vista) |
+| `features/action-queue/components/FlatGroupSection.tsx` | Sección flat por intent dentro del grupo de tienda |
+
+**Archivos eliminados:**
+- `features/action-queue/components/CompactActionList.tsx` (reemplazado por ActionCardList + ActionCard)
+
+### 3. Integración engine↔UI
+
+**`ActionCard.tsx` adaptado al engine per-talle:**
+- Header del producto muestra `· {talle}` para todo lifecycle no-curve (line 141-143)
+- `LifecycleReviewBody`: "Sell-Through talla {talle}" en header del bloque STH + "SKU prom. X%" abajo
+- `LifecycleCommercialBody`: idem
+- `LifecycleExitBody`: "Stock talla" + "STH talla" + subtexto "SKU prom. X%"
+- `lifecycle_reposition` (size curve) sigue oculta la talle — correcto, es SKU-level
+
+**`ActionGroupCard.tsx`:**
+- `buildSectionDiagnosis` agrega `tallesVsSkus`: muestra "(N SKUs · M talles)" cuando difieren, "(N SKUs)" cuando coinciden
+- Aplica a lifecycle_review, lifecycle_commercial, lifecycle_exit
+
+**Tipo `ActionItem` (`types.ts`):**
+- `+ skuAvgSthInStore?: number` — promedio STH de las tallas del SKU en la tienda (contexto)
+
+### 4. Tests
+
+`waterfall.test.ts` — 5 tests nuevos en describe "computeActionQueue · lifecycle per-talle":
+- SKU con talla S (STH 90%) y talla L (STH 5%) a 60d → solo emite acción sobre talla L
+- Curve outcome aplica a todas las tallas (no se duplica per-talle)
+- skuAvgSthInStore correctamente calculado
+- Dedup correcto entre curve y talle decisions
+
+### 5. Deploy
+
+```bash
+vercel --prod
+```
+
+**Producción:** https://fenix-brands-one.vercel.app
+**Build:** ✅ `built in 8.06s`
+**Deploy:** ✅ `Production: https://fenix-brands-gxj1insou-calcarazgre646s-projects.vercel.app [37s]`
+
+### Verificación final
+
+```
+Tests:  1343 passing (40 suites)
+TSC:    0 errores
+Build:  OK
+Deploy: https://fenix-brands-one.vercel.app ✅
+```
+

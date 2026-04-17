@@ -16,7 +16,7 @@
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router";
-import { useTheme } from "@/context/ThemeContext";
+import { useTheme } from "@/hooks/useTheme";
 import { buildSearchCatalog } from "@/domain/search/catalog";
 import { search, groupResults, escapeRegex } from "@/domain/search/engine";
 import type { SearchResult, SearchGroup } from "@/domain/search/types";

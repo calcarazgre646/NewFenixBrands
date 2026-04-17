@@ -20,8 +20,6 @@
  * No hay propagación manual. No hay useEffect de sincronización.
  */
 import {
-  createContext,
-  useContext,
   useState,
   useCallback,
   useEffect,
@@ -35,21 +33,8 @@ import {
   type ChannelFilter,
   type PeriodFilter,
 } from "@/domain/filters/types";
-import { useAuth } from "@/context/AuthContext";
-
-interface FilterContextValue {
-  filters: AppFilters;
-  setBrand:   (brand: BrandFilter) => void;
-  setChannel: (channel: ChannelFilter) => void;
-  setStore:   (store: string | null) => void;
-  setPeriod:  (period: PeriodFilter) => void;
-  setYear:    (year: number) => void;
-  resetFilters: () => void;
-  /** true si el filtro de canal está bloqueado por el rol del usuario */
-  isChannelLocked: boolean;
-}
-
-const FilterContext = createContext<FilterContextValue | undefined>(undefined);
+import { useAuth } from "@/hooks/useAuth";
+import { FilterContext, type FilterContextValue } from "@/context/filter.context";
 
 /**
  * Mapea channel_scope del perfil al ChannelFilter de la app.
@@ -128,11 +113,4 @@ export function FilterProvider({ children }: { children: ReactNode }) {
       {children}
     </FilterContext.Provider>
   );
-}
-
-/** Hook para leer y actualizar filtros desde cualquier componente */
-export function useFilters(): FilterContextValue {
-  const ctx = useContext(FilterContext);
-  if (!ctx) throw new Error("useFilters must be used within FilterProvider");
-  return ctx;
 }

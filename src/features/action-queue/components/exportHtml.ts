@@ -153,7 +153,7 @@ function sectionBlock(section: ActionSection, showStore: boolean): string {
 export interface ExportGroupOptions {
   groupLabel: string;
   channel: string;
-  mode: "store" | "brand";
+  mode: "store" | "brand" | "priority";
   items: ActionItemFull[];
   sections: ActionSection[];
 }
@@ -237,7 +237,7 @@ ${sections.map(s => sectionBlock(s, showStore)).join("")}
 <!-- Footer -->
 <div style="padding:20px 28px 24px;text-align:center;">
   <p style="margin:0;font-size:10px;color:#9CA3AF;">
-    Generado automaticamente · Fenix Brands · Pareto 20/80 · Umbral Gs. 500K
+    Generado automaticamente · Fenix Brands · Priorizado por urgencia
   </p>
 </div>
 

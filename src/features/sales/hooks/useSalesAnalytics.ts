@@ -13,7 +13,7 @@
  */
 import { useMemo } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
-import { useFilters } from "@/context/FilterContext";
+import { useFilters } from "@/hooks/useFilters";
 import {
   fetchTopSkus,
   fetchDailyDetail,
