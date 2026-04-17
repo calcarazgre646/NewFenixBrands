@@ -13,7 +13,7 @@
  */
 import { useMemo } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { useFilters } from "@/context/FilterContext";
+import { useFilters } from "@/hooks/useFilters";
 import { fetchMonthlySalesWide, fetchDailySalesWide } from "@/queries/sales.queries";
 import type { DailySalesRow } from "@/queries/sales.queries";
 import { fetchBudget } from "@/queries/budget.queries";
@@ -305,7 +305,7 @@ export function useSalesDashboard(): SalesDashboardData {
       globalAOV,
       isPartialMonth: isPartial,
     };
-  }, [filteredCY, filteredPY, filteredDailyPY, salesQ.isLoading, activeMonths, closedMonths,
+  }, [filteredCY, filteredPY, filteredDailyPY, salesQ.isLoading, activeMonths,
       budgetQ.data, ticketsQ.data, storesQ.data, filters.brand, filters.channel, filters.store,
       filters.period, isPartial, correctedProrata, lastDataDay]);
 

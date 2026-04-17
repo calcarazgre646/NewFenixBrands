@@ -206,7 +206,7 @@ describe('computeActionQueue', () => {
       for (const a of result) {
         cum += a.impactScore
         if (cum / totalImpact <= 0.80) {
-          expect(a.paretoFlag).toBe(true)
+          expect(a.paretoFlag).toBe(false)
         }
       }
       // At least one item should NOT have pareto flag (the tail)
@@ -1318,7 +1318,7 @@ describe('computeActionQueue', () => {
     // SK_HIGH should have pareto=true, SK_LOW might not
     const highItem = result.find(a => a.sku === 'SK_HIGH' && a.risk === 'critical')
     if (highItem) {
-      expect(highItem.paretoFlag).toBe(true)
+      expect(highItem.paretoFlag).toBe(false)
     }
   })
 
@@ -1923,7 +1923,7 @@ describe('computeActionQueue', () => {
     )
     if (result.length === 1) {
       // Single item = 100% of impact → always pareto
-      expect(result[0].paretoFlag).toBe(true)
+      expect(result[0].paretoFlag).toBe(false)
     }
   })
 
@@ -2242,30 +2242,17 @@ describe('computeActionQueue', () => {
     expect(result).toEqual([])
   })
 
-  // DA-07: Threshold + pareto interaction — threshold filters first, then pareto on filtered set
-  it('DA-07: pareto is computed on threshold-filtered set', () => {
-    const sales = new Map<string, number>()
-    for (let i = 0; i < 10; i++) {
-      sales.set(`TD${i}|SK${i}`, 5)
-      sales.set(`TS${i}|SK${i}`, 2)
-    }
+  // DA-07: Pareto removed — all paretoFlags are false (risk-based prioritization)
+  it('DA-07: pareto flags are always false (deprecated)', () => {
     const rows: InventoryRecord[] = []
-    for (let i = 0; i < 10; i++) {
-      // High-value items
+    const sales = new Map<string, number>()
+    for (let i = 0; i < 5; i++) {
+      sales.set(`TD${i}|SK${i}`, 5)
       rows.push(inv({ store: `TD${i}`, units: 0, sku: `SK${i}`, price: 100000 }))
       rows.push(inv({ store: `TS${i}`, units: 50, sku: `SK${i}`, price: 100000 }))
     }
-    const result = computeActionQueue(makeInput(rows, sales), opts({ impactThreshold: 500_000 }))
-    if (result.length > 2) {
-      // Pareto flags exist on the filtered set
-      const pareto = result.filter(a => a.paretoFlag)
-      const nonPareto = result.filter(a => !a.paretoFlag)
-      expect(pareto.length).toBeGreaterThan(0)
-      // At least some items should not be pareto
-      if (result.length > 3) {
-        expect(nonPareto.length).toBeGreaterThanOrEqual(0)
-      }
-    }
+    const result = computeActionQueue(makeInput(rows, sales), opts())
+    for (const a of result) expect(a.paretoFlag).toBe(false)
   })
 
   // DA-08: Mirror action units match deficit N1 allocation
@@ -2408,24 +2395,17 @@ describe('computeActionQueue', () => {
     expect(elapsed).toBeLessThan(100) // 100ms budget
   })
 
-  // DA-15: Pareto exactly at 80% boundary — all items at equal impact
-  it('DA-15: equal impact items → pareto flags subset, not all', () => {
+  // DA-15: Pareto removed — all flags false
+  it('DA-15: pareto deprecated — all flags false', () => {
     const sales = new Map<string, number>()
     const rows: InventoryRecord[] = []
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 5; i++) {
       rows.push(inv({ store: `TD${i}`, units: 0, sku: `EQ${i}`, price: 1000, cost: 500 }))
       rows.push(inv({ store: `TS${i}`, units: 50, sku: `EQ${i}`, price: 1000, cost: 500 }))
       sales.set(`TD${i}|EQ${i}`, 5)
-      sales.set(`TS${i}|EQ${i}`, 2)
     }
     const result = computeActionQueue(makeInput(rows, sales), opts())
-    if (result.length > 3) {
-      const pareto = result.filter(a => a.paretoFlag)
-      const nonPareto = result.filter(a => !a.paretoFlag)
-      // With equal impact, ~80% of items should be flagged
-      expect(pareto.length).toBeGreaterThan(0)
-      expect(nonPareto.length).toBeGreaterThan(0)
-    }
+    for (const a of result) expect(a.paretoFlag).toBe(false)
   })
 
   // DA-16: avgQty self-bias — high-stock store inflates its own average
@@ -2695,17 +2675,12 @@ describe('computeActionQueue', () => {
       sales.set(`TSL${i}|LV${i}`, 3)
     }
     const result = computeActionQueue(makeInput(rows, sales), opts())
-    // Pareto flags should only exist among the filtered (high-value) items
-    const paretoItems = result.filter(a => a.paretoFlag)
-    const nonPareto = result.filter(a => !a.paretoFlag)
-    expect(paretoItems.length).toBeGreaterThan(0)
-    // Cumulative pareto impact should be >= 80% of total filtered impact
-    const totalImpact = result.reduce((s, a) => s + a.impactScore, 0)
-    const paretoImpact = paretoItems.reduce((s, a) => s + a.impactScore, 0)
-    expect(paretoImpact / totalImpact).toBeGreaterThanOrEqual(0.79)
-    // And non-pareto items should exist (not 100% flagged)
-    if (result.length > 3) {
-      expect(nonPareto.length).toBeGreaterThan(0)
+    // Pareto deprecated — all flags false, sorted by risk
+    for (const a of result) expect(a.paretoFlag).toBe(false)
+    // Verify risk-based sorting: critical items first
+    if (result.length >= 2) {
+      const firstRisk = result[0].risk
+      expect(firstRisk === 'critical' || firstRisk === 'low').toBe(true)
     }
   })
 
@@ -2930,5 +2905,169 @@ describe('idealUnits, gapUnits, daysOfInventory', () => {
       expect(Number.isFinite(action.daysOfInventory)).toBe(true)
       expect(action.daysOfInventory).toBeGreaterThanOrEqual(0)
     }
+  })
+})
+
+// ─── Lifecycle per-talle granularity (Rodrigo 16/04/2026) ─────────────────────
+
+describe('computeActionQueue · lifecycle per-talle', () => {
+  const sthRecord = (sth: number, age: number = 60) => ({ sth, cohortAgeDays: age })
+
+  it('SKU con talla S (STH 90%) y talla L (STH 5%) a 60d → sólo emite acción lifecycle sobre la talla L', () => {
+    // Basicos @ 60d → umbral 55%. S=90% ok, L=5% cae por debajo → cascade.
+    const sales = new Map([['TIENDA1|SKU001', 10]])
+    const sthData = {
+      exact: new Map([
+        ['TIENDA1|SKU001|S', sthRecord(0.90)],
+        ['TIENDA1|SKU001|L', sthRecord(0.05)],
+      ]),
+      byStoreSku: new Map([
+        ['TIENDA1|SKU001', sthRecord(0.90)], // best talle representa al SKU en curve analysis
+      ]),
+    }
+    const result = computeActionQueue(
+      {
+        inventory: [
+          inv({ store: 'TIENDA1', talle: 'S', units: 10, storeCluster: 'A' }),
+          inv({ store: 'TIENDA1', talle: 'L', units: 10, storeCluster: 'A' }),
+        ],
+        salesHistory: sales,
+        sthData,
+      },
+      opts(),
+    )
+    const lifecycleActions = result.filter(a => a.category === 'lifecycle')
+    expect(lifecycleActions).toHaveLength(1)
+    expect(lifecycleActions[0].talle).toBe('L')
+    expect(lifecycleActions[0].sth).toBeCloseTo(5, 0)
+  })
+
+  it('90d+ mandatory exit: talla S con STH alto se exceptúa, talla L con STH bajo recibe acción', () => {
+    // @90d+ basicos umbral 85%. S=95% pasa (maintain), L=10% cae → markdown_liquidacion.
+    const sales = new Map([['TIENDA1|SKU001', 5]])
+    const sthData = {
+      exact: new Map([
+        ['TIENDA1|SKU001|S', sthRecord(0.95, 95)],
+        ['TIENDA1|SKU001|L', sthRecord(0.10, 95)],
+      ]),
+      byStoreSku: new Map([
+        ['TIENDA1|SKU001', sthRecord(0.95, 95)],
+      ]),
+    }
+    const result = computeActionQueue(
+      {
+        inventory: [
+          inv({ store: 'TIENDA1', talle: 'S', units: 5, storeCluster: 'A' }),
+          inv({ store: 'TIENDA1', talle: 'L', units: 5, storeCluster: 'A' }),
+        ],
+        salesHistory: sales,
+        sthData,
+      },
+      opts(),
+    )
+    const lifecycleActions = result.filter(a => a.category === 'lifecycle')
+    // Exactly one lifecycle action, for talle L only.
+    const talleSet = new Set(lifecycleActions.map(a => a.talle))
+    expect(talleSet.has('L')).toBe(true)
+    expect(talleSet.has('S')).toBe(false)
+  })
+
+  it('per-talle action carries STH of its own talle (not the SKU best-talle)', () => {
+    const sales = new Map([['TIENDA1|SKU001', 8]])
+    const sthData = {
+      exact: new Map([
+        ['TIENDA1|SKU001|S', sthRecord(0.90)],
+        ['TIENDA1|SKU001|L', sthRecord(0.03)],
+      ]),
+      byStoreSku: new Map([
+        ['TIENDA1|SKU001', sthRecord(0.90)],
+      ]),
+    }
+    const result = computeActionQueue(
+      {
+        inventory: [
+          inv({ store: 'TIENDA1', talle: 'S', units: 8, storeCluster: 'A' }),
+          inv({ store: 'TIENDA1', talle: 'L', units: 8, storeCluster: 'A' }),
+        ],
+        salesHistory: sales,
+        sthData,
+      },
+      opts(),
+    )
+    const talleLAction = result.find(a => a.category === 'lifecycle' && a.talle === 'L')
+    expect(talleLAction).toBeDefined()
+    // STH attached to action reflects the talle's STH via lookupSth(sthData, ..., 'L')
+    expect(talleLAction!.sth).toBeCloseTo(3, 0)
+  })
+
+  it('skuAvgSthInStore promedia todas las talles del SKU en la tienda (desde exact)', () => {
+    // S=80%, M=60%, L=40% → promedio = 60%.
+    const sales = new Map([['TIENDA1|SKU001', 10]])
+    const sthData = {
+      exact: new Map([
+        ['TIENDA1|SKU001|S', sthRecord(0.80)],
+        ['TIENDA1|SKU001|M', sthRecord(0.60)],
+        ['TIENDA1|SKU001|L', sthRecord(0.40)],
+      ]),
+      byStoreSku: new Map([
+        ['TIENDA1|SKU001', sthRecord(0.80)],
+      ]),
+    }
+    const result = computeActionQueue(
+      {
+        inventory: [
+          inv({ store: 'TIENDA1', talle: 'S', units: 5, storeCluster: 'A' }),
+          inv({ store: 'TIENDA1', talle: 'M', units: 5, storeCluster: 'A' }),
+          inv({ store: 'TIENDA1', talle: 'L', units: 5, storeCluster: 'A' }),
+        ],
+        salesHistory: sales,
+        sthData,
+      },
+      opts(),
+    )
+    // Every action emitted from TIENDA1|SKU001 (store-level) should carry skuAvgSthInStore ≈ 60.
+    const storeActions = result.filter(a => a.store === 'TIENDA1' && a.sku === 'SKU001')
+    expect(storeActions.length).toBeGreaterThan(0)
+    for (const action of storeActions) {
+      expect(action.skuAvgSthInStore).toBeDefined()
+      expect(action.skuAvgSthInStore!).toBeCloseTo(60, 0)
+    }
+  })
+
+  it('curve-based outcome (move_to_best_performer) emite UNA sola acción SKU-level, no una por talle', () => {
+    // TIENDA1 vende menos (currentStoreSales=1); TIENDA2 vende mucho más (bestPerformerSales=50).
+    // Ratio 1/50 = 0.02 < 0.8 → move_to_best_performer. Aplica a todas las tallas del SKU en TIENDA1.
+    const sales = new Map([
+      ['TIENDA1|SKU001', 1],
+      ['TIENDA2|SKU001', 50],
+    ])
+    const sthData = {
+      exact: new Map([
+        ['TIENDA1|SKU001|S', sthRecord(0.10)],
+        ['TIENDA1|SKU001|M', sthRecord(0.10)],
+        ['TIENDA2|SKU001|L', sthRecord(0.80)],
+      ]),
+      byStoreSku: new Map([
+        ['TIENDA1|SKU001', sthRecord(0.10)],
+        ['TIENDA2|SKU001', sthRecord(0.80)],
+      ]),
+    }
+    const result = computeActionQueue(
+      {
+        inventory: [
+          inv({ store: 'TIENDA1', talle: 'S', units: 5, storeCluster: 'A' }),
+          inv({ store: 'TIENDA1', talle: 'M', units: 5, storeCluster: 'A' }),
+          inv({ store: 'TIENDA2', talle: 'L', units: 10, storeCluster: 'A' }),
+        ],
+        salesHistory: sales,
+        sthData,
+      },
+      opts(),
+    )
+    const tienda1LifecycleActions = result.filter(
+      a => a.category === 'lifecycle' && a.store === 'TIENDA1'
+    )
+    // Exactly one lifecycle action for TIENDA1 — SKU-level (aunque itera por talle, dedup "STORE|sku")
+    expect(tienda1LifecycleActions).toHaveLength(1)
   })
 })

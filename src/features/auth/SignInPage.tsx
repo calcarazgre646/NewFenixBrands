@@ -5,7 +5,7 @@
  */
 import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { getDefaultRoute } from "@/domain/auth/types";
 import { EyeCloseIcon, EyeIcon } from "@/icons";
 import Label from "@/components/form/Label";

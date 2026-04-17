@@ -10,7 +10,7 @@ import type { StoreBreakdownRow } from "../hooks/useSalesAnalytics";
 import { classifyMarginHealth } from "@/domain/kpis/calculations";
 import { useMarginConfig } from "@/hooks/useConfig";
 import { formatPYGShort, formatPYGSuffix, formatPct, formatChange } from "@/utils/format";
-import { useFilters } from "@/context/FilterContext";
+import { useFilters } from "@/hooks/useFilters";
 import { Card } from "@/components/ui/card/Card";
 import {
   MARGIN_TEXT,

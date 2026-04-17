@@ -19,7 +19,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { Suspense, lazy } from "react";
 
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { getDefaultRoute, type Permissions } from "@/domain/auth/types";
 import AppLayout from "@/layout/AppLayout";
 import { FeatureErrorBoundary } from "@/components/common/FeatureErrorBoundary";

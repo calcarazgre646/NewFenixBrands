@@ -18,9 +18,9 @@ import {
   WarehouseIcon,
   GroupIcon,
 } from "@/icons";
-import { useSidebar } from "@/context/SidebarContext";
-import { useAuth } from "@/context/AuthContext";
-import { useFilters } from "@/context/FilterContext";
+import { useSidebar } from "@/hooks/useSidebar";
+import { useAuth } from "@/hooks/useAuth";
+import { useFilters } from "@/hooks/useFilters";
 import { getRoleLabel, type Permissions } from "@/domain/auth/types";
 
 // ─── Definición de items de navegación con permisos ─────────────────────────

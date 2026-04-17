@@ -6,8 +6,8 @@
 
 import { useState } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
-import { useAuth } from "../../context/AuthContext";
-import { useFilters } from "../../context/FilterContext";
+import { useAuth } from "@/hooks/useAuth";
+import { useFilters } from "@/hooks/useFilters";
 import { useNavigate } from "react-router";
 import { getRoleLabel } from "@/domain/auth/types";
 

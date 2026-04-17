@@ -8,13 +8,13 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useFilters } from "@/context/FilterContext";
+import { useFilters } from "@/hooks/useFilters";
 import { fetchInventory, toInventoryRecord } from "@/queries/inventory.queries";
 import { fetchSalesHistory } from "@/queries/salesHistory.queries";
 import type { SalesHistoryMap } from "@/queries/salesHistory.queries";
 import { inventoryKeys, salesHistoryKeys, doiAgeKeys, sthKeys, STALE_30MIN, GC_60MIN } from "@/queries/keys";
 import { persistDecisionRun, persistDecisionActions } from "@/queries/decisions.queries";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { fetchDoiAge } from "@/queries/doiAge.queries";
 import type { DoiAgeData } from "@/queries/doiAge.queries";
 import { fetchSthCohort } from "@/queries/sth.queries";
@@ -60,7 +60,6 @@ export interface ActionQueueData {
   /** Total units currently in stock per store (all SKUs, not just actioned ones) */
   storeStockMap: Map<string, number>;
   totalItems: number;
-  paretoCount: number;
   stockoutCount: number;
   lifecycleCriticalCount: number;
   lowCount: number;
@@ -75,7 +74,6 @@ export interface ActionQueueData {
   /** Count of lifecycle actions visible to the user */
   lifecycleCount: number;
   filters: ActionQueueFilters;
-  setChannel: (ch: ChannelMode) => void;
   isLoading: boolean;
   isHistoryLoading: boolean;
   error: string | null;
@@ -90,7 +88,8 @@ export function useActionQueue(): ActionQueueData {
   const { user, profile } = useAuth();
   const storeConfig = useStoreConfig();
   const waterfallConfig = useWaterfallConfig();
-  const [channel, setChannel] = useState<ChannelMode>("b2c");
+  // Channel comes from global FilterContext (header selector)
+  const channel: ChannelMode = globalFilters.channel === "b2b" ? "b2b" : "b2c";
 
   // Brand comes from global FilterContext (header avatars)
   const brand = globalFilters.brand === "total" ? null : globalFilters.brand;
@@ -198,7 +197,7 @@ export function useActionQueue(): ActionQueueData {
       computationMsRef.current = Math.round(elapsed);
       if (import.meta.env.DEV) {
         console.info(
-          `[waterfall] ${records.length} rows → ${result.length} actions (${result.filter(a => a.paretoFlag).length} pareto) in ${elapsed.toFixed(1)}ms`,
+          `[waterfall] ${records.length} rows → ${result.length} actions in ${elapsed.toFixed(1)}ms`,
         );
       }
       return { items: result, error: null, ran: true };
@@ -252,7 +251,7 @@ export function useActionQueue(): ActionQueueData {
       total_actions: items.length,
       total_gap_units: totalGap,
       total_impact_gs: totalImpact,
-      pareto_count: items.filter(a => a.paretoFlag).length,
+      pareto_count: 0, // deprecated — risk-based prioritization
       critical_count: items.filter(a => a.risk === "critical").length,
       computation_ms: computationMsRef.current,
       inventory_row_count: records.length,
@@ -264,19 +263,18 @@ export function useActionQueue(): ActionQueueData {
         return persistDecisionActions(runId, items);
       })
       .catch(err => console.error("[decision-persist]", err));
-  }, [items, channel, globalFilters.brand, globalFilters.year, user, records.length, historyQ.data, doiAgeQ.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [items, channel, globalFilters.brand, globalFilters.year, user, records.length, historyQ.data, doiAgeQ.data]);
 
   // ── Derived stats ──────────────────────────────────────────────────────────
-  const { totalItems, paretoCount, stockoutCount, lifecycleCriticalCount, lowCount, overstockCount, uniqueSkus, totalGapUnits, avgDOI, movementCount, lifecycleCount } =
+  const { totalItems, stockoutCount, lifecycleCriticalCount, lowCount, overstockCount, uniqueSkus, totalGapUnits, avgDOI, movementCount, lifecycleCount } =
     useMemo(() => {
-      let pareto = 0, stockouts = 0, lcCritical = 0, low = 0, overstock = 0;
+      let stockouts = 0, lcCritical = 0, low = 0, overstock = 0;
       let totalGap = 0;
       let doiWeightedSum = 0;
       let doiWeightTotal = 0;
       let movements = 0, lifecycle = 0;
       const skuSet = new Set<string>();
       for (const item of visibleItems) {
-        if (item.paretoFlag) pareto++;
         if (item.risk === "critical" && item.category === "movement") stockouts++;
         if (item.risk === "critical" && item.category === "lifecycle") lcCritical++;
         if (item.risk === "low") low++;
@@ -292,7 +290,6 @@ export function useActionQueue(): ActionQueueData {
       }
       return {
         totalItems: visibleItems.length,
-        paretoCount: pareto,
         stockoutCount: stockouts,
         lifecycleCriticalCount: lcCritical,
         lowCount: low,
@@ -333,7 +330,6 @@ export function useActionQueue(): ActionQueueData {
     items: visibleItems,
     storeStockMap,
     totalItems,
-    paretoCount,
     stockoutCount,
     lifecycleCriticalCount,
     lowCount,
@@ -344,7 +340,6 @@ export function useActionQueue(): ActionQueueData {
     movementCount,
     lifecycleCount,
     filters: { channel, brand: globalFilters.brand },
-    setChannel,
     isLoading: inventoryQ.isLoading || (historyQ.isLoading && records.length > 0) || doiAgeQ.isLoading || sthQ.isLoading,
     isHistoryLoading: historyQ.isLoading,
     error: inventoryQ.error?.message ?? historyQ.error?.message ?? doiAgeQ.error?.message ?? waterfallError ?? null,

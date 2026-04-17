@@ -292,15 +292,7 @@ describe("groupActions — exhaustive", () => {
     expect(group.totalUnits).toBe(20);
   });
 
-  it("paretoCount counts items with paretoFlag=true", () => {
-    const items = [
-      makeItem({ store: "T1", paretoFlag: true }),
-      makeItem({ store: "T1", paretoFlag: true }),
-      makeItem({ store: "T1", paretoFlag: false }),
-    ];
-    const [group] = groupActions(items, "store");
-    expect(group.paretoCount).toBe(2);
-  });
+  // paretoCount removed — prioritization is now risk-based
 
   it("label equals key", () => {
     const items = [makeItem({ store: "CERROALTO" })];

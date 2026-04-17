@@ -65,7 +65,8 @@ export interface ActionItem {
   waterfallLevel:  WaterfallLevel;
   actionType:      ActionType;
   impactScore:     number;      // revenue × (1 + margin × 0.3)
-  paretoFlag:      boolean;     // top 20% del impacto financiero
+  /** @deprecated Always false — prioritization is now risk-based, not Pareto. Kept for persistence compatibility. */
+  paretoFlag:      boolean;
   storeCluster:    StoreCluster | null;
   timeRestriction: string;      // horario de la tienda
   productType:     ProductType; // clasificación lifecycle (carry_over | basicos | temporada)
@@ -75,6 +76,7 @@ export interface ActionItem {
   lifecycleEvaluation?: LinealidadResult; // evaluación completa de linealidad (si aplica)
   sth?:            number;      // sell-through rate 0-100 (from mv_sth_cohort, optional)
   cohortAgeDays?:  number;      // days since first entry to network (from mv_sth_cohort, optional)
+  skuAvgSthInStore?: number;    // STH promedio del SKU (todas sus tallas) en esta tienda (0-100). Contexto para acciones lifecycle per-talla.
   sequentialOutcome?: DecisionOutcome; // resultado del análisis secuencial (debugging/UI)
   sizeCurveCoverage?: number;   // % de curva de tallas cubierta en esta tienda
   sourcableSizes?: string[];    // tallas faltantes disponibles en otras tiendas

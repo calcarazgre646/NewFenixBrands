@@ -34,7 +34,7 @@
  */
 import { useMemo } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
-import { useFilters } from "@/context/FilterContext";
+import { useFilters } from "@/hooks/useFilters";
 import {
   fetchMonthlySalesWide,
   fetchDailyDetail,
@@ -308,7 +308,6 @@ export function useKpiDashboard(): UseKpiDashboardResult {
   // ── Cálculo de los 9 KPIs core ─────────────────────────────────────────────
   const kpis = useMemo((): KpiCardData[] => {
     const currRows       = filteredSales.filter((r) => activeMonths.includes(r.month));
-    const currClosedRows = currRows.filter((r) => closedMonths.includes(r.month));
     const prevRows       = filteredPrevSales.filter((r) => closedMonths.includes(r.month));
     const prevRowsAll    = filteredPrevSales.filter((r) => activeMonths.includes(r.month));
     const ticketsForMonths     = (ticketsQ.data ?? []).filter((t) => activeMonths.includes(t.month));
@@ -321,9 +320,6 @@ export function useKpiDashboard(): UseKpiDashboardResult {
     // ── Agregar ventas ─────────────────────────────────────────────────────
     let currNeto = 0, currCogs = 0, currBruto = 0, currDcto = 0, currUnitsMonthly = 0;
     for (const r of currRows) { currNeto += r.neto; currCogs += r.cogs; currBruto += r.bruto; currDcto += r.dcto; currUnitsMonthly += r.units; }
-
-    let currClosedNeto = 0;
-    for (const r of currClosedRows) { currClosedNeto += r.neto; }
 
     let prevNeto = 0, prevCogs = 0, prevBruto = 0, prevDcto = 0, prevUnitsMonthly = 0;
     for (const r of prevRows) { prevNeto += r.neto; prevCogs += r.cogs; prevBruto += r.bruto; prevDcto += r.dcto; prevUnitsMonthly += r.units; }

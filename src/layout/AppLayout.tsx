@@ -5,7 +5,7 @@
  * El SidebarProvider ya está en main.tsx — no se anida aquí.
  */
 import { Outlet } from "react-router";
-import { useSidebar } from "@/context/SidebarContext";
+import { useSidebar } from "@/hooks/useSidebar";
 import AppHeader from "./AppHeader";
 import AppSidebar from "./AppSidebar";
 import Backdrop from "./Backdrop";

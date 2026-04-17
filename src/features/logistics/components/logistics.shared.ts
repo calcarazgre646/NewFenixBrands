@@ -1,5 +1,5 @@
 /**
- * logistics.shared.tsx
+ * logistics.shared.ts
  *
  * Constantes y helpers extraidos de LogisticsPage para reutilizar en componentes.
  */
@@ -62,20 +62,6 @@ export function marginRange(rows: LogisticsArrival[]): { label: string; value: n
   const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
   if (min === max) return { label: `${min}%`, value: min };
   return { label: `${min}–${max}%`, value: avg };
-}
-
-export function ChevronIcon({ open, className }: { open: boolean; className?: string }) {
-  return (
-    <svg
-      className={`transition-transform duration-200 ${open ? "rotate-180" : ""} ${className ?? "h-4 w-4 text-gray-400"}`}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-    </svg>
-  );
 }
 
 export function formatFob(usd: number): string {

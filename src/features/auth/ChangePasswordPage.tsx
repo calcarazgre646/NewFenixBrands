@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { authClient } from "@/api/client";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { getDefaultRoute } from "@/domain/auth/types";
 import { validatePassword } from "@/domain/users/validation";
 import { queryClient } from "@/lib/queryClient";

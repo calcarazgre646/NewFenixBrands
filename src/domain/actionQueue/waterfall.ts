@@ -178,6 +178,32 @@ function precomputeStoreAvgSth(
   return result;
 }
 
+/** Compute average STH per (store, sku) across all talles of that sku in that store.
+ *  Uses sthData.exact (per-talle) to produce a true SKU-level average in the store.
+ *  Key: "STORE|sku" → avg STH (0-100). */
+function precomputeSkuStoreAvgSth(
+  sthData: WaterfallInput["sthData"],
+): Map<string, number> {
+  const result = new Map<string, number>();
+  if (!sthData) return result;
+  const sums = new Map<string, { total: number; count: number }>();
+  for (const [key, record] of sthData.exact) {
+    const parts = key.split("|");
+    if (parts.length < 3) continue;
+    const store = parts[0];
+    const sku = parts[1];
+    const k = `${store}|${sku}`;
+    const entry = sums.get(k) ?? { total: 0, count: 0 };
+    entry.total += record.sth * 100;
+    entry.count++;
+    sums.set(k, entry);
+  }
+  for (const [k, { total, count }] of sums) {
+    result.set(k, total / count);
+  }
+  return result;
+}
+
 // ─── Types internos ──────────────────────────────────────────────────────────
 
 interface StoreEntry {
@@ -235,7 +261,7 @@ export function computeActionQueue(
   const { inventory, salesHistory, doiAge, sthData } = input;
   const {
     lowStockRatio, highStockRatio, minStockAbs, minAvgForRatio,
-    minTransferUnits, paretoTarget, surplusLiquidateRatio,
+    minTransferUnits, surplusLiquidateRatio,
     b2cStoreCoverWeeks, importedBrands, coverWeeksImported, coverWeeksNational,
   } = waterfallConfig;
 
@@ -319,6 +345,7 @@ export function computeActionQueue(
   const sizeCurveMap = precomputeSizeCurves(operationalRows);
   const networkAvgSthMap = precomputeNetworkAvgSth(sthData);
   const storeAvgSthMap = precomputeStoreAvgSth(sthData);
+  const skuStoreAvgSthMap = precomputeSkuStoreAvgSth(sthData);
   const bestPerformerMap = precomputeBestPerformerBySku(salesHistory, storeClusters);
   // Pre-compute cohort age by SKU for O(1) fallback lookup (avoids O(n*m) scan)
   const skuCohortAge = new Map<string, number>();
@@ -332,28 +359,51 @@ export function computeActionQueue(
   }
 
   // -- 2b2. Pre-compute total stock per store (for capacity checks)
+  // IMPORTANT: Use ALL inventory (unfiltered by brand) for capacity — a store's
+  // physical capacity is consumed by ALL brands, not just the filtered one.
   const storeStockTotals = new Map<string, number>();
-  for (const r of operationalRows) {
+  for (const r of inventory) {
     const store = r.store.trim().toUpperCase();
     if (!store || store === RETAILS_DEPOT || store === STOCK_DEPOT) continue;
+    if (r.channel !== mode) continue; // respect B2C/B2B mode
     storeStockTotals.set(store, (storeStockTotals.get(store) ?? 0) + r.units);
   }
 
-  // -- 2c. Lifecycle pre-evaluation per (sku, store) — BEFORE talle loop
-  // Evaluates analyzeSequentially ONCE per unique (sku, store) pair.
-  // Decisions drive the talle loop: excluded stores don't get restocked,
-  // lifecycle surplus doesn't enter the N1 redistribution pool.
-  const lifecycleDecisions = new Map<string, SequentialDecision>();
-  const lifecycleExcluded = new Set<string>();    // "STORE|sku" → don't restock
-  const lifecycleSurplusSet = new Set<string>();  // "STORE|sku" → surplus goes to OUT only
+  // -- 2c. Lifecycle pre-evaluation — hybrid (sku, store) + (sku, talle, store)
+  //
+  // Rodrigo quiso evaluar por talla individual. Pero el análisis de curva de tallas
+  // (Steps 1-3 de sequentialDecision) sigue siendo SKU-level — no tiene sentido
+  // analizar la curva "talla por talla". Entonces:
+  //   1. Correr analyzeSequentially UNA vez per (sku, store) con sizeCurve →
+  //      si outcome ∈ { reposition_sizes, consolidate_here, move_to_best_performer }
+  //      → decisión SKU-level, aplica a todas las tallas (curveDecisions).
+  //   2. Si el outcome NO es curve-based → descartar y re-evaluar PER TALLA con el
+  //      STH específico (sthData.exact), llamando analyzeSequentially SIN sizeCurve
+  //      (salta Steps 1-3, evalúa solo Steps 4-5 de linealidad) → talleDecisions.
+  //
+  // lifecycleExcluded / lifecycleSurplusSet aceptan keys "STORE|sku" (cubre todas
+  // las tallas) y "STORE|sku|talle" (solo esa talla). Los filtros del loop consultan
+  // ambos.
+  const curveDecisions = new Map<string, SequentialDecision>();   // "STORE|sku" → decision SKU-level
+  const talleDecisions = new Map<string, SequentialDecision>();   // "STORE|sku|talle" → decision per-talle
+  const lifecycleExcluded = new Set<string>();    // mix de keys, ambas granularidades
+  const lifecycleSurplusSet = new Set<string>();  // mix de keys, ambas granularidades
+
+  const CURVE_OUTCOMES = new Set<SequentialDecision["outcome"]>([
+    "reposition_sizes", "consolidate_here", "move_to_best_performer",
+  ]);
 
   {
-    // Build unique (sku, store) contexts + total qty per (sku, store) for WOI fallback
+    // Build unique (sku, store) contexts + total qty per (sku, store) for WOI fallback.
+    // Also track which talles exist per (store, sku) so we can re-evaluate per-talle
+    // when the curve analysis doesn't produce a decision.
     const skuStoreCtx = new Map<string, { store: string; sku: string; storeCluster: StoreCluster | null; productType: ProductType }>();
     const skuStoreQty = new Map<string, number>();
+    const skuStoreTalles = new Map<string, Set<string>>();
     for (const r of operationalRows) {
       const store = r.store.trim().toUpperCase();
       const sku = r.sku.trim();
+      const talle = r.talle.trim() || "S/T";
       if (!store || !sku || store === RETAILS_DEPOT || store === STOCK_DEPOT) continue;
       if (r.channel !== mode) continue;
       const key = `${store}|${sku}`;
@@ -361,20 +411,17 @@ export function computeActionQueue(
         skuStoreCtx.set(key, { store, sku, storeCluster: getStoreCluster(store, storeClusters), productType: r.productType });
       }
       skuStoreQty.set(key, (skuStoreQty.get(key) ?? 0) + r.units);
+      const tset = skuStoreTalles.get(key) ?? new Set<string>();
+      tset.add(talle);
+      skuStoreTalles.set(key, tset);
     }
 
-    for (const [key, ctx] of skuStoreCtx) {
-      const sthRecord = sthData?.byStoreSku.get(key) ?? null;
-      // Priority: (1) cohort age from this store, (2) cohort age from ANY store for this SKU,
-      // (3) DOI age (last movement — less accurate but better than nothing)
+    /** Resolve age (days) for a (store, sku) using the existing fallback chain. */
+    const resolveAge = (ctx: { store: string; sku: string }, sthRecord: { cohortAgeDays: number } | null): number => {
+      const key = `${ctx.store}|${ctx.sku}`;
       let ageDays = sthRecord?.cohortAgeDays ?? 0;
-      if (ageDays <= 0) {
-        // Cohort age is network-level — use pre-computed O(1) lookup
-        ageDays = skuCohortAge.get(ctx.sku) ?? 0;
-      }
+      if (ageDays <= 0) ageDays = skuCohortAge.get(ctx.sku) ?? 0;
       if (ageDays <= 0) ageDays = doiAge?.byStoreSku.get(key) ?? 0;
-
-      // Fallback: if no age data but product has extreme WOI, estimate age from coverage
       if (ageDays <= 0) {
         const hist = salesHistory.get(salesHistoryKey(ctx.store, ctx.sku)) ?? 0;
         if (hist > 0) {
@@ -387,38 +434,79 @@ export function computeActionQueue(
           }
         }
       }
+      return ageDays;
+    };
+
+    for (const [key, ctx] of skuStoreCtx) {
+      // -- Step 1: curve-level analysis (one call per sku×store)
+      const storeSkuSthRecord = sthData?.byStoreSku.get(key) ?? null;
+      const ageDays = resolveAge(ctx, storeSkuSthRecord);
       if (ageDays <= 0) continue;
 
-      const sth = sthRecord ? sthRecord.sth * 100 : 0;
-      const decision = analyzeSequentially(
-        {
-          store: ctx.store, storeCluster: ctx.storeCluster, productType: ctx.productType,
-          storeSth: sthRecord ? sth : null,
-          networkAvgSth: networkAvgSthMap.get(ctx.sku) ?? null,
-          storeAvgSth: storeAvgSthMap.get(ctx.store) ?? null,
-          ageDays,
-          bestPerformerStore: bestPerformerMap.get(ctx.sku)?.store ?? null,
-          currentStoreSales: salesHistory.get(salesHistoryKey(ctx.store, ctx.sku)) ?? 0,
-          bestPerformerSales: bestPerformerMap.get(ctx.sku)?.avgSales ?? 0,
-        },
+      const baseCtx = {
+        store: ctx.store, storeCluster: ctx.storeCluster, productType: ctx.productType,
+        networkAvgSth: networkAvgSthMap.get(ctx.sku) ?? null,
+        storeAvgSth: storeAvgSthMap.get(ctx.store) ?? null,
+        ageDays,
+        bestPerformerStore: bestPerformerMap.get(ctx.sku)?.store ?? null,
+        currentStoreSales: salesHistory.get(salesHistoryKey(ctx.store, ctx.sku)) ?? 0,
+        bestPerformerSales: bestPerformerMap.get(ctx.sku)?.avgSales ?? 0,
+      };
+
+      const bestTalleSth = storeSkuSthRecord ? storeSkuSthRecord.sth * 100 : 0;
+      const curveDecision = analyzeSequentially(
+        { ...baseCtx, storeSth: storeSkuSthRecord ? bestTalleSth : null },
         sizeCurveMap.get(ctx.sku) ?? null,
       );
 
-      lifecycleDecisions.set(key, decision);
-
-      switch (decision.outcome) {
-        case "move_to_best_performer":
-        case "transfer_cascade":
+      if (CURVE_OUTCOMES.has(curveDecision.outcome)) {
+        // Curve-based decision → applies to all talles of this (sku, store)
+        curveDecisions.set(key, curveDecision);
+        if (curveDecision.outcome === "move_to_best_performer") {
           lifecycleExcluded.add(key);
           lifecycleSurplusSet.add(key);
-          break;
-        case "markdown":
+        } else {
+          // reposition_sizes / consolidate_here: don't restock this (sku, store)
+          // but don't push to surplus either (items stay put while curve is completed)
           lifecycleExcluded.add(key);
-          if (decision.lifecycleAction === "transferencia_out") lifecycleSurplusSet.add(key);
-          break;
-        case "maintain_until_sold":
-          lifecycleExcluded.add(key);
-          break;
+        }
+        continue;
+      }
+
+      // -- Step 2: per-talle STH analysis (no curve gating)
+      const talles = skuStoreTalles.get(key);
+      if (!talles) continue;
+      for (const talle of talles) {
+        const talleKey = `${ctx.store}|${ctx.sku}|${talle}`;
+        const exactRecord = sthData?.exact.get(talleKey) ?? null;
+        // Without per-talle STH data we can't make an STH-based decision for this talle.
+        // Skip silently: the movements pipeline still handles it.
+        if (!exactRecord) continue;
+
+        const talleAge = exactRecord.cohortAgeDays > 0 ? exactRecord.cohortAgeDays : ageDays;
+        if (talleAge <= 0) continue;
+
+        const talleDecision = analyzeSequentially(
+          { ...baseCtx, ageDays: talleAge, storeSth: exactRecord.sth * 100 },
+          null, // skip Steps 1-3 (curve analysis) — evaluate only Steps 4-5 (STH)
+        );
+
+        talleDecisions.set(talleKey, talleDecision);
+
+        switch (talleDecision.outcome) {
+          case "move_to_best_performer":
+          case "transfer_cascade":
+            lifecycleExcluded.add(talleKey);
+            lifecycleSurplusSet.add(talleKey);
+            break;
+          case "markdown":
+            lifecycleExcluded.add(talleKey);
+            if (talleDecision.lifecycleAction === "transferencia_out") lifecycleSurplusSet.add(talleKey);
+            break;
+          case "maintain_until_sold":
+            lifecycleExcluded.add(talleKey);
+            break;
+        }
       }
     }
   }
@@ -488,9 +576,12 @@ export function computeActionQueue(
         }
       }
 
-      // ── Consult pre-computed lifecycle decision (per sku×store) ──
-      const lcKey = `${store}|${sku}`;
-      const decision = lifecycleDecisions.get(lcKey);
+      // ── Consult pre-computed lifecycle decision ──
+      // Curve decisions (sku×store) take precedence — they apply to all talles.
+      // Fall back to per-talle decisions (sku×talle×store) for STH-based outcomes.
+      const lcCurveKey = `${store}|${sku}`;
+      const lcTalleKey = `${store}|${sku}|${talle}`;
+      const decision = curveDecisions.get(lcCurveKey) ?? talleDecisions.get(lcTalleKey);
       let isLifecycleSurplus = false;
 
       if (decision) {
@@ -528,7 +619,9 @@ export function computeActionQueue(
     // Sort deficit stores: exclude lifecycle-excluded and at-capacity stores
     const deficitStores  = storeData.filter(s => {
       if (s.need <= 0) return false;
+      // Excluded either at SKU-level (curve decision) or at talle-level (STH decision)
       if (lifecycleExcluded.has(`${s.store}|${sku}`)) return false;
+      if (lifecycleExcluded.has(`${s.store}|${sku}|${talle}`)) return false;
       // Capacity check: don't restock stores already at or over capacity
       const assortment = getStoreAssortment(s.store) ?? 0;
       if (assortment > 0) {
@@ -625,17 +718,34 @@ export function computeActionQueue(
         lifecycleAction: itemLinealidad?.isBelowThreshold ? itemLinealidad.action ?? undefined : undefined,
         sth: sthLookup ? sthLookup.sth * 100 : undefined,
         cohortAgeDays: sthLookup ? sthLookup.cohortAgeDays : undefined,
+        skuAvgSthInStore: isDepot ? undefined : skuStoreAvgSthMap.get(`${store}|${sku}`),
       };
     };
 
-    // -- Generate lifecycle actions from pre-computed decisions (one per sku×store)
+    // -- Generate lifecycle actions from pre-computed decisions
+    // Curve decisions (sku×store) take precedence → one action per SKU.
+    // Otherwise fall back to per-talle decisions (sku×talle×store) → one action per talle.
     for (const store of stores.map(([s]) => s)) {
-      const lcKey = `${store}|${sku}`;
-      if (lifecycleActionsEmitted.has(lcKey)) continue;
-      const decision = lifecycleDecisions.get(lcKey);
-      if (!decision || decision.outcome === "no_action" || decision.outcome === "maintain_until_sold") continue;
+      const lcCurveKey = `${store}|${sku}`;
+      const lcTalleKey = `${store}|${sku}|${talle}`;
 
-      lifecycleActionsEmitted.add(lcKey);
+      let decision: SequentialDecision | undefined;
+      let dedupKey: string;
+      const curveDec = curveDecisions.get(lcCurveKey);
+      if (curveDec) {
+        if (lifecycleActionsEmitted.has(lcCurveKey)) continue;
+        decision = curveDec;
+        dedupKey = lcCurveKey;
+      } else {
+        const talleDec = talleDecisions.get(lcTalleKey);
+        if (!talleDec) continue;
+        if (lifecycleActionsEmitted.has(lcTalleKey)) continue;
+        decision = talleDec;
+        dedupKey = lcTalleKey;
+      }
+      if (decision.outcome === "no_action" || decision.outcome === "maintain_until_sold") continue;
+
+      lifecycleActionsEmitted.add(dedupKey);
       const storeQty = storeData.find(s => s.store === store)?.qty ?? 0;
       const lifecycleImpact = calcImpactScore(storeQty > 0 ? storeQty : 1, effectivePrice, cost);
 
@@ -707,15 +817,17 @@ export function computeActionQueue(
           const destCluster = sourceCluster ? nextClusterCascade(sourceCluster) : "OUT";
           actionType = destCluster === "OUT" ? "transferencia_out_lifecycle" : "transferencia_lifecycle";
           risk = destCluster === "OUT" ? "critical" : "low";
-          // Find best destination store in cluster: prefer most capacity headroom
+          // Find best destination store in cluster: prefer best sales for this SKU (Rodrigo)
+          // Secondary: exclude stores at capacity
           const destStores = Object.entries(storeClusters)
             .filter(([, c]) => c === destCluster)
             .map(([s]) => ({
               store: s,
+              sales: salesHistory.get(salesHistoryKey(s, sku)) ?? 0,
               headroom: (getStoreAssortment(s) ?? Infinity) - (storeStockTotals.get(s) ?? 0),
             }))
-            .filter(s => s.store !== store) // don't cascade to self
-            .sort((a, b) => b.headroom - a.headroom); // most headroom first
+            .filter(s => s.store !== store && s.headroom > 0) // don't cascade to self or full stores
+            .sort((a, b) => b.sales - a.sales || b.headroom - a.headroom); // best seller first, then most space
           const cascadeDest = destStores.length > 0 ? destStores[0].store : null;
           if (cascadeDest) {
             recommended = `Transferir ${storeQty}u a ${cascadeDest} (cluster ${destCluster}) — ${decision.reason}`;
@@ -959,26 +1071,9 @@ export function computeActionQueue(
     return a.store < b.store ? -1 : 1;
   });
 
-  // -- 6. Pareto flagging: top items BY IMPACT that sum to 80% of total impact.
-  //    The Pareto 20/80 principle: flag the HIGHEST-IMPACT items whose cumulative
-  //    impact accounts for 80% of the total. This is independent of risk sort order.
-  const totalImpact = filtered.reduce((s, a) => s + a.impactScore, 0);
-  if (totalImpact > 0) {
-    // Sort a COPY by impact descending to identify the top items
-    const byImpact = [...filtered].sort((a, b) => b.impactScore - a.impactScore);
-    const paretoIds = new Set<string>();
-    let cumulative = 0;
-    for (const action of byImpact) {
-      if (cumulative / totalImpact >= paretoTarget) break;
-      cumulative += action.impactScore;
-      paretoIds.add(action.id);
-    }
-    // Map flags back to the risk-sorted original
-    for (const action of filtered) {
-      action.paretoFlag = paretoIds.has(action.id);
-    }
-  }
+  // Pareto removed — prioritization is now 100% risk-based (critical > low > overstock > balanced).
+  // The risk sort at step 5 is the single source of priority. See LIFECYCLE_04 docs.
 
-  // -- 7. Assign ranks (no artificial limit — show all actionable items)
+  // -- 6. Assign ranks (no artificial limit — show all actionable items)
   return filtered.map((a, i) => ({ ...a, rank: i + 1 }));
 }

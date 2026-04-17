@@ -271,7 +271,7 @@ export default function ExecutivePage() {
     }
     // currentMonth y lastClosedMonth: usar periodLabel de resolvePeriod
     return periodLabel;
-  }, [isYtdView, lastDataDay, calendarMonth, periodLabel]);
+  }, [isYtdView, calendarMonth, periodLabel]);
 
   if (isLoading) return (
     <div className="animate-pulse space-y-6 p-4 sm:p-6">

@@ -220,7 +220,20 @@ export function analyzeSequentially(
   );
 
   // STH is above threshold → SKU performing OK
+  // At 90d+: Rodrigo says "revisar curva, consolidar si posible, sino mantener hasta agotar"
+  // Size curve analysis (Steps 1-3) already ran above. If we're here, no curve action was needed.
   if (!linealidad.isBelowThreshold) {
+    if (linealidad.bracket === 90) {
+      // 90d+ with good STH: maintain until sold (not markdown, not no_action)
+      return {
+        ...base,
+        outcome: "maintain_until_sold",
+        reason: `STH ${ctx.storeSth.toFixed(0)}% ≥ ${linealidad.requiredSth}% a ${linealidad.bracket}d — mantener hasta agotar stock`,
+        lifecycleAction: null,
+        responsibleRoles: [],
+        suggestedDestination: null,
+      };
+    }
     return {
       ...base,
       outcome: "no_action",
@@ -234,9 +247,8 @@ export function analyzeSequentially(
   // ── Step 4: STH below threshold — compare vs store average ──────────
 
   // If STH is above the store's average (across all SKUs), maintain until sold
-  // EXCEPT at 90d+ where Rodrigo mandates action regardless ("salida obligatoria")
   const avgRef = ctx.storeAvgSth ?? ctx.networkAvgSth; // prefer store avg, fallback to network
-  if (linealidad.bracket < 90 && avgRef !== null && ctx.storeSth >= avgRef) {
+  if (avgRef !== null && ctx.storeSth >= avgRef) {
     return {
       ...base,
       outcome: "maintain_until_sold",
