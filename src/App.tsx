@@ -39,6 +39,7 @@ const NoAccessPage         = lazy(() => import("@/features/auth/NoAccessPage"));
 const ChangePasswordPage   = lazy(() => import("@/features/auth/ChangePasswordPage"));
 const UsersPage            = lazy(() => import("@/features/users/UsersPage"));
 const CommissionsPage      = lazy(() => import("@/features/commissions/CommissionsPage"));
+const MarketingPage        = lazy(() => import("@/features/marketing/MarketingPage"));
 const HelpPage             = lazy(() => import("@/features/help/HelpPage"));
 
 // ─── Loading fallback ─────────────────────────────────────────────────────────
@@ -158,6 +159,13 @@ export default function App() {
             <Route path="comisiones" element={
               <PermissionGuard allowed={(p) => p.canViewCommissions}>
                 <FeatureErrorBoundary feature="Comisiones"><CommissionsPage /></FeatureErrorBoundary>
+              </PermissionGuard>
+            } />
+
+            {/* Marketing (SAM) — super_user y gerencia */}
+            <Route path="marketing" element={
+              <PermissionGuard allowed={(p) => p.canViewMarketing}>
+                <FeatureErrorBoundary feature="Marketing"><MarketingPage /></FeatureErrorBoundary>
               </PermissionGuard>
             } />
 

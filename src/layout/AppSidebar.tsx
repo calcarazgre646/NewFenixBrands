@@ -17,6 +17,7 @@ import {
   ShipIcon,
   WarehouseIcon,
   GroupIcon,
+  MegaphoneIcon,
 } from "@/icons";
 import { useSidebar } from "@/hooks/useSidebar";
 import { useAuth } from "@/hooks/useAuth";
@@ -40,8 +41,9 @@ const ALL_MAIN_NAV: NavItem[] = [
 ];
 
 const ALL_ANALYSIS_NAV: NavItem[] = [
-  { path: "/kpis",      label: "KPIs",       icon: <BoltIcon />,    allowed: (p) => p.canViewKpis },
-  { path: "/calendario", label: "Calendario", icon: <CalenderIcon />, allowed: (p) => p.canViewCalendar },
+  { path: "/kpis",       label: "KPIs",       icon: <BoltIcon />,       allowed: (p) => p.canViewKpis },
+  { path: "/marketing",  label: "Marketing",  icon: <MegaphoneIcon />,  allowed: (p) => p.canViewMarketing },
+  { path: "/calendario", label: "Calendario", icon: <CalenderIcon />,   allowed: (p) => p.canViewCalendar },
 ];
 
 const ALL_CONTROL_NAV: NavItem[] = [

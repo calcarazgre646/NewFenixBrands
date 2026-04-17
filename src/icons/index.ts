@@ -56,6 +56,7 @@ import { ReactComponent as AlertHexaIcon } from "./alert-hexa.svg?react";
 import { ReactComponent as ErrorHexaIcon } from "./info-hexa.svg?react";
 import { ReactComponent as ShipIcon } from "./ship.svg?react";
 import { ReactComponent as WarehouseIcon } from "./warehouse.svg?react";
+import { ReactComponent as MegaphoneIcon } from "./megaphone.svg?react";
 
 export {
   ErrorHexaIcon,
@@ -116,4 +117,5 @@ export {
   AngleRightIcon,
   ShipIcon,
   WarehouseIcon,
+  MegaphoneIcon,
 };

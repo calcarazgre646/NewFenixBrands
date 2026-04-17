@@ -50,6 +50,7 @@ export interface Permissions {
   canViewDepots:    boolean;
   canViewCalendar:  boolean;
   canViewCommissions: boolean;
+  canViewMarketing: boolean;
   /** Gestión (futuro SettingsPage) */
   canManageUsers:   boolean;
   /** Filtro de canal bloqueado (usuario no puede cambiarlo) */
@@ -81,6 +82,7 @@ export function derivePermissions(profile: UserProfile | null): Permissions {
       canViewDepots:    true,
       canViewCalendar:  true,
       canViewCommissions: true,
+      canViewMarketing: true,
       canManageUsers:   role === "super_user",
       isChannelLocked:  false,
       lockedChannel:    null,
@@ -97,6 +99,7 @@ export function derivePermissions(profile: UserProfile | null): Permissions {
     canViewDepots:    false,
     canViewCalendar:  true,
     canViewCommissions: false,
+    canViewMarketing: false,
     canManageUsers:   false,
     isChannelLocked:  channelScope !== "total" && channelScope !== null,
     lockedChannel:    channelScope,
@@ -113,6 +116,7 @@ const EMPTY_PERMISSIONS: Permissions = {
   canViewDepots:    false,
   canViewCalendar:  false,
   canViewCommissions: false,
+  canViewMarketing: false,
   canManageUsers:   false,
   isChannelLocked:  true,
   lockedChannel:    null,
