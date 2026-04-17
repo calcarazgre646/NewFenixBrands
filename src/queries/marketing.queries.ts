@@ -173,13 +173,17 @@ export interface InventoryHealthSummary {
  * Low stock: units < 5 (candidate for "ultimas unidades" campaign)
  * Overstock: units > 100 (candidate for clearance campaign)
  */
-export async function fetchInventoryForMarketing(): Promise<InventoryHealthSummary> {
-  const data = await fetchAllRows<Row>(() =>
-    dataClient
+export async function fetchInventoryForMarketing(
+  brandCanonical?: string | null,
+): Promise<InventoryHealthSummary> {
+  const data = await fetchAllRows<Row>(() => {
+    let q = dataClient
       .from("mv_stock_tienda")
       .select("store, sku, description, brand, tipo_articulo, units, price, cost, value")
-      .gt("units", 0),
-  );
+      .gt("units", 0);
+    if (brandCanonical) q = q.eq("brand", brandCanonical);
+    return q;
+  });
 
   const LOW_THRESHOLD = 5;
   const HIGH_THRESHOLD = 100;
@@ -260,20 +264,30 @@ export interface PimSummary {
  * Top sellers: highest revenue SKUs → promote more
  * Slow movers: lowest revenue SKUs that have stock → candidates for promotion
  */
-export async function fetchProductPerformance(): Promise<PimSummary> {
-  const year = new Date().getFullYear();
+export async function fetchProductPerformance(opts?: {
+  year?: number;
+  months?: number[];
+  channel?: "total" | "b2c" | "b2b";
+  brandCanonical?: string | null;
+}): Promise<PimSummary> {
+  const year = opts?.year ?? new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
-  const months = Array.from({ length: currentMonth }, (_, i) => i + 1);
+  const months = opts?.months ?? Array.from({ length: currentMonth }, (_, i) => i + 1);
+  const channels = opts?.channel === "b2c" ? ["B2C"]
+    : opts?.channel === "b2b" ? ["B2B"]
+    : ["B2B", "B2C"];
 
-  // 1. Sales by SKU this year
-  const salesData = await fetchAllRows<Row>(() =>
-    dataClient
+  // 1. Sales by SKU in the period
+  const salesData = await fetchAllRows<Row>(() => {
+    let q = dataClient
       .from("fjdhstvta1")
       .select("v_sku, v_descrip, v_marca, v_vtasimpu, v_cantvend")
       .eq("v_año", year)
       .in("v_mes", months)
-      .in("v_canal_venta", ["B2B", "B2C"]),
-  );
+      .in("v_canal_venta", channels);
+    if (opts?.brandCanonical) q = q.eq("v_marca", opts.brandCanonical);
+    return q;
+  });
 
   // Aggregate by SKU
   const skuMap = new Map<string, { description: string; brand: string; neto: number; units: number }>();
