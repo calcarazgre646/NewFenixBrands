@@ -18,6 +18,7 @@ import { useState, useMemo } from "react";
 import type { ActionGroup, ActionSection, GroupByMode, OperationalIntent } from "@/domain/actionQueue/grouping";
 import { ActionCardList } from "./ActionCardList";
 import { downloadGroupHtml } from "./exportHtml";
+import { downloadGroupCsv } from "./exportCsv";
 import { Badge } from "@/components/ui/badge/Badge";
 import { Card } from "@/components/ui/card/Card";
 
@@ -204,15 +205,20 @@ export function ActionGroupCard({ group, mode, channel, defaultExpanded = false,
     return doiWeightTotal > 0 ? doiWeightedSum / doiWeightTotal : null;
   }, [group.items]);
 
-  const handleExport = (e: React.MouseEvent | React.KeyboardEvent) => {
+  const exportOptions = {
+    groupLabel: group.label,
+    channel,
+    mode,
+    items: group.items,
+    sections: group.sections,
+  };
+  const handleExportHtml = (e: React.MouseEvent | React.KeyboardEvent) => {
     e.stopPropagation();
-    downloadGroupHtml({
-      groupLabel: group.label,
-      channel,
-      mode,
-      items: group.items,
-      sections: group.sections,
-    });
+    downloadGroupHtml(exportOptions);
+  };
+  const handleExportCsv = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation();
+    downloadGroupCsv(exportOptions);
   };
 
   return (
@@ -302,18 +308,27 @@ export function ActionGroupCard({ group, mode, channel, defaultExpanded = false,
             )}
           </div>
 
-          {/* Export button */}
-          <button
-            type="button"
-            onClick={handleExport}
-            onKeyDown={(e) => { if (e.key === "Enter") handleExport(e); }}
-            title={`Exportar acciones de ${group.label}`}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-          </button>
+          {/* Export buttons */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={handleExportHtml}
+              onKeyDown={(e) => { if (e.key === "Enter") handleExportHtml(e); }}
+              title={`Exportar ${group.label} como HTML`}
+              className="rounded-md border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+            >
+              HTML
+            </button>
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              onKeyDown={(e) => { if (e.key === "Enter") handleExportCsv(e); }}
+              title={`Exportar ${group.label} como CSV`}
+              className="rounded-md border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+            >
+              CSV
+            </button>
+          </div>
 
           {mode === "store" && (
             <OccupancyIndicator stock={storeStock} capacity={group.assortmentCapacity} />

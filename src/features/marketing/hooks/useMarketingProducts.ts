@@ -46,16 +46,21 @@ export function useMarketingProducts() {
   const months = resolveMonths(filters.period, filters.year);
   const channel = filters.channel;
 
-  const params = { year: filters.year, period: filters.period, channel, brand: brandCanonical };
-
   const q = useQuery({
-    queryKey: marketingKeys.products(params),
-    queryFn: () => fetchProductPerformance({
-      year: filters.year,
-      months,
-      channel,
-      brandCanonical,
-    }),
+    queryKey: marketingKeys.products(filters.year, filters.period, channel, brandCanonical),
+    queryFn: async () => {
+      // eslint-disable-next-line no-console
+      console.log("[marketing/products] fetch", { year: filters.year, period: filters.period, months, channel, brand: brandCanonical });
+      const result = await fetchProductPerformance({
+        year: filters.year,
+        months,
+        channel,
+        brandCanonical,
+      });
+      // eslint-disable-next-line no-console
+      console.log("[marketing/products] result", { topSellers: result.topSellers.length, slowMovers: result.slowMovers.length, firstTop: result.topSellers[0]?.sku });
+      return result;
+    },
     staleTime: STALE_30MIN,
     gcTime: GC_60MIN,
     enabled: months.length > 0,

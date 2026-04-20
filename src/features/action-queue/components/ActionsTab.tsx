@@ -158,6 +158,7 @@ export function ActionsTab({
                   <FlatGroupSection
                     group={group}
                     mode={viewMode as GroupByMode}
+                    channel={channel}
                   />
                 )}
               </div>
