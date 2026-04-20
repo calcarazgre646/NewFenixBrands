@@ -144,9 +144,12 @@ export function ActionCard({ item, showStore = false, viewProfile = "detail" }: 
             </p>
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] text-gray-400 dark:text-gray-500">
+            <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400">
               {item.skuComercial || item.sku}
             </span>
+            {item.skuComercial && item.sku && item.skuComercial !== item.sku && (
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">{item.sku}</span>
+            )}
             <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">{item.brand}</span>
             {PRODUCT_TYPE_BADGE[item.productType] && (
               <Badge

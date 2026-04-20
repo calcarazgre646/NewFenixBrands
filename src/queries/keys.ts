@@ -188,7 +188,8 @@ export const marketingKeys = {
   dashboard: () => ["marketing", "dashboard"] as const,
   etlStats: () => ["marketing", "etlStats"] as const,
   inventory: (brand?: string | null) => ["marketing", "inventory", brand ?? "total"] as const,
-  products: (params?: Record<string, unknown>) => ["marketing", "products", params ?? {}] as const,
+  products: (year: number, period: string, channel: string, brand: string | null) =>
+    ["marketing", "products", year, period, channel, brand ?? "total"] as const,
 };
 
 // ─── Cache durations ──────────────────────────────────────────────────────────

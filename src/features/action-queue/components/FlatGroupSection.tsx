@@ -16,6 +16,8 @@ import { ActionCardList } from "./ActionCardList";
 import { Badge } from "@/components/ui/badge/Badge";
 import { Card } from "@/components/ui/card/Card";
 import { formatPYGSuffix } from "@/utils/format";
+import { downloadGroupHtml } from "./exportHtml";
+import { downloadGroupCsv } from "./exportCsv";
 
 // ─── Priority styling ────────────────────────────────────────────────────────
 
@@ -58,14 +60,31 @@ function PriorityIcon({ level, className }: { level: string; className?: string 
 interface Props {
   group: ActionGroup;
   mode: GroupByMode;
+  channel: string;
   defaultExpanded?: boolean;
   viewProfile?: ViewProfile;
 }
 
-export function FlatGroupSection({ group, mode, defaultExpanded = false, viewProfile = "detail" }: Props) {
+export function FlatGroupSection({ group, mode, channel, defaultExpanded = false, viewProfile = "detail" }: Props) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const isPriority = mode === "priority";
   const style = isPriority ? PRIORITY_STYLES[group.key] ?? PRIORITY_STYLES.normal : null;
+
+  const exportOptions = {
+    groupLabel: group.label,
+    channel,
+    mode,
+    items: group.items,
+    sections: group.sections,
+  };
+  const handleExportHtml = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation();
+    downloadGroupHtml(exportOptions);
+  };
+  const handleExportCsv = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation();
+    downloadGroupCsv(exportOptions);
+  };
 
   return (
     <Card padding="none" className={`transition-shadow ${expanded ? "shadow-theme-sm" : "hover:shadow-theme-sm"} ${
@@ -115,11 +134,38 @@ export function FlatGroupSection({ group, mode, defaultExpanded = false, viewPro
           </div>
         </div>
 
-        {/* Impact + chevron */}
+        {/* Impact + export + chevron */}
         <div className="flex shrink-0 items-center gap-3">
           <p className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">
             {formatPYGSuffix(group.totalImpact)}
           </p>
+
+          {/* Export buttons */}
+          <div className="flex items-center gap-1">
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={handleExportHtml}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleExportHtml(e); }}
+              title={`Exportar ${group.label} como HTML`}
+              aria-label={`Exportar ${group.label} como HTML`}
+              className="rounded-md border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+            >
+              HTML
+            </span>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={handleExportCsv}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleExportCsv(e); }}
+              title={`Exportar ${group.label} como CSV`}
+              aria-label={`Exportar ${group.label} como CSV`}
+              className="rounded-md border border-gray-200 px-2 py-1 text-[10px] font-semibold text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+            >
+              CSV
+            </span>
+          </div>
+
           <svg
             className={`h-5 w-5 text-gray-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}

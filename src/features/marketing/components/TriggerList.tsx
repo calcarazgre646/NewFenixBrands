@@ -14,6 +14,7 @@ import {
   ChatIcon,
 } from "@/icons";
 import type { SamTrigger, TriggerCategory, MessageChannel } from "@/domain/marketing/types";
+import type { Recommendation } from "@/domain/marketing/recommendations";
 
 interface Props {
   triggers: SamTrigger[];
@@ -23,6 +24,8 @@ interface Props {
   onDelete: (id: string) => void;
   onDryRun: (t: SamTrigger) => void;
   onCreate: () => void;
+  /** Recomendación por trigger (solo se renderiza si existe para ese trigger) */
+  recommendations?: Map<string, Recommendation | null>;
 }
 
 const CATEGORY_LABEL: Record<TriggerCategory, string> = {
@@ -55,7 +58,13 @@ const CHANNEL_CONFIG: Record<MessageChannel, { icon: React.ReactNode; label: str
   sms:      { icon: <MailIcon />, label: "SMS" },
 };
 
-export function TriggerList({ triggers, isLoading, onToggle, onEdit, onDelete, onDryRun, onCreate }: Props) {
+const STRATEGY_STYLE: Record<Recommendation["strategy"], string> = {
+  urgency:        "border-rose-200 bg-rose-50 dark:border-rose-500/30 dark:bg-rose-500/10",
+  re_engagement:  "border-cyan-200 bg-cyan-50 dark:border-cyan-500/30 dark:bg-cyan-500/10",
+  clearance:      "border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10",
+};
+
+export function TriggerList({ triggers, isLoading, onToggle, onEdit, onDelete, onDryRun, onCreate, recommendations }: Props) {
   if (isLoading) return <div className="flex justify-center py-12"><Spinner /></div>;
 
   return (
@@ -79,6 +88,7 @@ export function TriggerList({ triggers, isLoading, onToggle, onEdit, onDelete, o
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {triggers.map((t) => {
             const ch = CHANNEL_CONFIG[t.channel];
+            const rec = recommendations?.get(t.id) ?? null;
             return (
               <div key={t.id} className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
                 <div className="flex items-start justify-between mb-3">
@@ -107,6 +117,20 @@ export function TriggerList({ triggers, isLoading, onToggle, onEdit, onDelete, o
                     {ch.label}
                   </span>
                 </div>
+
+                {rec && (
+                  <div className={`mb-3 rounded-lg border px-3 py-2 ${STRATEGY_STYLE[rec.strategy]}`}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Sugerencia · {rec.reason}
+                    </p>
+                    <p className="mt-0.5 text-xs font-medium text-gray-900 dark:text-white truncate" title={rec.description}>
+                      {rec.description}
+                    </p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                      {rec.brand} · {rec.sku} · {rec.dataPoint}
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between text-xs text-gray-400">
                   <span>{t.fireCount} disparos</span>

@@ -31,6 +31,7 @@ import { ProductIntelligence } from "./components/ProductIntelligence";
 import { CommercialInsights } from "./components/CommercialInsights";
 import { useMarketingDashboard } from "./hooks/useMarketingDashboard";
 import { useTriggers } from "./hooks/useTriggers";
+import { useTriggerRecommendations } from "./hooks/useTriggerRecommendations";
 import { useTemplates } from "./hooks/useTemplates";
 import { useTriggerDryRun } from "./hooks/useTriggerDryRun";
 import { useCampaigns } from "./hooks/useCampaigns";
@@ -59,6 +60,7 @@ export default function MarketingPage() {
   const executions = useExecutions();
   const inventory = useMarketingInventory();
   const products = useMarketingProducts();
+  const triggerRecommendations = useTriggerRecommendations(triggers.triggers);
 
   // ── First-time sync screen ──
   if (dashboard.isSyncing && dashboard.customerCount === 0) {
@@ -174,6 +176,7 @@ export default function MarketingPage() {
                 onDelete={triggers.deleteTrigger}
                 onDryRun={dryRun.evaluate}
                 onCreate={triggers.openCreate}
+                recommendations={triggerRecommendations.byTrigger}
               />
             </div>
 
