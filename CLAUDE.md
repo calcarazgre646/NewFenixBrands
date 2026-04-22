@@ -11,7 +11,7 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 
 ---
 
-## Estado actual (actualizado 04/04/2026)
+## Estado actual (actualizado 22/04/2026)
 
 | Fase | Feature | Estado |
 |------|---------|--------|
@@ -26,10 +26,12 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 6 | UsersPage (`/usuarios`) — CRUD completo, Edge Function, cambio contraseña | ✅ COMPLETO + AUDITADO |
 | 6B | DepotsPage (`/depositos`) — Filtros estandarizados in-page + Novedades/Lanzamientos | ✅ COMPLETO + AUDITADO |
 | 7 | CommissionsPage (`/comisiones`) — Comisiones por vendedor, datos reales, 8 escalas | ⚠️ PARCIAL — esperando datos de Fenix |
+| 8 | PricingPage (`/precios`) — PVP, PVM, costo, MBP%, MBM%, Novedad, Promoción por SKU comercial | ⚠️ PARCIAL — Promoción pendiente fuente de datos |
 
 **La app corre:** `npm run dev` → http://localhost:5173
-**Tests:** 1060 passing (29 suites) | TSC 0 errores | Build OK
+**Tests:** 1537 passing (45 suites) | TSC 0 errores | Build OK
 **Deploy:** https://fenix-brands-one.vercel.app
+**Sesión 22/04/2026:** PricingPage — módulo Precios (ver abajo)
 **Sesión 04/04/2026:** Config editable — Etapas 2-5 (ver abajo)
 **Sesión 30/03/2026:** Ver log detallado abajo
 **Sesión 24/03/2026:** Ver log detallado abajo
@@ -39,6 +41,14 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 ---
 
 ## Proximo trabajo
+
+**Pricing — PARCIAL (22/04/2026):**
+- ✅ Domain puro: `calcMBP`, `calcMBM`, `isNovelty` (reutilizada de depots), `getPromotionStatus` placeholder
+- ✅ Query: `fetchPrices` con dedup por `sku_comercial` + filtro de marca server-side
+- ✅ UI: tabla agrupada Marca→SKU con pagination, stats (SKUs, MBP prom, MBM prom, margen negativo)
+- ✅ Permiso `canViewPricing` (super_user + gerencia), ruta `/precios`, sidebar debajo de Depósitos
+- ⚠️ Promoción Activa: `getPromotionStatus` retorna `{ active: false, markdownPct: 0 }` hasta que el cliente defina fuente de datos (posibles: flag + % en `dim_maestro_comercial`, comparación histórica, tabla dedicada `promociones`)
+- TODO: pedir criterio a Rodrigo/Derlys para Promoción Activa
 
 **Config editable — COMPLETA (Etapas 2-5):**
 - ✅ Comisiones: 8 escalas en `config_commission_scale` → loop completo BD→UI
@@ -119,6 +129,11 @@ src/
   domain/config/schemas.ts         — Validación sin Zod: ValidationResult<T>, numericField, validateXxxConfig
   domain/config/loader.ts          — resolveParam, resolveStoreConfig, resolveCommissionScales (remote→validate→fallback)
   queries/config.queries.ts        — fetchAppParams, fetchStoreConfig, fetchCommissionScales (authClient)
+  domain/pricing/calculations.ts   — MBP%, MBM% (puros), re-export isNovelty, getPromotionStatus (TODO cliente)
+  queries/pricing.queries.ts       — fetchPrices: dedup por sku_comercial, filtro marca server-side
+  features/pricing/PricingPage.tsx — Página Precios: stats + tabla agrupada Marca→SKU con pagination
+  features/pricing/hooks/usePricing.ts — Hook TanStack (patrón useMarketingInventory)
+  features/pricing/components/PricingTable.tsx — Tabla con columnas MBP%/MBM%/Novedad/Promoción
   hooks/useConfig.ts               — 7 hooks: useWaterfallConfig, useDepotConfig, useFreshnessConfig, useExecutiveConfig, useMarginConfig, useStoreConfig, useCommissionScales
 ```
 
@@ -136,6 +151,77 @@ src/
 - `docs/ETAPA_2_3_CONFIG_IMPLEMENTATION.md` — Documentación completa Etapas 2-5 + seed + estado final
 - `docs/scope freeze + inventario final.md` — Auditoría de ~95 constantes de negocio, clasificación, mapa de impacto
 - `docs/safety net de tests.md` — Auditoría de fragilidad de tests, migración a contract tests
+
+---
+
+## Sesión 22/04/2026 — PricingPage: módulo Precios
+
+**Objetivo:** Nueva página `/precios` para visualizar PVP, PVM, costo y márgenes por SKU comercial, con badge de Novedad y Promoción Activa. Patrón: `useMarketingInventory` para el hook, `PurchasePlanningTab` para stats+tabla+pagination.
+
+### Fuentes de datos
+
+| Campo | Tabla BD | Columna | Archivo |
+|-------|----------|---------|---------|
+| PVP (precio retail) | `mv_stock_tienda` | `price` | `src/queries/pricing.queries.ts` |
+| PVM (precio mayorista) | `mv_stock_tienda` | `price_may` | `src/queries/pricing.queries.ts` |
+| Costo unitario | `mv_stock_tienda` | `cost` | `src/queries/pricing.queries.ts` |
+| SKU Comercial (clave dedup) | `mv_stock_tienda` | `sku_comercial` | `src/queries/pricing.queries.ts` |
+| Novedad | `mv_stock_tienda` | `est_comercial` (= "lanzamiento") | `src/domain/depots/calculations.ts` (canónica, re-exportada) |
+| Promoción Activa | — | **PENDIENTE definición cliente** | `src/domain/pricing/calculations.ts` (placeholder) |
+
+### Arquitectura
+
+```
+mv_stock_tienda (multi-row por sku×tienda×talle)
+  → fetchPrices(brandCanonical?)
+    → dedup por sku_comercial (primera row non-zero para price/price_may/cost)
+    → filtro marca server-side (.eq("brand", brandCanonical))
+  → usePricing (TanStack Query v5, staleTime 30min, gcTime 60min)
+    → PricingPage (stats: SKUs, MBP prom, MBM prom, margen negativo)
+      → PricingTable (agrupación visual Marca→SKU, pagination FEATURE_PAGE_SIZE)
+```
+
+### Archivos creados
+
+| Archivo | Propósito |
+|---------|-----------|
+| `src/domain/pricing/calculations.ts` | Funciones puras: `calcMBP`, `calcMBM`, `getPromotionStatus` placeholder. Re-exporta `isNovelty` de depots (fuente canónica). |
+| `src/domain/pricing/__tests__/calculations.test.ts` | 25 tests: casos normales, edge cases (precio 0, precio negativo, costo > precio, costo negativo, no-NaN-ni-Infinity, idempotencia promo) |
+| `src/queries/pricing.queries.ts` | `fetchPrices()` con dedup por sku_comercial + filtro marca |
+| `src/features/pricing/PricingPage.tsx` | Shell: header + DataFreshnessTag + 4 StatCards + PricingTable |
+| `src/features/pricing/hooks/usePricing.ts` | Hook TanStack (copia fiel patrón `useMarketingInventory`) |
+| `src/features/pricing/components/PricingTable.tsx` | Tabla: 9 columnas (Producto, Línea, Costo, PVP, MBP%, PVM, MBM%, Novedad, Promoción), agrupación visual con section-row por marca, pagination |
+
+### Archivos modificados
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/domain/depots/calculations.ts` | Exportados `NOVELTY_STATUS` + `isNovelty()` (eran internos). Cero cambio funcional en depots. |
+| `src/domain/auth/types.ts` | `canViewPricing: boolean` agregado a Permissions (3 branches + EMPTY_PERMISSIONS). Default: true para super_user/gerencia, false para negocio. |
+| `src/App.tsx` | Lazy import `PricingPage` + Route `/precios` con `PermissionGuard allowed={(p) => p.canViewPricing}` |
+| `src/layout/AppSidebar.tsx` | Import `TableIcon` + item "Precios" al final del grupo Comercial (debajo de Depósitos) |
+| `src/layout/AppHeader.tsx` | `/precios` agregado a `hasInPageFilters` → solo filtro de marca visible en header |
+| `src/queries/keys.ts` | `pricingKeys` factory + `list(brand)` |
+
+### Estado
+
+- **Tests:** 1537 passing (+25 nuevos) | TSC 0 errores | Build OK
+- **Lint:** 0 errores (2 warnings pre-existentes en useMarketingProducts.ts, no de esta sesión)
+- **Permiso:** `canViewPricing` — mismo cutoff que `/depositos` (super_user + gerencia)
+
+### Pendiente cliente (Rodrigo/Derlys)
+
+- **Promoción Activa:** fuente de datos sin definir. `getPromotionStatus(sku)` retorna `{ active: false, markdownPct: 0 }` hasta resolver. Opciones evaluadas:
+  - Campo nuevo en `dim_maestro_comercial` (flag promo + %)
+  - Comparar precio actual vs histórico para inferir markdown
+  - Tabla/vista dedicada `promociones` con vigencia por SKU
+
+### Lecciones aprendidas del repo (para PR/Basecamp)
+
+- `isNovelty` ya vivía en `domain/depots/calculations.ts` como const local — la saqué a export para reutilizar sin duplicar.
+- La convención `varsIgnorePattern "^_"` del ESLint del jefe aplica también a `tsc -b` (TS6133) — para params no usados: renombrar a `_foo`, no comentarios eslint-disable.
+- `FEATURE_PAGE_SIZE` está en `domain/config/defaults.ts` — usar esa constante para paginación es la convención, no hardcodear.
+- Filtro global de marca: `useFilters()` lee del context; `brandIdToCanonical(filters.brand)` convierte `"martel"` → `"Martel"` (formato BD).
 
 ---
 
