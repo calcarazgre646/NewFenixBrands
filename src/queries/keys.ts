@@ -148,6 +148,8 @@ export const commissionKeys = {
     ["commissions", "storeLevel", year] as const,
   sellerGoals: (year: number, month: number) =>
     ["commissions", "sellerGoals", year, month] as const,
+  sellerDaily: (year: number, month: number) =>
+    ["commissions", "sellerDaily", year, month] as const,
 };
 
 // ─── Freshness ──────────────────────────────────────────────────────────────
@@ -190,6 +192,9 @@ export const marketingKeys = {
   inventory: (brand?: string | null) => ["marketing", "inventory", brand ?? "total"] as const,
   products: (year: number, period: string, channel: string, brand: string | null) =>
     ["marketing", "products", year, period, channel, brand ?? "total"] as const,
+  emailConfig: () => ["marketing", "emailConfig"] as const,
+  executionsWithEvents: (filters?: Record<string, unknown>) =>
+    ["marketing", "executionsWithEvents", filters ?? {}] as const,
 };
 
 // ─── Cache durations ──────────────────────────────────────────────────────────
