@@ -29,6 +29,38 @@ export interface PricingRow {
 }
 
 /**
+ * Stores excluidos solo de la vista de Precios (extiende la lista canónica).
+ *
+ * `EXCLUDED_STORES` (api/normalize.ts) ya cubre ubicaciones de proceso/producción
+ * sin precio comercial asignado (FABRICA, LAVADO, LUQ-DEP-OUT, PRODUCTO, MP,
+ * ALM-BATAS, etc.).
+ *
+ * `PASEOLAMB` se excluye SOLO acá (Derlys, sistemas Fenix — 27/04/2026).
+ * Es una tienda real (cluster "B" en actionQueue/clusters.ts), por lo que
+ * NO se debe agregar a la canónica — saldría de Acciones/KPIs/Depots y
+ * rompería otras vistas. En esta tienda los precios se cargan inconsistentes
+ * y el cliente nos pidió ocultarla en el reporte de Precios.
+ */
+const PRICING_ONLY_EXCLUDED = new Set<string>(["PASEOLAMB"]);
+
+/**
+ * Causa raíz documentada del ~30% residual de PVM > PVP en tiendas reales
+ * tras aplicar todos los filtros (Derlys, 27/04/2026):
+ *
+ * El ERP da de alta DOS SKUs distintos para representar el mismo producto
+ * comercial cuando una parte del lote va a mayoristas y otra a tiendas:
+ *   - SKU-A → asignado a tiendas (price = precio retail)
+ *   - SKU-B → asignado a mayoristas (price = precio mayorista)
+ *
+ * Como ambos comparten `sku_comercial`, el dedup `Math.max` de fetchPrices
+ * mezcla precios de canales distintos y produce el patrón PVM > PVP.
+ *
+ * Sin un campo en el ERP que distinga sku-tienda vs sku-mayorista, no es
+ * solucionable desde el frontend. Pendiente: que sistemas marque el SKU
+ * con un flag de canal (o que separe los precios reales en otra fuente).
+ */
+
+/**
  * Lista de precios deduplicada por SKU Comercial.
  *
  * Reglas de dedup (un SKU comercial aparece en N tiendas × N talles):
@@ -39,16 +71,13 @@ export interface PricingRow {
  *     hasta 10 valores distintos por SKU (uniformes/outlet/muestras/lanzamiento/...);
  *     un primer-fila-gana sería no-determinístico para el badge Novedad.
  *
- * Filtro de stores (Derlys, sistemas Fenix — 27/04/2026): excluir filas de
- * ubicaciones de proceso/producción (FABRICA, LAVADO, LUQ-DEP-OUT, PRODUCTO,
- * MP, ALM-BATAS, etc.) donde aún no se asignó el precio comercial. En esas
- * filas `price` y `price_may` quedan en estados intermedios que rompen la
- * lógica PVP > PVM. Reutiliza la constante canónica `EXCLUDED_STORES`.
+ * Stores excluidos: unión de `EXCLUDED_STORES` (canónica) + `PRICING_ONLY_EXCLUDED`.
  *
  * Brand filter opcional (null/undefined = todas las marcas).
  */
 export async function fetchPrices(brandCanonical?: string | null): Promise<PricingRow[]> {
-  const excludedList = `(${[...EXCLUDED_STORES].join(",")})`;
+  const allExcluded = [...EXCLUDED_STORES, ...PRICING_ONLY_EXCLUDED];
+  const excludedList = `(${allExcluded.join(",")})`;
   const data = await fetchAllRows<Row>(() => {
     let q = dataClient
       .from("mv_stock_tienda")
