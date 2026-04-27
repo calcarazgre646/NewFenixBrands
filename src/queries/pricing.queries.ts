@@ -9,7 +9,7 @@
  * Sin lógica de negocio — solo fetch + normalización + dedup.
  */
 import { dataClient } from "@/api/client";
-import { toNum, trimStr, normalizeBrand } from "@/api/normalize";
+import { toNum, trimStr, normalizeBrand, EXCLUDED_STORES } from "@/api/normalize";
 import { fetchAllRows } from "@/queries/paginate";
 import { NOVELTY_STATUS } from "@/domain/depots/calculations";
 
@@ -39,9 +39,16 @@ export interface PricingRow {
  *     hasta 10 valores distintos por SKU (uniformes/outlet/muestras/lanzamiento/...);
  *     un primer-fila-gana sería no-determinístico para el badge Novedad.
  *
+ * Filtro de stores (Derlys, sistemas Fenix — 27/04/2026): excluir filas de
+ * ubicaciones de proceso/producción (FABRICA, LAVADO, LUQ-DEP-OUT, PRODUCTO,
+ * MP, ALM-BATAS, etc.) donde aún no se asignó el precio comercial. En esas
+ * filas `price` y `price_may` quedan en estados intermedios que rompen la
+ * lógica PVP > PVM. Reutiliza la constante canónica `EXCLUDED_STORES`.
+ *
  * Brand filter opcional (null/undefined = todas las marcas).
  */
 export async function fetchPrices(brandCanonical?: string | null): Promise<PricingRow[]> {
+  const excludedList = `(${[...EXCLUDED_STORES].join(",")})`;
   const data = await fetchAllRows<Row>(() => {
     let q = dataClient
       .from("mv_stock_tienda")
@@ -49,7 +56,8 @@ export async function fetchPrices(brandCanonical?: string | null): Promise<Prici
         "sku, sku_comercial, description, brand, lineapr, " +
         "est_comercial, price, price_may, cost"
       )
-      .gt("units", 0);
+      .gt("units", 0)
+      .not("store", "in", excludedList);
     if (brandCanonical) q = q.eq("brand", brandCanonical);
     return q;
   });
