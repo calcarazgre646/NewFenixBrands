@@ -11,7 +11,7 @@ import { StatCard } from "@/components/ui/stat-card/StatCard";
 import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
 import { useDataFreshness } from "@/hooks/useDataFreshness";
 import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
-import { calcMBP, calcMBM, isNovelty } from "@/domain/pricing/calculations";
+import { calcMBP, calcMBM, isNovelty, MIN_VALID_PRICE } from "@/domain/pricing/calculations";
 import { usePricing } from "./hooks/usePricing";
 import { PricingTable } from "./components/PricingTable";
 
@@ -25,10 +25,15 @@ export default function PricingPage() {
     }
     let sumMBP = 0, sumMBM = 0, countMBP = 0, countMBM = 0, noveltyCount = 0, negativeMargin = 0;
     for (const r of rows) {
-      if (r.pvp > 0) { sumMBP += calcMBP(r.pvp, r.costo); countMBP++; }
-      if (r.pvm > 0) { sumMBM += calcMBM(r.pvm, r.costo); countMBM++; }
+      // Solo cuenta SKUs con precio Y costo reales (≥ MIN_VALID_PRICE) —
+      // los placeholders ERP (0 ó 1) en cualquiera de los dos lados rompen
+      // el promedio (precios ridículos producen márgenes de ±10⁷ %; costos
+      // ridículos producen márgenes falsos cercanos a 100%).
+      const costoOk = r.costo >= MIN_VALID_PRICE;
+      if (r.pvp >= MIN_VALID_PRICE && costoOk) { sumMBP += calcMBP(r.pvp, r.costo); countMBP++; }
+      if (r.pvm >= MIN_VALID_PRICE && costoOk) { sumMBM += calcMBM(r.pvm, r.costo); countMBM++; }
       if (isNovelty(r.estComercial)) noveltyCount++;
-      if (r.pvp > 0 && r.costo > r.pvp) negativeMargin++;
+      if (r.pvp >= MIN_VALID_PRICE && costoOk && r.costo > r.pvp) negativeMargin++;
     }
     return {
       count: rows.length,

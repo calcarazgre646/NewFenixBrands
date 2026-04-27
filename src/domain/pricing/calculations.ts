@@ -9,13 +9,25 @@
  * @contract percentages
  *   Márgenes en escala 0-100 (no 0-1). Ej: 40% = 40.
  *
- * @contract division-by-zero
- *   Si el precio (PVP o PVM) es ≤ 0, retorna 0. Nunca Infinity ni NaN.
+ * @contract erp-placeholder
+ *   El ERP usa precios `0` y `1` como placeholder de "sin precio asignado".
+ *   Cualquier precio < MIN_VALID_PRICE se trata como ausencia de dato y
+ *   `calcMBP`/`calcMBM` retornan 0 (la UI debe mostrar "—" en ese caso).
+ *   Verificado contra `mv_stock_tienda`: ej. SKU WRCA009862 tiene 6 filas
+ *   con pvp=320000 y 1 fila con pvp=1 — sin este guard, esa fila produce
+ *   MBP de -17 millones de % y arrastra los promedios.
  *
  * @contract negative-margin
- *   Si costo > precio, el margen es NEGATIVO (dato válido: venta a pérdida).
- *   No se clampea a 0.
+ *   Si costo > precio (siendo precio un valor real ≥ MIN_VALID_PRICE),
+ *   el margen es NEGATIVO (dato válido: venta a pérdida). No se clampea.
  */
+
+/**
+ * Umbral por debajo del cual un precio se considera placeholder ERP, no
+ * un precio real. En guaraníes — cualquier producto real cuesta mucho más
+ * que 10 Gs.
+ */
+export const MIN_VALID_PRICE = 10;
 
 // Reutiliza el check de Novedad del feature Depósitos (fuente canónica).
 // Se re-exporta para que consumidores de Pricing tengan un único import.
@@ -26,7 +38,7 @@ export { isNovelty } from "@/domain/depots/calculations";
  * MBP% = (PVP − Costo) / PVP × 100
  */
 export function calcMBP(pvp: number, costo: number): number {
-  if (pvp <= 0) return 0;
+  if (pvp < MIN_VALID_PRICE) return 0;
   return ((pvp - costo) / pvp) * 100;
 }
 
@@ -35,7 +47,7 @@ export function calcMBP(pvp: number, costo: number): number {
  * MBM% = (PVM − Costo) / PVM × 100
  */
 export function calcMBM(pvm: number, costo: number): number {
-  if (pvm <= 0) return 0;
+  if (pvm < MIN_VALID_PRICE) return 0;
   return ((pvm - costo) / pvm) * 100;
 }
 

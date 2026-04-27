@@ -11,6 +11,7 @@
 import { dataClient } from "@/api/client";
 import { toNum, trimStr, normalizeBrand } from "@/api/normalize";
 import { fetchAllRows } from "@/queries/paginate";
+import { NOVELTY_STATUS } from "@/domain/depots/calculations";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
@@ -22,7 +23,6 @@ export interface PricingRow {
   brand:        string;
   linea:        string;
   estComercial: string;   // para isNovelty() en el render
-  carryOver:    boolean;
   pvp:          number;   // precio retail
   pvm:          number;   // precio mayorista
   costo:        number;
@@ -30,9 +30,16 @@ export interface PricingRow {
 
 /**
  * Lista de precios deduplicada por SKU Comercial.
- * - Si el mismo sku_comercial aparece en múltiples tiendas/talles,
- *   toma la primera fila con precio > 0 (precios son invariantes por tienda).
- * - Brand filter opcional (null/undefined = todas las marcas).
+ *
+ * Reglas de dedup (un SKU comercial aparece en N tiendas × N talles):
+ *   - Precios y costo: max observado. Precios son invariantes por SKU; el ERP
+ *     a veces inserta filas con placeholders (price=1, price_may=1) que NO deben
+ *     ganar sobre filas con el precio real.
+ *   - estComercial: gana "lanzamiento" si aparece en ALGUNA fila. El ERP usa
+ *     hasta 10 valores distintos por SKU (uniformes/outlet/muestras/lanzamiento/...);
+ *     un primer-fila-gana sería no-determinístico para el badge Novedad.
+ *
+ * Brand filter opcional (null/undefined = todas las marcas).
  */
 export async function fetchPrices(brandCanonical?: string | null): Promise<PricingRow[]> {
   const data = await fetchAllRows<Row>(() => {
@@ -40,7 +47,7 @@ export async function fetchPrices(brandCanonical?: string | null): Promise<Prici
       .from("mv_stock_tienda")
       .select(
         "sku, sku_comercial, description, brand, lineapr, " +
-        "est_comercial, carry_over, price, price_may, cost"
+        "est_comercial, price, price_may, cost"
       )
       .gt("units", 0);
     if (brandCanonical) q = q.eq("brand", brandCanonical);
@@ -58,6 +65,7 @@ export async function fetchPrices(brandCanonical?: string | null): Promise<Prici
     const pvp   = toNum(r.price);
     const pvm   = toNum(r.price_may);
     const costo = toNum(r.cost);
+    const est   = trimStr(r.est_comercial);
 
     const existing = byKey.get(key);
     if (!existing) {
@@ -67,15 +75,15 @@ export async function fetchPrices(brandCanonical?: string | null): Promise<Prici
         description:  trimStr(r.description) || "Sin descripción",
         brand:        normalizeBrand(r.brand),
         linea:        trimStr(r.lineapr) || "Sin línea",
-        estComercial: trimStr(r.est_comercial),
-        carryOver:    trimStr(r.carry_over).toUpperCase() === "SI",
+        estComercial: est,
         pvp, pvm, costo,
       });
     } else {
-      // Upgrade sólo si el existing tiene precios en 0 y el nuevo no.
-      if (existing.pvp === 0 && pvp > 0) existing.pvp = pvp;
-      if (existing.pvm === 0 && pvm > 0) existing.pvm = pvm;
-      if (existing.costo === 0 && costo > 0) existing.costo = costo;
+      if (pvp > existing.pvp) existing.pvp = pvp;
+      if (pvm > existing.pvm) existing.pvm = pvm;
+      if (costo > existing.costo) existing.costo = costo;
+      // "lanzamiento" (NOVELTY_STATUS) en cualquier fila marca el SKU como novedad.
+      if (est === NOVELTY_STATUS) existing.estComercial = NOVELTY_STATUS;
     }
   }
 

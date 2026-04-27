@@ -5,7 +5,7 @@
  * Patrón visual: PurchasePlanningTab (stats arriba + tabla + paginación).
  */
 import { useState, useMemo } from "react";
-import { calcMBP, calcMBM, isNovelty, getPromotionStatus } from "@/domain/pricing/calculations";
+import { calcMBP, calcMBM, isNovelty, getPromotionStatus, MIN_VALID_PRICE } from "@/domain/pricing/calculations";
 import { formatPYGSuffix } from "@/utils/format";
 import { FEATURE_PAGE_SIZE } from "@/domain/config/defaults";
 import type { PricingRow } from "@/queries/pricing.queries";
@@ -59,7 +59,7 @@ export function PricingTable({ rows }: { rows: PricingRow[] }) {
               const promo = getPromotionStatus(row.skuComercial || row.sku);
               return (
                 <BrandGroupRow
-                  key={row.sku + row.skuComercial}
+                  key={row.skuComercial || row.sku}
                   row={row}
                   mbp={mbp}
                   mbm={mbm}
@@ -129,14 +129,14 @@ function BrandGroupRow({ row, mbp, mbm, novelty, promo, showBrandHeader }: RowPr
         <td className="whitespace-nowrap px-3 py-2.5 text-right text-[11px] tabular-nums text-gray-900 dark:text-white">
           {formatPYGSuffix(row.pvp)}
         </td>
-        <td className={`whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-semibold tabular-nums ${marginColor(mbp, row.pvp)}`}>
-          {formatMargin(mbp, row.pvp)}
+        <td className={`whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-semibold tabular-nums ${marginColor(mbp, row.pvp, row.costo)}`}>
+          {formatMargin(mbp, row.pvp, row.costo)}
         </td>
         <td className="whitespace-nowrap px-3 py-2.5 text-right text-[11px] tabular-nums text-gray-700 dark:text-gray-300">
           {formatPYGSuffix(row.pvm)}
         </td>
-        <td className={`whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-semibold tabular-nums ${marginColor(mbm, row.pvm)}`}>
-          {formatMargin(mbm, row.pvm)}
+        <td className={`whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-semibold tabular-nums ${marginColor(mbm, row.pvm, row.costo)}`}>
+          {formatMargin(mbm, row.pvm, row.costo)}
         </td>
         <td className="whitespace-nowrap px-3 py-2.5 text-center">
           <YesNoPill yes={novelty} />
@@ -149,13 +149,18 @@ function BrandGroupRow({ row, mbp, mbm, novelty, promo, showBrandHeader }: RowPr
   );
 }
 
-function formatMargin(value: number, basePrice: number): string {
-  if (basePrice <= 0) return "—";
+/** Margen no es calculable si el precio base o el costo son placeholders ERP. */
+function isPlaceholderMargin(basePrice: number, costo: number): boolean {
+  return basePrice < MIN_VALID_PRICE || costo < MIN_VALID_PRICE;
+}
+
+function formatMargin(value: number, basePrice: number, costo: number): string {
+  if (isPlaceholderMargin(basePrice, costo)) return "—";
   return `${value.toFixed(1)}%`;
 }
 
-function marginColor(value: number, basePrice: number): string {
-  if (basePrice <= 0) return "text-gray-300 dark:text-gray-600";
+function marginColor(value: number, basePrice: number, costo: number): string {
+  if (isPlaceholderMargin(basePrice, costo)) return "text-gray-300 dark:text-gray-600";
   if (value < 0) return "text-error-600 dark:text-error-400";
   if (value < 20) return "text-warning-600 dark:text-warning-400";
   return "text-success-600 dark:text-success-400";
