@@ -11,7 +11,7 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 
 ---
 
-## Estado actual (actualizado 04/04/2026)
+## Estado actual (actualizado 27/04/2026)
 
 | Fase | Feature | Estado |
 |------|---------|--------|
@@ -25,10 +25,12 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 5 | CalendarPage (`/calendario`) — FullCalendar + CRUD + Realtime + Llegadas logística | ✅ COMPLETO + AUDITADO |
 | 6 | UsersPage (`/usuarios`) — CRUD completo, Edge Function, cambio contraseña | ✅ COMPLETO + AUDITADO |
 | 6B | DepotsPage (`/depositos`) — Filtros estandarizados in-page + Novedades/Lanzamientos | ✅ COMPLETO + AUDITADO |
-| 7 | CommissionsPage (`/comisiones`) — Comisiones por vendedor, datos reales, 8 escalas | ⚠️ PARCIAL — esperando datos de Fenix |
+| 7 | CommissionsPage (`/comisiones`) — Comisiones por vendedor, datos reales, 8 escalas | ⚠️ PARCIAL — Mayorista/UTP esperando datos de Fenix |
+| 8A | ProjectionPage (`/proyeccion-vendedor`) — gerencia/super_user, run-rate lineal + comisiones proyectadas | ✅ COMPLETO |
+| 8B | MyProjectionPage (`/mi-proyeccion`) — vista personal del vendedor (rol nuevo `vendedor`) | ✅ COMPLETO |
 
 **La app corre:** `npm run dev` → http://localhost:5173
-**Tests:** 1060 passing (29 suites) | TSC 0 errores | Build OK
+**Tests:** 1543 passing (45 suites) | TSC 0 errores | Build OK | ESLint 0 errores
 **Deploy:** https://fenix-brands-one.vercel.app
 **Sesión 04/04/2026:** Config editable — Etapas 2-5 (ver abajo)
 **Sesión 30/03/2026:** Ver log detallado abajo
@@ -61,6 +63,25 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 - SQL y spec completa en `docs/COMISIONES_DATA_SPEC.md`
 - Datos de cobranza en `c_cobrar` (para comision Mayorista/UTP)
 - Ver preguntas pendientes en `docs/COMISIONES_DATA_SPEC.md`
+
+**Proyección por Vendedor — IMPLEMENTADO (sesión 27/04/2026):**
+- Modelo: run-rate lineal diario (`venta_acum / dias_transcurridos`).
+- Domain puro: `src/domain/projections/{types,calculations}.ts` + 30 tests.
+- Asimetría retail vs mayorista resuelta en `useSellerProjections`:
+  - Retail: cumplimiento + tramo derivados de la TIENDA proyectada; comisión vendedor = ventaProyectadaVendedor × tramoTienda.
+  - Mayorista/UTP: cumplimiento individual; "Pendiente" cuando no hay meta cargada.
+- Vista gerencia (`/proyeccion-vendedor`) → todos los vendedores + filtros mes/canal.
+- Vista personal (`/mi-proyeccion`) → 4 KPIs personales + 3 cards "actual" + gráfico ApexCharts día×día (real + proyección + meta lineal + anotación "Hoy").
+- Reusa motor de comisiones (`calcCommission` con `cobranzaReal=0`) → si Rodrigo cambia escalas en Configuración, la proyección se actualiza sola.
+- Limitaciones: cobranza no proyectada (espera `c_cobrar`); Mayorista/UTP sin meta queda en "Pendiente".
+
+**Rol nuevo `vendedor` (sesión 27/04/2026):**
+- 4to rol del sistema (`super_user | gerencia | negocio | vendedor`).
+- Permisos vacíos excepto `canViewMyProjection: true` (siempre, incluso sin código asignado para que vea el cartel "vincular código").
+- Default route: `/mi-proyeccion`.
+- Mapeo a vendedor del ERP: columna `profiles.vendedor_codigo INTEGER` (migration 023). 1:1, sin FK (cross-DB).
+- Crear vendedor: modal `/usuarios → Crear` ahora pide código en la misma pantalla (required cuando rol = vendedor).
+- Edge Function `manage-user` actualizada para persistir `vendedor_codigo` en el INSERT (deployada 27/04/2026 a `uxtzzcjimvapjpkeruwb`).
 
 **Deuda SettingsPage:** Posible contenido restante:
 - Perfil de usuario (nombre, foto, cambiar contraseña)
@@ -101,6 +122,14 @@ src/
   domain/logistics/types.ts      — Tipos logística (ArrivalStatus, LogisticsGroup, etc.)
   domain/logistics/arrivals.ts   — Funciones puras: toArrivals, groupArrivals, computeSummary
   domain/logistics/calendar.ts   — Funciones puras: groupsToCalendarItems, arrivalsByDay (proyeccion logistica→calendario)
+  domain/projections/types.ts   — DailySalePoint, SellerProjection, DailyProjectionPoint, BuildProjectionInput
+  domain/projections/calculations.ts — calcDailyRunRate, projectMonthEnd, resolveMonthTime, buildSellerProjection, buildDailyProjectionSeries
+  features/projections/hooks/useSellerProjections.ts — orquesta 4 queries + asimetría retail/mayorista (vista gerencia)
+  features/projections/hooks/useMyProjection.ts — wrapper que filtra por profile.vendedorCodigo + serie diaria personal
+  features/projections/ProjectionPage.tsx — `/proyeccion-vendedor` (vista gerencia)
+  features/projections/MyProjectionPage.tsx — `/mi-proyeccion` (vista vendedor + cartel "vincular código")
+  features/projections/components/ProjectionTable.tsx — tabla paginada (gerencia)
+  features/projections/components/ProjectionChart.tsx — ApexCharts area+line (real, proyección, meta) + anotación "Hoy"
   context/FilterContext.tsx     — useFilters() — estado global de filtros
   queries/sales.queries.ts      — fetchMonthlySales, fetchDailyDetail, fetchBrandBreakdown, fetchTopSkus (con weightPct)...
   queries/inventory.queries.ts  — fetchInventory, fetchInventoryValue
