@@ -18,23 +18,26 @@ export interface UserProfileRow {
   cargo:              string | null;
   isActive:           boolean;
   mustChangePassword: boolean;
+  vendedorCodigo:     number | null;
   updatedAt:          string;
 }
 
 export interface ProfileUpdate {
-  fullName?:     string;
-  cargo?:        string | null;
-  role?:         Role;
-  channelScope?: ChannelScope;
-  isActive?:     boolean;
+  fullName?:       string;
+  cargo?:          string | null;
+  role?:           Role;
+  channelScope?:   ChannelScope;
+  isActive?:       boolean;
+  vendedorCodigo?: number | null;
 }
 
 export interface CreateUserData {
-  email:        string;
-  fullName:     string;
-  role:         Role;
-  channelScope: ChannelScope;
-  cargo:        string | null;
+  email:           string;
+  fullName:        string;
+  role:            Role;
+  channelScope:    ChannelScope;
+  cargo:           string | null;
+  vendedorCodigo:  number | null;
 }
 
 // ─── Fetch ───────────────────────────────────────────────────────────────────
@@ -42,7 +45,7 @@ export interface CreateUserData {
 export async function fetchAllProfiles(): Promise<UserProfileRow[]> {
   const { data, error } = await authClient
     .from("profiles")
-    .select("id, role, channel_scope, full_name, cargo, is_active, must_change_password, updated_at")
+    .select("id, role, channel_scope, full_name, cargo, is_active, must_change_password, vendedor_codigo, updated_at")
     .order("full_name");
 
   if (error) throw new Error(`fetchAllProfiles: ${error.message}`);
@@ -55,6 +58,7 @@ export async function fetchAllProfiles(): Promise<UserProfileRow[]> {
     cargo:        r.cargo ?? null,
     isActive:           r.is_active ?? true,
     mustChangePassword: r.must_change_password ?? false,
+    vendedorCodigo:     r.vendedor_codigo ?? null,
     updatedAt:          r.updated_at ?? "",
   }));
 }
@@ -71,6 +75,7 @@ export async function updateProfile(
   if (updates.role !== undefined)         dbUpdates.role          = updates.role;
   if (updates.channelScope !== undefined) dbUpdates.channel_scope = updates.channelScope;
   if (updates.isActive !== undefined)     dbUpdates.is_active     = updates.isActive;
+  if (updates.vendedorCodigo !== undefined) dbUpdates.vendedor_codigo = updates.vendedorCodigo;
 
   const { error } = await authClient
     .from("profiles")
@@ -134,6 +139,7 @@ export async function createUser(
     role: data.role,
     channelScope: data.channelScope,
     cargo: data.cargo,
+    vendedorCodigo: data.vendedorCodigo,
   });
 
   return result as { id: string; email: string };

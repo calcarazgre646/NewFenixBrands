@@ -25,7 +25,7 @@ interface UserEditModalProps {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const ALL_ROLES: Role[] = ["super_user", "gerencia", "negocio"];
+const ALL_ROLES: Role[] = ["super_user", "gerencia", "negocio", "vendedor"];
 const ALL_SCOPES = ["b2c", "b2b", "b2b_mayoristas", "b2b_utp", "total"] as const;
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -44,6 +44,9 @@ export function UserEditModal({
   const [role, setRole] = useState<Role>(profile.role);
   const [channelScope, setChannelScope] = useState<ChannelScope>(profile.channelScope);
   const [isActive, setIsActive] = useState(profile.isActive);
+  const [vendedorCodigo, setVendedorCodigo] = useState<string>(
+    profile.vendedorCodigo != null ? String(profile.vendedorCodigo) : "",
+  );
 
   // Auto-limpiar channel_scope si cambia a rol que no lo usa
   useEffect(() => {
@@ -62,6 +65,10 @@ export function UserEditModal({
     if (role !== profile.role) updates.role = role;
     if (channelScope !== profile.channelScope) updates.channelScope = channelScope;
     if (isActive !== profile.isActive) updates.isActive = isActive;
+
+    const trimmedCodigo = vendedorCodigo.trim();
+    const newCodigo = trimmedCodigo === "" ? null : Number(trimmedCodigo);
+    if (newCodigo !== profile.vendedorCodigo) updates.vendedorCodigo = newCodigo;
 
     // Si no hay cambios, cerrar
     if (Object.keys(updates).length === 0) {
@@ -154,6 +161,26 @@ export function UserEditModal({
             </select>
           </div>
         )}
+
+        {/* Código de vendedor (mapeo a fjdhstvta1.v_vended) */}
+        <div>
+          <label htmlFor="edit-vendedorCodigo" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Código de vendedor
+          </label>
+          <input
+            id="edit-vendedorCodigo"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            value={vendedorCodigo}
+            onChange={(e) => setVendedorCodigo(e.target.value)}
+            placeholder="Vacío si no es vendedor"
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          />
+          <p className="mt-1 text-[11px] text-gray-400">
+            Habilita la vista &laquo;Mi Proyección&raquo;. Debe coincidir con el código del ERP.
+          </p>
+        </div>
 
         {/* Estado activo */}
         <div>

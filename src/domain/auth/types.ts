@@ -11,7 +11,7 @@
 // ─── Roles ──────────────────────────────────────────────────────────────────────
 
 /** Roles del sistema. Ordenados de mayor a menor privilegio. */
-export type Role = "super_user" | "gerencia" | "negocio";
+export type Role = "super_user" | "gerencia" | "negocio" | "vendedor";
 
 /**
  * Scope de canal para usuarios con rol 'negocio'.
@@ -35,6 +35,8 @@ export interface UserProfile {
   cargo:              string | null;
   isActive:           boolean;
   mustChangePassword: boolean;
+  /** Código de vendedor en la BD operacional (fjdhstvta1.v_vended). null = no es vendedor. */
+  vendedorCodigo:     number | null;
 }
 
 // ─── Permissions ────────────────────────────────────────────────────────────────
@@ -51,7 +53,12 @@ export interface Permissions {
   canViewPricing:   boolean;
   canViewCalendar:  boolean;
   canViewCommissions: boolean;
+  canViewSellerProjections: boolean;
+  /** Vista personal del vendedor (sólo si está mapeado a un vendedor_codigo) */
+  canViewMyProjection: boolean;
   canViewMarketing: boolean;
+  /** Editar config del remitente de email marketing (from alias, destinatarios de prueba) */
+  canConfigureEmailSender: boolean;
   /** Gestión (futuro SettingsPage) */
   canManageUsers:   boolean;
   /** Filtro de canal bloqueado (usuario no puede cambiarlo) */
@@ -73,6 +80,8 @@ export function derivePermissions(profile: UserProfile | null): Permissions {
 
   const { role, channelScope } = profile;
 
+  const isSeller = profile.vendedorCodigo != null;
+
   if (role === "super_user" || role === "gerencia") {
     return {
       canViewExecutive: true,
@@ -84,9 +93,40 @@ export function derivePermissions(profile: UserProfile | null): Permissions {
       canViewPricing:   true,
       canViewCalendar:  true,
       canViewCommissions: true,
+      canViewSellerProjections: true,
+      // Gerencia/super_user mapeados a un vendedor también pueden ver su vista personal
+      canViewMyProjection: isSeller,
       canViewMarketing: true,
+      canConfigureEmailSender: role === "super_user",
       canManageUsers:   role === "super_user",
       isChannelLocked:  false,
+      lockedChannel:    null,
+    };
+  }
+
+  if (role === "vendedor") {
+    // Vendedor: vista mínima. Solo "Mi Proyección".
+    // Su data está restringida a su propio vendedor_codigo (la página filtra por
+    // profile.vendedorCodigo en el hook useMyProjection).
+    // Permitimos canViewMyProjection=true incluso sin código asignado: la página
+    // muestra un cartel pidiendo al admin que asigne el código (mejor UX que
+    // mandarlo a /signin).
+    return {
+      canViewExecutive: false,
+      canViewKpis:      false,
+      canViewSales:     false,
+      canViewActions:   false,
+      canViewLogistics: false,
+      canViewDepots:    false,
+      canViewPricing:   false,
+      canViewCalendar:  false,
+      canViewCommissions: false,
+      canViewSellerProjections: false,
+      canViewMyProjection: true,
+      canViewMarketing: false,
+      canConfigureEmailSender: false,
+      canManageUsers:   false,
+      isChannelLocked:  true,
       lockedChannel:    null,
     };
   }
@@ -102,7 +142,10 @@ export function derivePermissions(profile: UserProfile | null): Permissions {
     canViewPricing:   false,
     canViewCalendar:  true,
     canViewCommissions: false,
+    canViewSellerProjections: false,
+    canViewMyProjection: isSeller,
     canViewMarketing: false,
+    canConfigureEmailSender: false,
     canManageUsers:   false,
     isChannelLocked:  channelScope !== "total" && channelScope !== null,
     lockedChannel:    channelScope,
@@ -120,7 +163,10 @@ const EMPTY_PERMISSIONS: Permissions = {
   canViewPricing:   false,
   canViewCalendar:  false,
   canViewCommissions: false,
+  canViewSellerProjections: false,
+  canViewMyProjection: false,
   canViewMarketing: false,
+  canConfigureEmailSender: false,
   canManageUsers:   false,
   isChannelLocked:  true,
   lockedChannel:    null,
@@ -133,6 +179,7 @@ export function getDefaultRoute(permissions: Permissions): string {
   if (permissions.canViewExecutive) return "/";
   if (permissions.canViewSales) return "/ventas";
   if (permissions.canViewCalendar) return "/calendario";
+  if (permissions.canViewMyProjection) return "/mi-proyeccion";
   return "/signin";
 }
 
@@ -208,5 +255,6 @@ export function getRoleLabel(role: Role): string {
     case "super_user": return "Super User";
     case "gerencia":   return "Gerencia";
     case "negocio":    return "Negocio";
+    case "vendedor":   return "Vendedor";
   }
 }

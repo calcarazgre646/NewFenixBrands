@@ -111,12 +111,15 @@ Deno.serve(async (req) => {
 
 async function handleCreate(
   client: SupabaseClient,
-  body: { email: string; fullName: string; role: string; channelScope: string | null; cargo: string | null },
+  body: { email: string; fullName: string; role: string; channelScope: string | null; cargo: string | null; vendedorCodigo?: number | null },
 ) {
   const { email, fullName, role, cargo } = body;
   // Guard: JSON "null" string → real null (prevents storing 'null'/'NULL' as text)
   const channelScope = body.channelScope && body.channelScope !== "null" && body.channelScope !== "NULL"
     ? body.channelScope
+    : null;
+  const vendedorCodigo = typeof body.vendedorCodigo === "number" && Number.isFinite(body.vendedorCodigo)
+    ? body.vendedorCodigo
     : null;
 
   if (!email || !fullName) {
@@ -151,6 +154,7 @@ async function handleCreate(
       channel_scope: channelScope,
       cargo: cargo,
       full_name: fullName,
+      vendedor_codigo: vendedorCodigo,
       must_change_password: true,
     })
     .eq("id", userId);

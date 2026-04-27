@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { Spinner } from "@/components/ui/spinner/Spinner";
 import type { SamTemplate, MessageChannel } from "@/domain/marketing/types";
+import { useEmailConfig } from "../hooks/useEmailConfig";
 
 interface Props {
   template: SamTemplate | null;
@@ -24,6 +25,10 @@ export function TemplateFormModal({ template, onSave, onClose, isSaving }: Props
   const [subject, setSubject] = useState(template?.subject ?? "");
   const [body, setBody] = useState(template?.body ?? "");
 
+  const { config, sendTest, isSending, sendError } = useEmailConfig();
+  const [selectedRecipient, setSelectedRecipient] = useState<string>("");
+  const [testFeedback, setTestFeedback] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const data = {
@@ -40,6 +45,46 @@ export function TemplateFormModal({ template, onSave, onClose, isSaving }: Props
   function insertVariable(v: string) {
     setBody((prev) => prev + v);
   }
+
+  async function handleSendTest() {
+    setTestFeedback(null);
+    const recipients = config?.testRecipients ?? [];
+    if (recipients.length === 0) {
+      setTestFeedback({
+        kind: "err",
+        msg: "Configurá al menos un destinatario de prueba en la pestaña Configuración.",
+      });
+      return;
+    }
+    const toEmail = selectedRecipient || recipients[0];
+
+    // Si hay cambios no guardados necesitamos un template_id. Exige guardar primero.
+    if (!isEdit) {
+      setTestFeedback({
+        kind: "err",
+        msg: "Guardá el template primero para poder enviar una prueba.",
+      });
+      return;
+    }
+
+    try {
+      await sendTest({
+        templateId: template!.id,
+        toEmail,
+        overrideSubject: subject || null,
+        overrideBody: body,
+      });
+      setTestFeedback({ kind: "ok", msg: `Enviado a ${toEmail}. Revisá la bandeja.` });
+    } catch (e) {
+      setTestFeedback({
+        kind: "err",
+        msg: e instanceof Error ? e.message : "Error enviando prueba",
+      });
+    }
+  }
+
+  const canSendTest = channel === "email" && isEdit && !!body && !!subject;
+  const recipients = config?.testRecipients ?? [];
 
   // Simple preview replacing variables with sample data
   const preview = body
@@ -108,6 +153,57 @@ export function TemplateFormModal({ template, onSave, onClose, isSaving }: Props
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm whitespace-pre-wrap dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
                 {preview}
               </div>
+            </div>
+          )}
+
+          {/* Enviar prueba (solo email, solo templates guardados) */}
+          {channel === "email" && isEdit && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex-1">
+                  <div className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Enviar prueba
+                  </div>
+                  <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                    Manda este template (con los cambios actuales como override) a uno de los
+                    destinatarios configurados.
+                  </div>
+                </div>
+                {recipients.length > 1 && (
+                  <select
+                    aria-label="Destinatario de prueba"
+                    value={selectedRecipient || recipients[0]}
+                    onChange={(e) => setSelectedRecipient(e.target.value)}
+                    className="rounded-lg border border-gray-200 px-2 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                  >
+                    {recipients.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  type="button"
+                  onClick={handleSendTest}
+                  disabled={!canSendTest || isSending}
+                  className="inline-flex items-center gap-2 rounded-lg border border-brand-500 bg-white px-3 py-1.5 text-xs font-medium text-brand-500 hover:bg-brand-50 disabled:opacity-50 dark:bg-transparent dark:hover:bg-brand-500/10"
+                >
+                  {isSending && <Spinner />}
+                  Enviar prueba
+                </button>
+              </div>
+              {(testFeedback || sendError) && (
+                <p
+                  className={`mt-2 text-[11px] ${
+                    testFeedback?.kind === "ok"
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-red-600 dark:text-red-400"
+                  }`}
+                >
+                  {testFeedback?.msg ?? sendError}
+                </p>
+              )}
             </div>
           )}
 

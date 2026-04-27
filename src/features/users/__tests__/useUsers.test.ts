@@ -27,6 +27,7 @@ function makeRow(overrides: Partial<UserProfileRow> = {}): UserProfileRow {
     cargo: "Gerente",
     isActive: true,
     mustChangePassword: false,
+    vendedorCodigo: null,
     updatedAt: "2026-03-14",
     ...overrides,
   };
@@ -41,6 +42,7 @@ function makeProfile(overrides: Partial<UserProfile> = {}): UserProfile {
     cargo: "Gerente",
     isActive: true,
     mustChangePassword: false,
+    vendedorCodigo: null,
     ...overrides,
   };
 }

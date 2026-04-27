@@ -84,11 +84,12 @@ describe("fetchProfile", () => {
         cargo: "CEO",
         isActive: true,
         mustChangePassword: false,
+        vendedorCodigo: null,
       });
     });
 
     it("maps negocio with b2c scope correctly", async () => {
-      mockSingle.mockResolvedValue({ data: DB_ROW_NEGOCIO_B2C, error: null });
+      mockSingle.mockResolvedValue({ data: { ...DB_ROW_NEGOCIO_B2C, vendedor_codigo: 42 }, error: null });
       const profile = await fetchProfile("uuid-negocio");
 
       expect(profile).toEqual({
@@ -99,6 +100,7 @@ describe("fetchProfile", () => {
         cargo: "Ejecutiva",
         isActive: true,
         mustChangePassword: false,
+        vendedorCodigo: 42,
       });
     });
 
@@ -114,6 +116,7 @@ describe("fetchProfile", () => {
         cargo: "Director",
         isActive: true,
         mustChangePassword: false,
+        vendedorCodigo: null,
       });
     });
 
@@ -132,7 +135,7 @@ describe("fetchProfile", () => {
       await fetchProfile("uuid-super");
 
       expect(mockFrom).toHaveBeenCalledWith("profiles");
-      expect(mockSelect).toHaveBeenCalledWith("id, role, channel_scope, full_name, cargo, is_active, must_change_password");
+      expect(mockSelect).toHaveBeenCalledWith("id, role, channel_scope, full_name, cargo, is_active, must_change_password, vendedor_codigo");
       expect(mockEq).toHaveBeenCalledWith("id", "uuid-super");
     });
   });

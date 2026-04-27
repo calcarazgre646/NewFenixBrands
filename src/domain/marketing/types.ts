@@ -161,3 +161,51 @@ export interface EtlStats {
   tierBreakdown: Record<CustomerTier, number>;
   lastSyncedAt: string | null;
 }
+
+// ─── Email sender / Resend config ───────────────────────────────────────────
+
+export interface SamEmailConfig {
+  id: string;
+  fromEmail: string;
+  fromName: string;
+  replyTo: string | null;
+  testRecipients: string[];
+  isActive: boolean;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SamEmailEvent {
+  id: string;
+  executionId: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface ExecutionWithEvents {
+  execution: SamExecution & {
+    toEmail: string | null;
+    fromEmail: string | null;
+    subjectSnapshot: string | null;
+    isTest: boolean;
+    resendEmailId: string | null;
+    bounceReason: string | null;
+  };
+  events: SamEmailEvent[];
+}
+
+export interface SendTestEmailInput {
+  templateId: string;
+  toEmail: string;
+  customerId?: string | null;
+  overrideSubject?: string | null;
+  overrideBody?: string | null;
+}
+
+export interface SendTestEmailResult {
+  executionId: string | null;
+  resendEmailId: string;
+  status: string;
+}
