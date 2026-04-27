@@ -18,6 +18,7 @@ import {
   WarehouseIcon,
   GroupIcon,
   MegaphoneIcon,
+  TableIcon,
 } from "@/icons";
 import { useSidebar } from "@/hooks/useSidebar";
 import { useAuth } from "@/hooks/useAuth";
@@ -38,6 +39,7 @@ const ALL_MAIN_NAV: NavItem[] = [
   { path: "/acciones",  label: "Centro de Acciones",  icon: <ListIcon />,       allowed: (p) => p.canViewActions },
   { path: "/logistica", label: "Logística",           icon: <ShipIcon />,      allowed: (p) => p.canViewLogistics },
   { path: "/depositos", label: "Depósitos",           icon: <WarehouseIcon />,  allowed: (p) => p.canViewDepots },
+  { path: "/precios",   label: "Precios",             icon: <TableIcon />,      allowed: (p) => p.canViewPricing },
 ];
 
 const ALL_ANALYSIS_NAV: NavItem[] = [

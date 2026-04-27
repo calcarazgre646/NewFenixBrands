@@ -192,6 +192,12 @@ export const marketingKeys = {
     ["marketing", "products", year, period, channel, brand ?? "total"] as const,
 };
 
+// ─── Pricing (precios + margen) ─────────────────────────────────────────────
+export const pricingKeys = {
+  all: ["pricing"] as const,
+  list: (brand?: string | null) => ["pricing", "list", brand ?? "total"] as const,
+};
+
 // ─── Cache durations ──────────────────────────────────────────────────────────
 // 30 min staleTime: dato cambia ~cada 6h, 30 min es conservador.
 // 60 min gcTime: mantener en memoria tras unmount.

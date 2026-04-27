@@ -34,6 +34,7 @@ const SalesPage         = lazy(() => import("@/features/sales/SalesPage"));
 const ActionQueuePage   = lazy(() => import("@/features/action-queue/ActionQueuePage"));
 const LogisticsPage     = lazy(() => import("@/features/logistics/LogisticsPage"));
 const DepotsPage        = lazy(() => import("@/features/depots/DepotsPage"));
+const PricingPage       = lazy(() => import("@/features/pricing/PricingPage"));
 const CalendarPage      = lazy(() => import("@/features/calendar/CalendarPage"));
 const NoAccessPage         = lazy(() => import("@/features/auth/NoAccessPage"));
 const ChangePasswordPage   = lazy(() => import("@/features/auth/ChangePasswordPage"));
@@ -145,6 +146,13 @@ export default function App() {
             <Route path="depositos" element={
               <PermissionGuard allowed={(p) => p.canViewDepots}>
                 <FeatureErrorBoundary feature="Depósitos"><DepotsPage /></FeatureErrorBoundary>
+              </PermissionGuard>
+            } />
+
+            {/* Precios — solo super_user y gerencia */}
+            <Route path="precios" element={
+              <PermissionGuard allowed={(p) => p.canViewPricing}>
+                <FeatureErrorBoundary feature="Precios"><PricingPage /></FeatureErrorBoundary>
               </PermissionGuard>
             } />
 

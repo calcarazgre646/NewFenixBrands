@@ -48,6 +48,7 @@ export interface Permissions {
   canViewActions:   boolean;
   canViewLogistics: boolean;
   canViewDepots:    boolean;
+  canViewPricing:   boolean;
   canViewCalendar:  boolean;
   canViewCommissions: boolean;
   canViewMarketing: boolean;
@@ -80,6 +81,7 @@ export function derivePermissions(profile: UserProfile | null): Permissions {
       canViewActions:   true,
       canViewLogistics: true,
       canViewDepots:    true,
+      canViewPricing:   true,
       canViewCalendar:  true,
       canViewCommissions: true,
       canViewMarketing: true,
@@ -97,6 +99,7 @@ export function derivePermissions(profile: UserProfile | null): Permissions {
     canViewActions:   true,
     canViewLogistics: true,
     canViewDepots:    false,
+    canViewPricing:   false,
     canViewCalendar:  true,
     canViewCommissions: false,
     canViewMarketing: false,
@@ -114,6 +117,7 @@ const EMPTY_PERMISSIONS: Permissions = {
   canViewActions:   false,
   canViewLogistics: false,
   canViewDepots:    false,
+  canViewPricing:   false,
   canViewCalendar:  false,
   canViewCommissions: false,
   canViewMarketing: false,

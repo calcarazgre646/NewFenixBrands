@@ -214,7 +214,13 @@ function buildSalesWindow(): SalesWindow {
   };
 }
 
-const NOVELTY_STATUS = "lanzamiento";
+/** ERP est_comercial value que marca un producto como Novedad (lanzamiento). */
+export const NOVELTY_STATUS = "lanzamiento";
+
+/** ¿Es este item una Novedad (lanzamiento)? Fuente de verdad canónica. */
+export function isNovelty(estComercial: string): boolean {
+  return estComercial === NOVELTY_STATUS;
+}
 
 /** Es una tienda dependiente de RETAILS (B2C activa) */
 export function isDependentStore(storeCode: string): boolean {
