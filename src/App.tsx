@@ -39,6 +39,8 @@ const NoAccessPage         = lazy(() => import("@/features/auth/NoAccessPage"));
 const ChangePasswordPage   = lazy(() => import("@/features/auth/ChangePasswordPage"));
 const UsersPage            = lazy(() => import("@/features/users/UsersPage"));
 const CommissionsPage      = lazy(() => import("@/features/commissions/CommissionsPage"));
+const ProjectionPage       = lazy(() => import("@/features/projections/ProjectionPage"));
+const MyProjectionPage     = lazy(() => import("@/features/projections/MyProjectionPage"));
 const MarketingPage        = lazy(() => import("@/features/marketing/MarketingPage"));
 const HelpPage             = lazy(() => import("@/features/help/HelpPage"));
 
@@ -159,6 +161,20 @@ export default function App() {
             <Route path="comisiones" element={
               <PermissionGuard allowed={(p) => p.canViewCommissions}>
                 <FeatureErrorBoundary feature="Comisiones"><CommissionsPage /></FeatureErrorBoundary>
+              </PermissionGuard>
+            } />
+
+            {/* Proyección por Vendedor — super_user y gerencia */}
+            <Route path="proyeccion-vendedor" element={
+              <PermissionGuard allowed={(p) => p.canViewSellerProjections}>
+                <FeatureErrorBoundary feature="Proyección Vendedor"><ProjectionPage /></FeatureErrorBoundary>
+              </PermissionGuard>
+            } />
+
+            {/* Mi Proyección — vendedor mapeado a su propia vista */}
+            <Route path="mi-proyeccion" element={
+              <PermissionGuard allowed={(p) => p.canViewMyProjection}>
+                <FeatureErrorBoundary feature="Mi Proyección"><MyProjectionPage /></FeatureErrorBoundary>
               </PermissionGuard>
             } />
 

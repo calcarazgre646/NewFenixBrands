@@ -26,6 +26,7 @@ const FALLBACK_PROFILE: Omit<UserProfile, "id"> = {
   cargo: null,
   isActive: false,
   mustChangePassword: false,
+  vendedorCodigo: null,
 };
 
 /**
@@ -38,7 +39,7 @@ const FALLBACK_PROFILE: Omit<UserProfile, "id"> = {
 export async function fetchProfile(userId: string): Promise<UserProfile> {
   const { data, error } = await authClient
     .from("profiles")
-    .select("id, role, channel_scope, full_name, cargo, is_active, must_change_password")
+    .select("id, role, channel_scope, full_name, cargo, is_active, must_change_password, vendedor_codigo")
     .eq("id", userId)
     .single();
 
@@ -63,5 +64,6 @@ export async function fetchProfile(userId: string): Promise<UserProfile> {
     cargo:              data.cargo,
     isActive:           data.is_active,
     mustChangePassword: data.must_change_password ?? false,
+    vendedorCodigo:     data.vendedor_codigo ?? null,
   };
 }
