@@ -22,6 +22,7 @@ function makeProfile(overrides: Partial<UserProfile> = {}): UserProfile {
     cargo: null,
     isActive: true,
     mustChangePassword: false,
+    vendedorCodigo: null,
     ...overrides,
   };
 }

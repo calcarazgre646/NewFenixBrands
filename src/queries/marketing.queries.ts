@@ -28,6 +28,11 @@ import type {
   ExecutionStatus,
   CampaignStatus,
   SegmentFilter,
+  SamEmailConfig,
+  SamEmailEvent,
+  ExecutionWithEvents,
+  SendTestEmailInput,
+  SendTestEmailResult,
 } from "@/domain/marketing/types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1083,4 +1088,161 @@ export async function fetchSamCustomerCount(): Promise<number> {
   }
   console.info("[SAM] customerCount:", count);
   return count ?? 0;
+}
+
+// ─── AUTH DB — sam_email_config ─────────────────────────────────────────────
+
+function mapEmailConfigRow(r: Row): SamEmailConfig {
+  return {
+    id: r.id,
+    fromEmail: r.from_email ?? "",
+    fromName: r.from_name ?? "",
+    replyTo: r.reply_to ?? null,
+    testRecipients: Array.isArray(r.test_recipients) ? r.test_recipients : [],
+    isActive: !!r.is_active,
+    updatedBy: r.updated_by ?? null,
+    createdAt: r.created_at ?? "",
+    updatedAt: r.updated_at ?? "",
+  };
+}
+
+export async function fetchEmailConfig(): Promise<SamEmailConfig | null> {
+  const { data, error } = await authClient
+    .from("sam_email_config")
+    .select("*")
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error) throw new Error(`fetchEmailConfig: ${error.message}`);
+  return data ? mapEmailConfigRow(data) : null;
+}
+
+export async function updateEmailConfig(
+  id: string,
+  patch: Partial<Omit<SamEmailConfig, "id" | "createdAt" | "updatedAt">>,
+): Promise<void> {
+  const dbPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.fromEmail !== undefined) dbPatch.from_email = patch.fromEmail;
+  if (patch.fromName !== undefined) dbPatch.from_name = patch.fromName;
+  if (patch.replyTo !== undefined) dbPatch.reply_to = patch.replyTo;
+  if (patch.testRecipients !== undefined) dbPatch.test_recipients = patch.testRecipients;
+  if (patch.isActive !== undefined) dbPatch.is_active = patch.isActive;
+
+  const { error } = await authClient
+    .from("sam_email_config")
+    .update(dbPatch)
+    .eq("id", id);
+
+  if (error) throw new Error(`updateEmailConfig: ${error.message}`);
+}
+
+// ─── Edge Function — send-email ─────────────────────────────────────────────
+
+export async function sendTestEmail(input: SendTestEmailInput): Promise<SendTestEmailResult> {
+  const { data, error } = await authClient.functions.invoke("send-email", {
+    body: {
+      template_id: input.templateId,
+      to_email: input.toEmail,
+      customer_id: input.customerId ?? null,
+      is_test: true,
+      override_subject: input.overrideSubject ?? null,
+      override_body: input.overrideBody ?? null,
+    },
+  });
+
+  if (error) {
+    // functions.invoke devuelve FunctionsHttpError con el body del error
+    const msg = (error as { message?: string }).message ?? "Error invocando send-email";
+    throw new Error(msg);
+  }
+  if (!data) throw new Error("send-email no devolvió respuesta");
+  if (data.error) throw new Error(data.error);
+
+  return {
+    executionId: data.execution_id ?? null,
+    resendEmailId: data.resend_email_id,
+    status: data.status,
+  };
+}
+
+// ─── AUTH DB — sam_email_events ─────────────────────────────────────────────
+
+function mapEmailEventRow(r: Row): SamEmailEvent {
+  return {
+    id: r.id,
+    executionId: r.execution_id,
+    eventType: r.event_type ?? "",
+    payload: (r.payload ?? {}) as Record<string, unknown>,
+    createdAt: r.created_at ?? "",
+  };
+}
+
+/**
+ * Fetch de executions + eventos asociados. Útil para la tabla
+ * de historial de tests en la pestaña Configuración.
+ */
+export async function fetchExecutionsWithEvents(filter?: {
+  isTest?: boolean;
+  limit?: number;
+}): Promise<ExecutionWithEvents[]> {
+  const limit = filter?.limit ?? 20;
+
+  let q = authClient
+    .from("sam_executions")
+    .select(`
+      id, trigger_id, customer_id, campaign_id, channel, status,
+      sent_at, delivered_at, opened_at, clicked_at, error_msg, created_at,
+      to_email, from_email, subject_snapshot, is_test, resend_email_id, bounce_reason
+    `)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (filter?.isTest !== undefined) {
+    q = q.eq("is_test", filter.isTest);
+  }
+
+  const { data: execRows, error } = await q;
+  if (error) throw new Error(`fetchExecutionsWithEvents: ${error.message}`);
+  if (!execRows || execRows.length === 0) return [];
+
+  const ids = execRows.map((r) => r.id);
+  const { data: eventRows, error: evErr } = await authClient
+    .from("sam_email_events")
+    .select("*")
+    .in("execution_id", ids)
+    .order("created_at", { ascending: true });
+
+  if (evErr) throw new Error(`fetchExecutionsWithEvents events: ${evErr.message}`);
+
+  const eventsByExec = new Map<string, SamEmailEvent[]>();
+  for (const r of eventRows ?? []) {
+    const ev = mapEmailEventRow(r);
+    const arr = eventsByExec.get(ev.executionId) ?? [];
+    arr.push(ev);
+    eventsByExec.set(ev.executionId, arr);
+  }
+
+  return execRows.map((r) => ({
+    execution: {
+      id: r.id,
+      triggerId: r.trigger_id ?? "",
+      customerId: r.customer_id ?? "",
+      campaignId: r.campaign_id ?? null,
+      channel: (r.channel as MessageChannel) ?? "email",
+      status: (r.status as ExecutionStatus) ?? "pending",
+      sentAt: r.sent_at ?? null,
+      deliveredAt: r.delivered_at ?? null,
+      openedAt: r.opened_at ?? null,
+      clickedAt: r.clicked_at ?? null,
+      errorMsg: r.error_msg ?? null,
+      createdAt: r.created_at ?? "",
+      toEmail: r.to_email ?? null,
+      fromEmail: r.from_email ?? null,
+      subjectSnapshot: r.subject_snapshot ?? null,
+      isTest: !!r.is_test,
+      resendEmailId: r.resend_email_id ?? null,
+      bounceReason: r.bounce_reason ?? null,
+    },
+    events: eventsByExec.get(r.id) ?? [],
+  }));
 }

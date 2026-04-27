@@ -90,6 +90,7 @@ describe("fetchAllProfiles", () => {
         cargo: "CTO",
         is_active: true,
         must_change_password: false,
+        vendedor_codigo: null,
         updated_at: "2026-03-10T00:00:00Z",
       },
       {
@@ -100,6 +101,7 @@ describe("fetchAllProfiles", () => {
         cargo: null,
         is_active: false,
         must_change_password: true,
+        vendedor_codigo: 7,
         updated_at: "2026-03-09T00:00:00Z",
       },
     ]);
@@ -115,6 +117,7 @@ describe("fetchAllProfiles", () => {
       cargo: "CTO",
       isActive: true,
       mustChangePassword: false,
+      vendedorCodigo: null,
       updatedAt: "2026-03-10T00:00:00Z",
     });
     expect(result[1]).toEqual({
@@ -125,6 +128,7 @@ describe("fetchAllProfiles", () => {
       cargo: null,
       isActive: false,
       mustChangePassword: true,
+      vendedorCodigo: 7,
       updatedAt: "2026-03-09T00:00:00Z",
     });
   });
@@ -224,6 +228,7 @@ describe("createUser", () => {
       role: "negocio",
       channelScope: "b2c",
       cargo: "Vendedor",
+      vendedorCodigo: null,
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
@@ -245,6 +250,7 @@ describe("createUser", () => {
       role: "negocio",
       channelScope: "b2c",
       cargo: "Vendedor",
+      vendedorCodigo: null,
     });
 
     expect(result).toEqual({ id: "new-uuid", email: "nuevo@fenix.com" });
@@ -260,6 +266,7 @@ describe("createUser", () => {
         role: "gerencia",
         channelScope: null,
         cargo: null,
+        vendedorCodigo: null,
       }),
     ).rejects.toThrow("El email ya está registrado");
   });
@@ -274,6 +281,7 @@ describe("createUser", () => {
         role: "super_user",
         channelScope: null,
         cargo: null,
+        vendedorCodigo: null,
       }),
     ).rejects.toThrow("Sin permisos");
   });
@@ -288,6 +296,7 @@ describe("createUser", () => {
         role: "negocio",
         channelScope: null,
         cargo: null,
+        vendedorCodigo: null,
       }),
     ).rejects.toThrow("Configuración del servidor incompleta");
   });
@@ -302,6 +311,7 @@ describe("createUser", () => {
         role: "negocio",
         channelScope: null,
         cargo: null,
+        vendedorCodigo: null,
       }),
     ).rejects.toThrow("Profile update failed");
   });
@@ -315,6 +325,7 @@ describe("createUser", () => {
       role: "gerencia",
       channelScope: null,
       cargo: null,
+      vendedorCodigo: null,
     });
 
     const sentBody = JSON.parse(mockFetch.mock.calls[0][1].body);

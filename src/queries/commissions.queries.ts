@@ -28,6 +28,13 @@ export interface SellerSalesRow {
   transacciones:  number;
 }
 
+/** Venta neta de un vendedor en un día específico del mes */
+export interface SellerDailySaleRow {
+  vendedorCodigo: number;
+  día:            number;
+  ventaNeta:      number;
+}
+
 /** Meta individual de un vendedor (de comisiones_metas_vendedor) */
 export interface SellerGoalRow {
   vendedorCodigo: number;
@@ -85,6 +92,39 @@ export async function fetchSellerSales(year: number, month: number): Promise<Sel
         unidades: Math.abs(toNum(r.v_cantvend)),
         transacciones: 1,
       });
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+/**
+ * Trae ventas diarias por vendedor para un año+mes.
+ * Fuente: fjdhstvta1 agrupado en JS por (vendedor, día).
+ * Necesario para construir el ritmo de venta y la serie acumulada del mes.
+ */
+export async function fetchSellerDailySales(year: number, month: number): Promise<SellerDailySaleRow[]> {
+  const buildQuery = () =>
+    dataClient
+      .from("fjdhstvta1")
+      .select("v_vended, v_dia, v_vtasimpu")
+      .eq("v_año", year)
+      .eq("v_mes", month);
+
+  const raw = await fetchAllRows<Row>(buildQuery);
+
+  const map = new Map<string, SellerDailySaleRow>();
+  for (const r of raw) {
+    const codigo = toNum(r.v_vended);
+    const día = toNum(r.v_dia);
+    if (codigo === 999 || día < 1 || día > 31) continue;
+    const key = `${codigo}|${día}`;
+    const existing = map.get(key);
+    const venta = toNum(r.v_vtasimpu);
+    if (existing) {
+      existing.ventaNeta += venta;
+    } else {
+      map.set(key, { vendedorCodigo: codigo, día, ventaNeta: venta });
     }
   }
 
