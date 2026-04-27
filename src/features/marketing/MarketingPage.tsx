@@ -29,6 +29,7 @@ import { MarketingCharts } from "./components/MarketingCharts";
 import { InventoryHealth } from "./components/InventoryHealth";
 import { ProductIntelligence } from "./components/ProductIntelligence";
 import { CommercialInsights } from "./components/CommercialInsights";
+import { ConfigurationTab } from "./components/ConfigurationTab";
 import { useMarketingDashboard } from "./hooks/useMarketingDashboard";
 import { useTriggers } from "./hooks/useTriggers";
 import { useTriggerRecommendations } from "./hooks/useTriggerRecommendations";
@@ -39,7 +40,13 @@ import { useExecutions } from "./hooks/useExecutions";
 import { useMarketingInventory } from "./hooks/useMarketingInventory";
 import { useMarketingProducts } from "./hooks/useMarketingProducts";
 
-type MarketingTab = "resumen" | "inventario" | "productos" | "automatizaciones" | "outbound";
+type MarketingTab =
+  | "resumen"
+  | "inventario"
+  | "productos"
+  | "automatizaciones"
+  | "outbound"
+  | "config";
 
 const TAB_ITEMS: TabItem<MarketingTab>[] = [
   { key: "resumen",           label: "Resumen" },
@@ -47,6 +54,7 @@ const TAB_ITEMS: TabItem<MarketingTab>[] = [
   { key: "productos",         label: "Productos" },
   { key: "automatizaciones",  label: "Automatizaciones" },
   { key: "outbound",          label: "Outbound" },
+  { key: "config",            label: "Configuración" },
 ];
 
 export default function MarketingPage() {
@@ -219,6 +227,9 @@ export default function MarketingPage() {
             executions={executions}
           />
         )}
+
+        {/* ════════ CONFIGURACIÓN (Resend + from alias + tests) ════════ */}
+        {activeTab === "config" && <ConfigurationTab />}
       </div>
     </div>
   );
