@@ -13,7 +13,6 @@
  */
 import { useMemo, useState } from "react";
 import { Tabs, type TabItem } from "@/components/ui/tabs/Tabs";
-import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
 import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
 import { CHANNEL_LABELS } from "@/domain/commissions/scales";
 import { useFilters } from "@/hooks/useFilters";
@@ -22,6 +21,7 @@ import { useCompensation } from "./hooks/useCompensation";
 import ResumenTab from "./components/tabs/ResumenTab";
 import EquipoTab from "./components/tabs/EquipoTab";
 import HistoricoTab from "./components/tabs/HistoricoTab";
+import CommissionsLoader from "./components/CommissionsLoader";
 import type { CommissionChannel } from "@/domain/commissions/types";
 
 type TabKey = "resumen" | "equipo" | "historico";
@@ -73,7 +73,7 @@ export default function CommissionsPage() {
     return base;
   }, [data.scope, data.rows.length]);
 
-  if (data.isLoading) return <PageSkeleton />;
+  if (data.isLoading) return <CommissionsLoader scope={data.scope} />;
 
   if (data.error) {
     return (
