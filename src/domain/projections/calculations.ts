@@ -45,7 +45,7 @@ export function projectMonthEnd(
 
 // ─── Resolución de tiempo del mes ──────────────────────────────────────────
 
-interface MonthTime {
+export interface MonthTime {
   diasMes: number;
   diasTranscurridos: number;
   diasRestantes: number;

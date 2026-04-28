@@ -35,6 +35,20 @@ export interface SellerDailySaleRow {
   ventaNeta:      number;
 }
 
+/** Transacción individual de un vendedor (drill-down) */
+export interface SellerTransactionRow {
+  /** Día del mes (1-31) */
+  día:        number;
+  /** Sucursal donde ocurrió la venta */
+  sucursal:   string;
+  /** Venta neta de la transacción (Gs.) */
+  ventaNeta:  number;
+  /** Unidades vendidas (abs) */
+  unidades:   number;
+  /** Canal de venta */
+  canal:      string;
+}
+
 /** Meta individual de un vendedor (de comisiones_metas_vendedor) */
 export interface SellerGoalRow {
   vendedorCodigo: number;
@@ -129,6 +143,35 @@ export async function fetchSellerDailySales(year: number, month: number): Promis
   }
 
   return Array.from(map.values());
+}
+
+/**
+ * Trae las transacciones individuales de un vendedor en un año+mes.
+ * Para drill-down: el vendedor (o gerencia) ve los tickets que componen su MTD.
+ * Fuente: fjdhstvta1 filtrado por vendedor.
+ */
+export async function fetchSellerTransactions(
+  year: number,
+  month: number,
+  vendedorCodigo: number,
+): Promise<SellerTransactionRow[]> {
+  const buildQuery = () =>
+    dataClient
+      .from("fjdhstvta1")
+      .select("v_dia, v_sucursal_final, v_vtasimpu, v_cantvend, v_canal_venta")
+      .eq("v_año", year)
+      .eq("v_mes", month)
+      .eq("v_vended", vendedorCodigo);
+
+  const raw = await fetchAllRows<Row>(buildQuery);
+
+  return raw.map((r) => ({
+    día:       toNum(r.v_dia),
+    sucursal:  trimStr(r.v_sucursal_final),
+    ventaNeta: toNum(r.v_vtasimpu),
+    unidades:  Math.abs(toNum(r.v_cantvend)),
+    canal:     trimStr(r.v_canal_venta),
+  }));
 }
 
 /**
