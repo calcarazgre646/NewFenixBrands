@@ -111,20 +111,18 @@ export default function ResumenTab({ data }: Props) {
         <KpiTooltip label="¿Cómo se calcula la comisión total?" formula={F_TOTAL_COMM} />
       </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {/* Curva de referencia (escala vendedor_tienda — la mayoría) */}
-        <StaircaseCommissionCurve
-          scale={scales["vendedor_tienda"]}
-          cumplimientoPct={pct(summary.totalVentaProyectada, totalMetaForTeam(rows))}
-          ventaActual={summary.totalVentaProyectada}
-          meta={totalMetaForTeam(rows)}
-        />
+      {/* Curva de referencia — fila completa */}
+      <StaircaseCommissionCurve
+        scale={scales["vendedor_tienda"]}
+        cumplimientoPct={pct(summary.totalVentaProyectada, totalMetaForTeam(rows))}
+        ventaActual={summary.totalVentaProyectada}
+        meta={totalMetaForTeam(rows)}
+      />
 
-        {/* Top + Bottom mini */}
-        <div className="grid grid-cols-1 gap-3">
-          <MiniSellerList title="Top — sobre cuota" rows={topAhead} variant="ahead" />
-          <MiniSellerList title="Atención — debajo de cuota" rows={topBehind} variant="behind" />
-        </div>
+      {/* Top + Bottom mini — una columna cada uno */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <MiniSellerList title="Top — sobre cuota" rows={topAhead} variant="ahead" />
+        <MiniSellerList title="Atención — debajo de cuota" rows={topBehind} variant="behind" />
       </div>
     </div>
   );
