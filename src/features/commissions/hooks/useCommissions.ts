@@ -20,12 +20,11 @@ import { fetchSellerSales, fetchSellerGoals } from "@/queries/commissions.querie
 import { fetchStoreGoals } from "@/queries/stores.queries";
 import { commissionKeys, storeKeys, STALE_30MIN, GC_60MIN } from "@/queries/keys";
 import { findTier, calcPercentageCommission, calcFixedCommission, buildCommissionSummary } from "@/domain/commissions/calculations";
+import { classifySellerRole } from "@/domain/commissions/classify";
 import { useCommissionScales } from "@/hooks/useConfig";
 import type {
   CommissionResult,
   CommissionSummary,
-  CommissionRole,
-  CommissionChannel,
 } from "@/domain/commissions/types";
 
 export interface UseCommissionsResult {
@@ -252,14 +251,3 @@ export function useCommissions(year: number, month: number): UseCommissionsResul
   };
 }
 
-/** Clasifica un vendedor en rol y canal según su canal de venta y tipo */
-function classifySellerRole(canal: string, tipoVenta: string): {
-  role: CommissionRole;
-  channel: CommissionChannel;
-} {
-  if (canal === "B2B") {
-    if (tipoVenta === "uniforme") return { role: "vendedor_utp", channel: "utp" };
-    return { role: "vendedor_mayorista", channel: "mayorista" };
-  }
-  return { role: "vendedor_tienda", channel: "retail" };
-}

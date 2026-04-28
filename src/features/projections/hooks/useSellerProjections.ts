@@ -42,6 +42,7 @@ import {
   calcCumplimiento,
   calcPercentageCommission,
 } from "@/domain/commissions/calculations";
+import { classifySellerRole } from "@/domain/commissions/classify";
 import { useCommissionScales } from "@/hooks/useConfig";
 import {
   getCalendarDay,
@@ -342,17 +343,6 @@ export function useSellerProjections(
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
-
-function classifySellerRole(canal: string, tipoVenta: string): {
-  role: CommissionRole;
-  channel: CommissionChannel;
-} {
-  if (canal === "B2B") {
-    if (tipoVenta === "uniforme") return { role: "vendedor_utp", channel: "utp" };
-    return { role: "vendedor_mayorista", channel: "mayorista" };
-  }
-  return { role: "vendedor_tienda", channel: "retail" };
-}
 
 function buildSummary(rows: SellerProjection[]): ProjectionSummary {
   const byChannel: ProjectionSummary["byChannel"] = {
