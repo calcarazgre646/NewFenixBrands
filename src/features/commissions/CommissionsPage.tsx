@@ -91,10 +91,16 @@ export default function CommissionsPage() {
     <div className="space-y-5 p-4 sm:p-6">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
-        <div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <h1 className="text-lg font-bold text-gray-900 dark:text-white">Comisiones</h1>
+          <DataFreshnessTag
+            lastDataDay={lastDataDay}
+            lastDataMonth={lastDataMonth}
+            freshnessStatus={getStatus("mv_ventas_mensual")}
+            refreshedAt={getInfo("mv_ventas_mensual")?.refreshedAt}
+          />
           {data.scope === "self" && (
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="basis-full text-xs text-gray-500 dark:text-gray-400">
               Tu desempeño y proyección personal
             </p>
           )}
@@ -106,13 +112,6 @@ export default function CommissionsPage() {
               Mes cerrado
             </span>
           )}
-
-          <DataFreshnessTag
-            lastDataDay={lastDataDay}
-            lastDataMonth={lastDataMonth}
-            freshnessStatus={getStatus("mv_ventas_mensual")}
-            refreshedAt={getInfo("mv_ventas_mensual")?.refreshedAt}
-          />
 
           <select
             value={selectedMonth}
