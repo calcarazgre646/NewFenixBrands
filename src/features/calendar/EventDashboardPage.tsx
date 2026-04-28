@@ -10,10 +10,12 @@ import { useParams, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { authClient } from "@/api/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useStoreConfig } from "@/hooks/useConfig";
 import { useEventDashboard } from "./hooks/useEventDashboard";
 import { useEventSkus } from "./hooks/useEventSkus";
 import { useEventStores } from "./hooks/useEventStores";
 import { useAllocationProposals } from "./hooks/useAllocationProposals";
+import { useSkuConflicts } from "./hooks/useSkuConflicts";
 import { EventScorecard } from "./components/EventScorecard";
 import { EventSkuPicker } from "./components/EventSkuPicker";
 import { EventStorePicker } from "./components/EventStorePicker";
@@ -59,6 +61,7 @@ export default function EventDashboardPage() {
 
   const eventQ = useCalendarEvent(eventId);
   const event = eventQ.data;
+  const storeConfig = useStoreConfig();
 
   const dashboard = useEventDashboard({
     eventId,
@@ -76,6 +79,7 @@ export default function EventDashboardPage() {
     () => skusH.skus.map((s) => s.skuComercial),
     [skusH.skus],
   );
+  const conflicts = useSkuConflicts(eventId, linkedSkuCodes);
   const linkedStoreCodes = useMemo(
     () => storesH.stores.map((s) => s.storeCode),
     [storesH.stores],
@@ -94,12 +98,20 @@ export default function EventDashboardPage() {
       inventory: dashboard.inventoryFull,
       generatedBy: user?.id ?? null,
       readinessPct: dashboard.readiness?.readinessPct ?? null,
+      storeConfig,
     });
   }
 
   async function handleApprove(id: string) {
     if (!user?.id) return;
-    await proposalsH.approve({ id, approvedBy: user.id });
+    const proposal = proposalsH.proposals.find((p) => p.id === id);
+    if (!proposal) return;
+    await proposalsH.approve({
+      proposal,
+      approvedBy: user.id,
+      inventorySnapshot: dashboard.inventoryFull,
+      readinessPctAtApproval: dashboard.readiness?.readinessPct ?? null,
+    });
   }
 
   if (eventQ.isLoading || dashboard.isLoading) return <PageSkeleton />;
@@ -147,6 +159,8 @@ export default function EventDashboardPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <LinkedSkusCard
           skus={skusH.skus}
+          conflicts={conflicts.conflicts}
+          conflictedSkuSet={conflicts.conflictedSkuSet}
           onAdd={() => setShowSkuPicker(true)}
           onRemove={(id) => skusH.removeSku(id)}
           isMutating={skusH.isMutating}
@@ -205,15 +219,24 @@ export default function EventDashboardPage() {
 
 function LinkedSkusCard({
   skus,
+  conflicts,
+  conflictedSkuSet,
   onAdd,
   onRemove,
   isMutating,
 }: {
   skus: ReturnType<typeof useEventSkus>["skus"];
+  conflicts: ReturnType<typeof useSkuConflicts>["conflicts"];
+  conflictedSkuSet: ReturnType<typeof useSkuConflicts>["conflictedSkuSet"];
   onAdd: () => void;
   onRemove: (id: string) => void;
   isMutating: boolean;
 }) {
+  const conflictBySku = useMemo(
+    () => new Map(conflicts.map((c) => [c.skuComercial, c])),
+    [conflicts],
+  );
+
   return (
     <div className="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-gray-800">
@@ -228,32 +251,48 @@ function LinkedSkusCard({
           + Agregar SKUs
         </button>
       </div>
+      {conflictedSkuSet.size > 0 && (
+        <div className="border-b border-warning-200 bg-warning-50 px-4 py-2 text-xs text-warning-800 dark:border-warning-500/20 dark:bg-warning-500/10 dark:text-warning-300">
+          ⚠ {conflictedSkuSet.size} SKU{conflictedSkuSet.size === 1 ? "" : "s"} también vinculado{conflictedSkuSet.size === 1 ? "" : "s"} a otro evento activo. Riesgo de doble allocation.
+        </div>
+      )}
       {skus.length === 0 ? (
         <div className="px-4 py-6 text-center text-sm text-gray-400">
           Sin SKUs vinculados.
         </div>
       ) : (
         <ul className="max-h-72 divide-y divide-gray-100 overflow-y-auto dark:divide-gray-700">
-          {skus.map((s) => (
-            <li key={s.id} className="flex items-center gap-2 px-4 py-2 text-sm">
-              <span className="font-mono text-xs text-gray-700 dark:text-gray-300">
-                {s.skuComercial}
-              </span>
-              <span className="text-xs text-gray-500">{s.brand}</span>
-              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] uppercase text-gray-500 dark:bg-gray-700 dark:text-gray-400">
-                {s.intent}
-              </span>
-              <button
-                type="button"
-                onClick={() => onRemove(s.id)}
-                disabled={isMutating}
-                className="ml-auto text-xs text-error-600 hover:underline disabled:opacity-50"
-                aria-label={`Quitar ${s.skuComercial}`}
-              >
-                Quitar
-              </button>
-            </li>
-          ))}
+          {skus.map((s) => {
+            const conflict = conflictBySku.get(s.skuComercial);
+            return (
+              <li key={s.id} className="flex flex-wrap items-center gap-2 px-4 py-2 text-sm">
+                <span className="font-mono text-xs text-gray-700 dark:text-gray-300">
+                  {s.skuComercial}
+                </span>
+                <span className="text-xs text-gray-500">{s.brand}</span>
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] uppercase text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                  {s.intent}
+                </span>
+                {conflict && (
+                  <span
+                    className="rounded-full bg-warning-100 px-2 py-0.5 text-[10px] font-medium text-warning-700 dark:bg-warning-500/20 dark:text-warning-300"
+                    title={conflict.conflictingEvents.map((e) => `${e.title} (${e.startDate})`).join("\n")}
+                  >
+                    En {conflict.conflictingEvents.length} evento{conflict.conflictingEvents.length === 1 ? "" : "s"}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onRemove(s.id)}
+                  disabled={isMutating}
+                  className="ml-auto text-xs text-error-600 hover:underline disabled:opacity-50"
+                  aria-label={`Quitar ${s.skuComercial}`}
+                >
+                  Quitar
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

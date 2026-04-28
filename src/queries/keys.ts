@@ -212,6 +212,8 @@ export const eventKeys = {
   stores: (eventId: string) => ["events", "stores", eventId] as const,
   proposals: (eventId: string) => ["events", "proposals", eventId] as const,
   proposal: (id: string) => ["events", "proposal", id] as const,
+  skuConflicts: (eventId: string, skuKey: string) =>
+    ["events", "skuConflicts", eventId, skuKey] as const,
 };
 
 // ─── Cache durations ──────────────────────────────────────────────────────────

@@ -25,6 +25,13 @@ export interface AllocationInput {
   depotStores?: string[];
   /** Mínimo de unidades por talle por tienda activation (default 1). */
   minUnitsPerTalleStore?: number;
+  /**
+   * Lookup de unidades ideales por (sku_comercial, talle, store). Si está
+   * definido, sobreescribe `minUnitsPerTalleStore`. Útil para alimentar
+   * la curva ideal por assortment de tienda (config_store.assortment).
+   * Si retorna 0 o un valor negativo, esa combinación se omite.
+   */
+  idealUnitsLookup?: (skuComercial: string, talle: string, storeCode: string) => number;
 }
 
 const DEFAULT_DEPOTS = ["STOCK", "RETAILS"];
@@ -36,6 +43,7 @@ export function generateAllocationProposal(input: AllocationInput): AllocationLi
     inventory,
     depotStores = DEFAULT_DEPOTS,
     minUnitsPerTalleStore = 1,
+    idealUnitsLookup,
   } = input;
 
   const skuSet = new Set(eventSkus.map((s) => s.skuComercial));
@@ -124,7 +132,10 @@ export function generateAllocationProposal(input: AllocationInput): AllocationLi
       for (const toStore of activationStores) {
         const currentInStore =
           stockMap.get(`${sku}|${talle}|${toStore}`)?.units ?? 0;
-        const need = Math.max(0, minUnitsPerTalleStore - currentInStore);
+        const target = idealUnitsLookup
+          ? Math.max(0, idealUnitsLookup(sku, talle, toStore))
+          : minUnitsPerTalleStore;
+        const need = Math.max(0, target - currentInStore);
         if (need <= 0) continue;
 
         // Greedy fill desde otras tiendas
