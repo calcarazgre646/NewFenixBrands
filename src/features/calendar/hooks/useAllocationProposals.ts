@@ -15,16 +15,22 @@ import {
   createAllocationProposal,
   approveAllocationProposal,
   rejectAllocationProposal,
+  createEventDecisionRun,
+  bulkInsertEventDecisionActions,
 } from "@/queries/events.queries";
 import {
   generateAllocationProposal,
   summarizeProposal,
 } from "@/domain/events/allocation";
+import { buildEventDecisionPayload } from "@/domain/events/closedLoop";
+import { computeNetworkCurves } from "@/domain/events/curveCompleteness";
 import type {
+  AllocationProposal,
   EventInventoryRow,
   EventSku,
   EventStore,
 } from "@/domain/events/types";
+import type { StoreConfig } from "@/domain/config/types";
 
 export interface GenerateProposalArgs {
   eventSkus: EventSku[];
@@ -32,6 +38,12 @@ export interface GenerateProposalArgs {
   inventory: EventInventoryRow[];
   generatedBy: string | null;
   readinessPct: number | null;
+  /**
+   * Config de tiendas para derivar `assortment` per-store. Cuando está disponible,
+   * el generador usa `assortment / talles_de_curva` como target ideal por talle.
+   * Si la tienda no tiene assortment, fallback a 1 (comportamiento Fase A).
+   */
+  storeConfig?: StoreConfig;
   notes?: string;
 }
 
@@ -49,6 +61,11 @@ export function useAllocationProposals(eventId: string | null | undefined) {
   const generateM = useMutation({
     mutationFn: async (args: GenerateProposalArgs) => {
       if (!eventId) throw new Error("eventId requerido");
+      // Build idealUnitsLookup desde storeConfig.assortments + curva de la red
+      const networkCurves = computeNetworkCurves(args.inventory);
+      const lookup = args.storeConfig
+        ? buildIdealUnitsLookup(args.storeConfig, networkCurves)
+        : undefined;
       const lines = generateAllocationProposal({
         eventSkus: args.eventSkus.map((s) => ({
           skuComercial: s.skuComercial,
@@ -59,6 +76,7 @@ export function useAllocationProposals(eventId: string | null | undefined) {
           role: s.role,
         })),
         inventory: args.inventory,
+        idealUnitsLookup: lookup,
       });
       const summary = summarizeProposal(lines);
       return createAllocationProposal({
@@ -77,8 +95,27 @@ export function useAllocationProposals(eventId: string | null | undefined) {
   });
 
   const approveM = useMutation({
-    mutationFn: ({ id, approvedBy }: { id: string; approvedBy: string }) =>
-      approveAllocationProposal(id, approvedBy),
+    mutationFn: async (args: {
+      proposal: AllocationProposal;
+      approvedBy: string;
+      inventorySnapshot: EventInventoryRow[];
+      readinessPctAtApproval: number | null;
+    }) => {
+      if (!eventId) throw new Error("eventId requerido");
+      // 1. Closed-loop: build run + actions desde el payload + snapshot
+      const payload = buildEventDecisionPayload({
+        proposal: args.proposal,
+        eventId,
+        inventory: args.inventorySnapshot,
+        approverId: args.approvedBy,
+        readinessPctAtApproval: args.readinessPctAtApproval,
+      });
+      // 2. Insert run, obtener id, bulk insert actions
+      const runId = await createEventDecisionRun(payload.run);
+      await bulkInsertEventDecisionActions(runId, payload.actions);
+      // 3. Marcar propuesta como aprobada
+      return approveAllocationProposal(args.proposal.id, args.approvedBy);
+    },
     onSuccess: () => {
       if (eventId) qc.invalidateQueries({ queryKey: eventKeys.proposals(eventId) });
     },
@@ -100,5 +137,30 @@ export function useAllocationProposals(eventId: string | null | undefined) {
     reject: rejectM.mutateAsync,
     isGenerating: generateM.isPending,
     isApproving: approveM.isPending,
+  };
+}
+
+// ─── Ideal units lookup helper ───────────────────────────────────────────────
+
+/**
+ * Construye lookup (sku, talle, store) → unidades ideales desde:
+ *   - assortment de la tienda (config_store.assortment)
+ *   - cantidad de talles del SKU en la red
+ *
+ * Heurística: distribuir el assortment uniformemente entre los talles del SKU.
+ * Mínimo 1 unidad por talle, redondeo hacia arriba para no sub-asignar.
+ *
+ * Si la tienda no tiene assortment definido, retorna 1 (fallback).
+ */
+function buildIdealUnitsLookup(
+  storeConfig: StoreConfig,
+  networkCurves: Map<string, string[]>,
+): (sku: string, talle: string, store: string) => number {
+  return (sku, _talle, store) => {
+    const assortment = storeConfig.assortments[store];
+    if (!assortment || assortment <= 0) return 1;
+    const talles = networkCurves.get(sku);
+    if (!talles || talles.length === 0) return 1;
+    return Math.max(1, Math.ceil(assortment / talles.length));
   };
 }

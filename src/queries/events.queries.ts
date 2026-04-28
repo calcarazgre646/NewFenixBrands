@@ -20,6 +20,10 @@ import type {
   EventStore,
   EventStoreRole,
 } from "@/domain/events/types";
+import type {
+  EventDecisionActionInput,
+  EventDecisionRunInput,
+} from "@/domain/events/closedLoop";
 
 // ─── Row types (snake_case BD → camelCase domain) ────────────────────────────
 
@@ -270,4 +274,141 @@ export async function rejectAllocationProposal(id: string): Promise<AllocationPr
     .single();
   if (error) throw new Error(`Error rechazando propuesta: ${error.message}`);
   return toAllocationProposal(data as DbAllocationProposalRow);
+}
+
+// ─── Cross-event conflicts (Fase B) ──────────────────────────────────────────
+
+export interface SkuConflict {
+  skuComercial: string;
+  conflictingEvents: { eventId: string; title: string; startDate: string; endDate: string | null }[];
+}
+
+/**
+ * Para los SKUs dados, encuentra otros eventos del calendario activos (end_date >= today
+ * o end_date null) que también tengan vinculados esos SKUs.
+ * Excluye el eventId actual.
+ */
+export async function fetchSkuConflicts(
+  eventId: string,
+  skuComerciales: string[],
+): Promise<SkuConflict[]> {
+  if (skuComerciales.length === 0) return [];
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  // 1. Buscar event_skus que matcheen los skus, excluyendo el evento actual
+  const { data: skuRows, error: skuErr } = await authClient
+    .from("calendar_event_skus")
+    .select("event_id, sku_comercial")
+    .in("sku_comercial", skuComerciales)
+    .neq("event_id", eventId);
+  if (skuErr) throw new Error(`Error consultando conflictos SKU: ${skuErr.message}`);
+  if (!skuRows || skuRows.length === 0) return [];
+
+  const otherEventIds = Array.from(new Set((skuRows as { event_id: string }[]).map((r) => r.event_id)));
+
+  // 2. Traer los eventos referidos, filtrar por end_date (activos o sin fecha fin)
+  const { data: eventRows, error: evErr } = await authClient
+    .from("calendar_events")
+    .select("id, title, start_date, end_date")
+    .in("id", otherEventIds);
+  if (evErr) throw new Error(`Error consultando eventos: ${evErr.message}`);
+  type EvRow = { id: string; title: string; start_date: string; end_date: string | null };
+  const activeEvents = ((eventRows as EvRow[] | null) ?? []).filter((e) => {
+    return e.end_date === null || e.end_date >= todayIso;
+  });
+  const activeIds = new Set(activeEvents.map((e) => e.id));
+  const evById = new Map(activeEvents.map((e) => [e.id, e]));
+
+  // 3. Agrupar por SKU
+  const grouped = new Map<string, SkuConflict>();
+  for (const row of skuRows as { event_id: string; sku_comercial: string }[]) {
+    if (!activeIds.has(row.event_id)) continue;
+    const ev = evById.get(row.event_id)!;
+    const existing = grouped.get(row.sku_comercial) ?? {
+      skuComercial: row.sku_comercial,
+      conflictingEvents: [],
+    };
+    if (!existing.conflictingEvents.some((e) => e.eventId === row.event_id)) {
+      existing.conflictingEvents.push({
+        eventId: ev.id,
+        title: ev.title,
+        startDate: ev.start_date,
+        endDate: ev.end_date,
+      });
+    }
+    grouped.set(row.sku_comercial, existing);
+  }
+
+  return Array.from(grouped.values());
+}
+
+// ─── Closed-loop persistence (Fase B) ────────────────────────────────────────
+
+/**
+ * Crea un decision_run de tipo event_allocation y devuelve el id.
+ * Mapea camelCase del domain a snake_case de la BD.
+ */
+export async function createEventDecisionRun(
+  input: EventDecisionRunInput,
+): Promise<string> {
+  const { data, error } = await authClient
+    .from("decision_runs")
+    .insert({
+      run_type: input.runType,
+      triggered_by: input.triggeredBy,
+      filters_snapshot: input.filtersSnapshot,
+      total_actions: input.totalActions,
+      total_gap_units: input.totalGapUnits,
+      total_impact_gs: input.totalImpactGs,
+      pareto_count: input.paretoCount,
+      critical_count: input.criticalCount,
+      metadata: input.metadata,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(`Error creando decision_run: ${error.message}`);
+  return (data as { id: string }).id;
+}
+
+/**
+ * Inserta múltiples decision_actions con run_id ya conocido.
+ * Mapea camelCase del domain a snake_case de la BD.
+ */
+export async function bulkInsertEventDecisionActions(
+  runId: string,
+  actions: EventDecisionActionInput[],
+): Promise<void> {
+  if (actions.length === 0) return;
+  const rows = actions.map((a) => ({
+    run_id: runId,
+    rank: a.rank,
+    sku: a.sku,
+    sku_comercial: a.skuComercial,
+    talle: a.talle,
+    brand: a.brand,
+    description: a.description,
+    store: a.store,
+    target_store: a.targetStore,
+    current_stock: a.currentStock,
+    suggested_units: a.suggestedUnits,
+    ideal_units: a.idealUnits,
+    gap_units: a.gapUnits,
+    days_of_inventory: a.daysOfInventory,
+    historical_avg: a.historicalAvg,
+    cover_weeks: a.coverWeeks,
+    current_mos: a.currentMos,
+    risk: a.risk,
+    waterfall_level: a.waterfallLevel,
+    action_type: a.actionType,
+    impact_score: a.impactScore,
+    pareto_flag: a.paretoFlag,
+    recommended_action: a.recommendedAction,
+    status: a.status,
+    reviewed_by: a.reviewedBy,
+    reviewed_at: new Date().toISOString(),
+    calendar_event_id: a.calendarEventId,
+    allocation_proposal_id: a.allocationProposalId,
+  }));
+  const { error } = await authClient.from("decision_actions").insert(rows);
+  if (error) throw new Error(`Error insertando decision_actions: ${error.message}`);
 }

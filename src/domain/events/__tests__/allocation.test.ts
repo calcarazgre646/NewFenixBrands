@@ -157,6 +157,69 @@ describe("generateAllocationProposal — sourcing strategy", () => {
   });
 });
 
+describe("generateAllocationProposal — idealUnitsLookup (Fase B)", () => {
+  it("uses idealUnitsLookup target instead of minUnitsPerTalleStore when provided", () => {
+    const lines = generateAllocationProposal({
+      eventSkus: [{ skuComercial: "A", brand: "Martel" }],
+      eventStores: [{ storeCode: "T_EVT", role: "activation" }],
+      inventory: inv([
+        { skuComercial: "A", talle: "S", store: "T_OTHER", units: 100 },
+      ]),
+      // Tienda quiere 5 units por talle (no el default 1)
+      idealUnitsLookup: () => 5,
+    });
+    const line = lines.find((l) => l.talle === "S")!;
+    expect(line.units).toBe(5);
+  });
+
+  it("subtracts currentStock from target", () => {
+    const lines = generateAllocationProposal({
+      eventSkus: [{ skuComercial: "A", brand: "Martel" }],
+      eventStores: [{ storeCode: "T_EVT", role: "activation" }],
+      inventory: inv([
+        { skuComercial: "A", talle: "S", store: "T_EVT", units: 2 },
+        { skuComercial: "A", talle: "S", store: "T_OTHER", units: 100 },
+      ]),
+      idealUnitsLookup: () => 5,
+    });
+    const line = lines.find((l) => l.fromStore === "T_OTHER")!;
+    expect(line.units).toBe(3); // 5 target - 2 currentInStore
+  });
+
+  it("skips combinations where lookup returns 0 or negative", () => {
+    const lines = generateAllocationProposal({
+      eventSkus: [{ skuComercial: "A", brand: "Martel" }],
+      eventStores: [{ storeCode: "T_EVT", role: "activation" }],
+      inventory: inv([
+        { skuComercial: "A", talle: "S", store: "T_OTHER", units: 100 },
+        { skuComercial: "A", talle: "M", store: "T_OTHER", units: 100 },
+      ]),
+      idealUnitsLookup: (_sku, talle) => (talle === "S" ? 3 : 0),
+    });
+    const allTalles = lines.map((l) => l.talle);
+    expect(allTalles).toContain("S");
+    expect(allTalles).not.toContain("M");
+  });
+
+  it("can vary target per (sku, talle, store)", () => {
+    const lines = generateAllocationProposal({
+      eventSkus: [{ skuComercial: "A", brand: "Martel" }],
+      eventStores: [
+        { storeCode: "T_BIG", role: "activation" },
+        { storeCode: "T_SMALL", role: "activation" },
+      ],
+      inventory: inv([
+        { skuComercial: "A", talle: "S", store: "T_OTHER", units: 100 },
+      ]),
+      idealUnitsLookup: (_sku, _talle, store) => (store === "T_BIG" ? 10 : 2),
+    });
+    const big = lines.find((l) => l.toStore === "T_BIG")!;
+    const small = lines.find((l) => l.toStore === "T_SMALL")!;
+    expect(big.units).toBe(10);
+    expect(small.units).toBe(2);
+  });
+});
+
 describe("summarizeProposal", () => {
   it("computes totals correctly", () => {
     const summary = summarizeProposal([
