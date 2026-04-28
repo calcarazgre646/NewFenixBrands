@@ -8,6 +8,7 @@
 import { dataClient, authClient } from "@/api/client";
 import { fetchAllRows } from "@/queries/paginate";
 import { trimStr, toNum } from "@/api/normalize";
+import { normalizeZone } from "@/domain/zones/normalize";
 import type { CommissionRole, CommissionChannel } from "@/domain/commissions/types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -197,6 +198,6 @@ export async function fetchSellerGoals(year: number, month: number): Promise<Sel
     trimestre:      toNum(r.trimestre),
     metaVentas:     toNum(r.meta_ventas),
     metaCobranza:   toNum(r.meta_cobranza),
-    zona:           r.zona ? trimStr(r.zona) : null,
+    zona:           normalizeZone(r.zona),
   }));
 }

@@ -80,11 +80,20 @@ export default function CommissionTable({ results }: Props) {
                   <span className="block font-medium text-gray-800 dark:text-white">
                     {r.vendedorNombre}
                   </span>
-                  <span className="block text-[10px] text-gray-400 dark:text-gray-500">
-                    {r.sucursal ?? "—"}
-                  </span>
+                  {r.canal === "retail" ? (
+                    <span className="block text-[10px] text-gray-400 dark:text-gray-500">
+                      {r.sucursal ?? "—"}
+                    </span>
+                  ) : r.sucursal ? (
+                    <span className="mt-0.5 inline-flex items-center gap-1 rounded-md bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
+                      <span className="text-[8px] font-normal opacity-70">Zona</span>
+                      {r.sucursal}
+                    </span>
+                  ) : (
+                    <span className="block text-[10px] text-gray-400 dark:text-gray-500">—</span>
+                  )}
                   {r.ventaReal === 0 && r.metaVentas > 0 && (
-                    <span className="inline-flex items-center rounded-full bg-blue-50 px-1.5 py-0.5 text-[9px] font-medium text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                    <span className="ml-1 inline-flex items-center rounded-full bg-blue-50 px-1.5 py-0.5 text-[9px] font-medium text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
                       Sin ventas aún
                     </span>
                   )}
