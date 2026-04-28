@@ -847,6 +847,7 @@ export default function CalendarPage() {
           onAddCategory={addCategory}
           onChangeCategoryColor={updateCategoryColor}
           onClose={handleCloseModal}
+          onOpenDashboard={(id) => navigate(`/calendario/evento/${id}`)}
         />
       )}
 

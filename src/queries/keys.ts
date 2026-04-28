@@ -205,6 +205,15 @@ export const pricingKeys = {
   list: (brand?: string | null) => ["pricing", "list", brand ?? "total"] as const,
 };
 
+// ─── Calendar Events: SKUs, stores, allocation proposals ─────────────────────
+export const eventKeys = {
+  all: ["events"] as const,
+  skus: (eventId: string) => ["events", "skus", eventId] as const,
+  stores: (eventId: string) => ["events", "stores", eventId] as const,
+  proposals: (eventId: string) => ["events", "proposals", eventId] as const,
+  proposal: (id: string) => ["events", "proposal", id] as const,
+};
+
 // ─── Cache durations ──────────────────────────────────────────────────────────
 // 30 min staleTime: dato cambia ~cada 6h, 30 min es conservador.
 // 60 min gcTime: mantener en memoria tras unmount.
