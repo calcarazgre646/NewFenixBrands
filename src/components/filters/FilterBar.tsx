@@ -129,7 +129,7 @@ export default function FilterBar({ compact = false, brandOnly = false }: Filter
             {/* Sub-canal B2B (sólo cuando channel='b2b') */}
             {showB2bSub && (
               <>
-                <div className="hidden lg:flex rounded-lg border border-indigo-200 dark:border-indigo-500/30 overflow-hidden">
+                <div className="hidden lg:flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                   {B2B_SUBCHANNELS.map(({ value, label }) => {
                     const active = filters.b2bSubchannel === value;
                     return (
@@ -137,9 +137,7 @@ export default function FilterBar({ compact = false, brandOnly = false }: Filter
                         key={value}
                         onClick={() => setB2bSubchannel(value)}
                         className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                          active
-                            ? "bg-indigo-500 text-white"
-                            : "bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/10"
+                          active ? pillActive : pillInactive
                         }`}
                       >
                         {label}
@@ -154,11 +152,7 @@ export default function FilterBar({ compact = false, brandOnly = false }: Filter
                       <button
                         key={value}
                         onClick={() => setB2bSubchannel(value)}
-                        className={`${pillBase} ${
-                          active
-                            ? "bg-indigo-500 text-white border-indigo-500"
-                            : "bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-300 border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 cursor-pointer"
-                        }`}
+                        className={`${pillBase} ${active ? pillActive : pillInactive}`}
                       >
                         {label}
                       </button>
@@ -274,11 +268,7 @@ export default function FilterBar({ compact = false, brandOnly = false }: Filter
                   <button
                     key={value}
                     onClick={() => setB2bSubchannel(value)}
-                    className={`${pillBase} ${
-                      active
-                        ? "bg-indigo-500 text-white border-indigo-500"
-                        : "bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-300 border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 cursor-pointer"
-                    }`}
+                    className={`${pillBase} ${active ? pillActive : pillInactive}`}
                   >
                     {label}
                   </button>

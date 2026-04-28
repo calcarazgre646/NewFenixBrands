@@ -10,12 +10,18 @@
  *   (El header FilterBar está oculto en mobile, así que Marca se muestra aquí.)
  */
 import { useFilters } from "@/hooks/useFilters";
-import type { BrandFilter, ChannelFilter, PeriodFilter } from "@/domain/filters/types";
+import type { B2bSubchannel, BrandFilter, ChannelFilter, PeriodFilter } from "@/domain/filters/types";
 
 const CHANNELS: { value: ChannelFilter; label: string }[] = [
   { value: "total", label: "Total" },
   { value: "b2c",   label: "B2C" },
   { value: "b2b",   label: "B2B" },
+];
+
+const B2B_SUBCHANNELS: { value: B2bSubchannel; label: string }[] = [
+  { value: "all",       label: "Todos" },
+  { value: "mayorista", label: "Mayorista" },
+  { value: "utp",       label: "UTP" },
 ];
 
 const BRANDS: { value: BrandFilter; label: string }[] = [
@@ -51,15 +57,17 @@ function Arrow() {
 }
 
 export function ExecutiveFilters() {
-  const { filters, setBrand, setChannel, setPeriod } = useFilters();
+  const { filters, setBrand, setChannel, setB2bSubchannel, setPeriod } = useFilters();
 
   const btnBase = "px-3 py-1.5 text-xs font-medium transition-colors";
   const btnActive = `${btnBase} bg-brand-500 text-white`;
   const btnInactive = `${btnBase} bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700`;
 
+  const showB2bSub = filters.channel === "b2b";
+
   return (
     <>
-      {/* ── Desktop (lg+): botones canal + select período ── */}
+      {/* ── Desktop (lg+): botones canal + sub-canal B2B + select período ── */}
       <div className="hidden lg:flex items-center gap-2">
         <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
           {CHANNELS.map(({ value, label }) => (
@@ -72,6 +80,19 @@ export function ExecutiveFilters() {
             </button>
           ))}
         </div>
+        {showB2bSub && (
+          <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {B2B_SUBCHANNELS.map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => setB2bSubchannel(value)}
+                className={filters.b2bSubchannel === value ? btnActive : btnInactive}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="relative">
           <select
             value={filters.period}
@@ -86,8 +107,8 @@ export function ExecutiveFilters() {
         </div>
       </div>
 
-      {/* ── Mobile (<lg): 3 selects — Marca, Canal, Período ── */}
-      <div className="exec-mobile-filters flex items-center gap-2 lg:hidden">
+      {/* ── Mobile (<lg): selects — Marca, Canal, [Sub-B2B], Período ── */}
+      <div className="exec-mobile-filters flex items-center gap-2 lg:hidden flex-wrap">
         {/* Marca */}
         <div className="relative">
           <select
@@ -115,6 +136,22 @@ export function ExecutiveFilters() {
           </select>
           <Arrow />
         </div>
+
+        {/* Sub-canal B2B (sólo cuando channel='b2b') */}
+        {showB2bSub && (
+          <div className="relative">
+            <select
+              value={filters.b2bSubchannel}
+              onChange={(e) => setB2bSubchannel(e.target.value as B2bSubchannel)}
+              className={selectInactive}
+            >
+              {B2B_SUBCHANNELS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <Arrow />
+          </div>
+        )}
 
         {/* Período */}
         <div className="relative">
