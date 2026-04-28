@@ -4,6 +4,8 @@ interface TabItem<T extends string = string> {
   key: T;
   label: string;
   icon?: ReactNode;
+  /** Mini contador (number) o pill custom (ReactNode) que se renderiza al lado del label. */
+  badge?: number | string | ReactNode;
 }
 
 interface TabsProps<T extends string = string> {
@@ -33,6 +35,9 @@ export function Tabs<T extends string = string>({
     >
       {items.map((tab) => {
         const isActive = tab.key === active;
+        const badge = tab.badge;
+        const badgeIsScalar = typeof badge === "number" || typeof badge === "string";
+
         return (
           <button
             key={tab.key}
@@ -47,6 +52,21 @@ export function Tabs<T extends string = string>({
           >
             {tab.icon}
             {tab.label}
+            {badge != null && (
+              badgeIsScalar ? (
+                <span
+                  className={`inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+                    isActive
+                      ? "bg-brand-500 text-white"
+                      : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                  }`}
+                >
+                  {badge}
+                </span>
+              ) : (
+                badge
+              )
+            )}
             {isActive && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-brand-500" />
             )}
