@@ -36,6 +36,7 @@ const LogisticsPage     = lazy(() => import("@/features/logistics/LogisticsPage"
 const DepotsPage        = lazy(() => import("@/features/depots/DepotsPage"));
 const PricingPage       = lazy(() => import("@/features/pricing/PricingPage"));
 const CalendarPage      = lazy(() => import("@/features/calendar/CalendarPage"));
+const EventDashboardPage = lazy(() => import("@/features/calendar/EventDashboardPage"));
 const NoAccessPage         = lazy(() => import("@/features/auth/NoAccessPage"));
 const ChangePasswordPage   = lazy(() => import("@/features/auth/ChangePasswordPage"));
 const UsersPage            = lazy(() => import("@/features/users/UsersPage"));
@@ -160,6 +161,13 @@ export default function App() {
             <Route path="calendario" element={
               <PermissionGuard allowed={(p) => p.canViewCalendar}>
                 <FeatureErrorBoundary feature="Calendario"><CalendarPage /></FeatureErrorBoundary>
+              </PermissionGuard>
+            } />
+
+            {/* Dashboard de un evento del calendario */}
+            <Route path="calendario/evento/:eventId" element={
+              <PermissionGuard allowed={(p) => p.canViewCalendar}>
+                <FeatureErrorBoundary feature="Evento"><EventDashboardPage /></FeatureErrorBoundary>
               </PermissionGuard>
             } />
 
