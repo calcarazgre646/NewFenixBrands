@@ -105,11 +105,9 @@ export function derivePermissions(profile: UserProfile | null): Permissions {
   }
 
   if (role === "vendedor") {
-    // Vendedor: vista mínima. Solo "Mi Proyección".
-    // Su data está restringida a su propio vendedor_codigo (la página filtra por
-    // profile.vendedorCodigo en el hook useMyProjection).
-    // Permitimos canViewMyProjection=true incluso sin código asignado: la página
-    // muestra un cartel pidiendo al admin que asigne el código (mejor UX que
+    // Vendedor: vista mínima — solo /comisiones (rol-aware: la página filtra
+    // por profile.vendedorCodigo). canViewCommissions=true incluso sin código
+    // asignado: la página muestra el cartel "vincular código" (mejor UX que
     // mandarlo a /signin).
     return {
       canViewExecutive: false,
@@ -120,8 +118,11 @@ export function derivePermissions(profile: UserProfile | null): Permissions {
       canViewDepots:    false,
       canViewPricing:   false,
       canViewCalendar:  false,
-      canViewCommissions: false,
-      canViewSellerProjections: false,
+      canViewCommissions: true,
+      // Aliases legacy para deep links / código antiguo. Mantienen el mismo
+      // valor que canViewCommissions porque /proyeccion-vendedor y
+      // /mi-proyeccion redirigen a /comisiones.
+      canViewSellerProjections: true,
       canViewMyProjection: true,
       canViewMarketing: false,
       canConfigureEmailSender: false,
@@ -179,7 +180,7 @@ export function getDefaultRoute(permissions: Permissions): string {
   if (permissions.canViewExecutive) return "/";
   if (permissions.canViewSales) return "/ventas";
   if (permissions.canViewCalendar) return "/calendario";
-  if (permissions.canViewMyProjection) return "/mi-proyeccion";
+  if (permissions.canViewCommissions) return "/comisiones";
   return "/signin";
 }
 

@@ -1,9 +1,12 @@
 /**
- * features/projections/hooks/useSellerProjections.ts
+ * features/commissions/hooks/useSellerProjections.ts
+ *
+ * Hook interno de orquestación, consumido por useCompensation. No tocar
+ * directamente desde la UI — la UI consume useCompensation.
  *
  * Orquesta la proyección de ventas + comisiones por vendedor para un mes.
  *
- * Asimetría retail vs mayorista/utp (igual que useCommissions):
+ * Asimetría retail vs mayorista/utp:
  *
  *   RETAIL: el cumplimiento es a nivel TIENDA. Proyectamos la venta total de la
  *     tienda con run-rate lineal y derivamos el tramo desde ahí. La comisión

@@ -2,8 +2,8 @@
  * domain/commissions/classify.ts
  *
  * Clasificación de un vendedor en rol de comisión + canal según el canal de venta
- * y el tipo de venta del ERP. Fuente única de verdad — antes vivía duplicada en
- * useCommissions y useSellerProjections.
+ * y el tipo de venta del ERP. Fuente única de verdad — la consume el hook
+ * useSellerProjections (interno a useCompensation).
  */
 import type { CommissionRole, CommissionChannel } from "./types";
 

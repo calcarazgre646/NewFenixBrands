@@ -40,9 +40,6 @@ const NoAccessPage         = lazy(() => import("@/features/auth/NoAccessPage"));
 const ChangePasswordPage   = lazy(() => import("@/features/auth/ChangePasswordPage"));
 const UsersPage            = lazy(() => import("@/features/users/UsersPage"));
 const CommissionsPage      = lazy(() => import("@/features/commissions/CommissionsPage"));
-const CommissionsV2Page    = lazy(() => import("@/features/commissions/CommissionsV2Page"));
-const ProjectionPage       = lazy(() => import("@/features/projections/ProjectionPage"));
-const MyProjectionPage     = lazy(() => import("@/features/projections/MyProjectionPage"));
 const MarketingPage        = lazy(() => import("@/features/marketing/MarketingPage"));
 const HelpPage             = lazy(() => import("@/features/help/HelpPage"));
 
@@ -166,33 +163,16 @@ export default function App() {
               </PermissionGuard>
             } />
 
-            {/* Comisiones — super_user y gerencia */}
+            {/* Comisiones — super_user, gerencia y vendedor (rol-aware en la página) */}
             <Route path="comisiones" element={
               <PermissionGuard allowed={(p) => p.canViewCommissions}>
                 <FeatureErrorBoundary feature="Comisiones"><CommissionsPage /></FeatureErrorBoundary>
               </PermissionGuard>
             } />
 
-            {/* Comisiones v2 (preview) — solo super_user durante PR 2 */}
-            <Route path="comisiones-v2" element={
-              <PermissionGuard allowed={(p) => p.canViewCommissions || p.canViewMyProjection}>
-                <FeatureErrorBoundary feature="Comisiones v2"><CommissionsV2Page /></FeatureErrorBoundary>
-              </PermissionGuard>
-            } />
-
-            {/* Proyección por Vendedor — super_user y gerencia */}
-            <Route path="proyeccion-vendedor" element={
-              <PermissionGuard allowed={(p) => p.canViewSellerProjections}>
-                <FeatureErrorBoundary feature="Proyección Vendedor"><ProjectionPage /></FeatureErrorBoundary>
-              </PermissionGuard>
-            } />
-
-            {/* Mi Proyección — vendedor mapeado a su propia vista */}
-            <Route path="mi-proyeccion" element={
-              <PermissionGuard allowed={(p) => p.canViewMyProjection}>
-                <FeatureErrorBoundary feature="Mi Proyección"><MyProjectionPage /></FeatureErrorBoundary>
-              </PermissionGuard>
-            } />
+            {/* Redirects: rutas viejas de proyección apuntan a /comisiones (deep links siguen funcionando) */}
+            <Route path="proyeccion-vendedor" element={<Navigate to="/comisiones" replace />} />
+            <Route path="mi-proyeccion" element={<Navigate to="/comisiones" replace />} />
 
             {/* Marketing (SAM) — super_user y gerencia */}
             <Route path="marketing" element={

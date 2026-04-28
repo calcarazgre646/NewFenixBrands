@@ -1,12 +1,9 @@
 /**
- * features/projections/hooks/useMyProjection.ts
+ * features/commissions/hooks/useMyProjection.ts
  *
- * Devuelve la proyección del vendedor mapeado al usuario autenticado +
- * la serie diaria para el gráfico acumulado.
- *
- * Reusa `useSellerProjections` (gerencia) filtrando por vendedorCodigo.
- * Para la serie diaria llama directamente a la query daily y construye los
- * puntos con el módulo de dominio.
+ * Hook interno consumido por useCompensation cuando scope=self. Devuelve la
+ * proyección del vendedor mapeado al perfil + la serie diaria para el chart.
+ * Reusa `useSellerProjections` filtrando por `profile.vendedorCodigo`.
  */
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";

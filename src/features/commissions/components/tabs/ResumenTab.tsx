@@ -18,7 +18,7 @@ import StaircaseCommissionCurve from "../StaircaseCommissionCurve";
 import WhatIfSimulator from "../WhatIfSimulator";
 import PaceChart from "../PaceChart";
 import { KpiTooltip } from "../KpiTooltip";
-import ProjectionChart from "@/features/projections/components/ProjectionChart";
+import DailyCurveChart from "../DailyCurveChart";
 import { buildTopBottoms } from "../../hooks/derive";
 import type { UseCompensationResult } from "../../hooks/useCompensation";
 
@@ -68,7 +68,7 @@ export default function ResumenTab({ data }: Props) {
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
               Tu mes día por día
             </p>
-            <ProjectionChart series={self.series} height={260} />
+            <DailyCurveChart series={self.series} height={260} />
           </div>
         </div>
 

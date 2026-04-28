@@ -1,10 +1,8 @@
 /**
  * CompensationTeamTable — tabla del equipo en la pestaña "Equipo".
  *
- * Igual que ProjectionTable pero enriquecida:
  *   + Columna Pace (bullet chart) con bandas semánticas.
  *   + Click en fila → drill a transacciones (drawer lateral).
- *   + Conserva las columnas de la versión original.
  */
 import { useState } from "react";
 import { formatPYGCompact } from "@/utils/format";
