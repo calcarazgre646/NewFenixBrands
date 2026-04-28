@@ -29,6 +29,7 @@ import {
 import {
   DEFAULT_FILTERS,
   type AppFilters,
+  type B2bSubchannel,
   type BrandFilter,
   type ChannelFilter,
   type PeriodFilter,
@@ -78,9 +79,14 @@ export function FilterProvider({ children }: { children: ReactNode }) {
   const setChannel = useCallback((channel: ChannelFilter) => {
     // Si el canal está bloqueado, ignorar el cambio
     if (isChannelLocked) return;
-    // Al cambiar canal, resetear tienda seleccionada (puede no pertenecer al nuevo canal)
-    setFilters((prev) => ({ ...prev, channel, store: null }));
+    // Al cambiar canal, resetear tienda seleccionada y sub-canal B2B
+    // (ambos sólo tienen sentido dentro de su canal correspondiente).
+    setFilters((prev) => ({ ...prev, channel, store: null, b2bSubchannel: "all" }));
   }, [isChannelLocked]);
+
+  const setB2bSubchannel = useCallback((sub: B2bSubchannel) => {
+    setFilters((prev) => ({ ...prev, b2bSubchannel: sub }));
+  }, []);
 
   const setStore = useCallback((store: string | null) => {
     setFilters((prev) => ({ ...prev, store }));
@@ -104,8 +110,8 @@ export function FilterProvider({ children }: { children: ReactNode }) {
 
   // Memoizar el valor del contexto para evitar re-renders innecesarios
   const contextValue = useMemo<FilterContextValue>(
-    () => ({ filters, setBrand, setChannel, setStore, setPeriod, setYear, resetFilters, isChannelLocked }),
-    [filters, setBrand, setChannel, setStore, setPeriod, setYear, resetFilters, isChannelLocked]
+    () => ({ filters, setBrand, setChannel, setB2bSubchannel, setStore, setPeriod, setYear, resetFilters, isChannelLocked }),
+    [filters, setBrand, setChannel, setB2bSubchannel, setStore, setPeriod, setYear, resetFilters, isChannelLocked]
   );
 
   return (

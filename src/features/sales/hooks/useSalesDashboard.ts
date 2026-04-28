@@ -174,13 +174,13 @@ export function useSalesDashboard(): SalesDashboardData {
 
   // ── Filtrado local ────────────────────────────────────────────────────────
   const filteredCY = useMemo(
-    () => filterSalesRows(salesQ.data ?? [], filters.brand, filters.channel, filters.store),
-    [salesQ.data, filters.brand, filters.channel, filters.store],
+    () => filterSalesRows(salesQ.data ?? [], filters.brand, filters.channel, filters.store, filters.b2bSubchannel),
+    [salesQ.data, filters.brand, filters.channel, filters.store, filters.b2bSubchannel],
   );
 
   const filteredPY = useMemo(
-    () => filterSalesRows(prevSalesQ.data ?? [], filters.brand, filters.channel, filters.store),
-    [prevSalesQ.data, filters.brand, filters.channel, filters.store],
+    () => filterSalesRows(prevSalesQ.data ?? [], filters.brand, filters.channel, filters.store, filters.b2bSubchannel),
+    [prevSalesQ.data, filters.brand, filters.channel, filters.store, filters.b2bSubchannel],
   );
 
   // ── Último día con datos reales (usa datos WIDE, sin filtros de usuario) ──

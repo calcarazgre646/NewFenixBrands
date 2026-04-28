@@ -400,8 +400,9 @@ export function useSalesAnalytics({
       storeMap,
       filters.channel,
       filters.store,
+      filters.b2bSubchannel,
     ),
-    [ticketsQ.data, activeMonths, storeMap, filters.channel, filters.store],
+    [ticketsQ.data, activeMonths, storeMap, filters.channel, filters.store, filters.b2bSubchannel],
   );
 
   const storeBreakdown = useMemo(
