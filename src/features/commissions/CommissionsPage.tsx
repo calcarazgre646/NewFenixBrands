@@ -93,19 +93,14 @@ export default function CommissionsPage() {
       <div className="flex flex-wrap items-center gap-3">
         <div>
           <h1 className="text-lg font-bold text-gray-900 dark:text-white">Comisiones</h1>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {data.scope === "self"
-              ? "Tu desempeño y proyección personal"
-              : "Actual + proyección al cierre + histórico — todo en un solo lugar"}
-          </p>
+          {data.scope === "self" && (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Tu desempeño y proyección personal
+            </p>
+          )}
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          {time.isInProgress && (
-            <span className="inline-flex items-center rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-[10px] font-semibold text-brand-700 dark:border-brand-500/20 dark:bg-brand-500/10 dark:text-brand-400">
-              Día {time.diasTranscurridos}/{time.diasMes} · {time.diasRestantes}d restantes
-            </span>
-          )}
           {time.isMonthClosed && (
             <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[10px] font-semibold text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
               Mes cerrado
