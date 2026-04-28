@@ -16,6 +16,7 @@
  */
 import { dataClient } from "@/api/client";
 import { toNum, trimStr, toInt, B2B_STORES } from "@/api/normalize";
+import type { B2bSubchannel } from "@/domain/filters/types";
 import { fetchAllRows } from "@/queries/paginate";
 
 export interface TicketRow {
@@ -62,24 +63,40 @@ export async function fetchPriorYearAnnualTickets(year: number): Promise<TicketR
 }
 
 /**
+ * Set de cosujd que cuentan como "UTP/Uniformes" (el resto de B2B son
+ * Mayorista). UNIFORMES aparece como tienda separada en algunos meses,
+ * comercialmente equivale a UTP.
+ */
+const UTP_STORES = new Set(["UTP", "UNIFORMES"]);
+
+/**
  * Filtra tickets de vw_ticket_promedio_diario por canal y/o tienda específica.
  * Recibe el mapa cosupc → cosujd para resolver ambos filtros.
  *
  * @param storeCosujd  Código cosujd de la tienda (filters.store). Si es null/undefined,
  *                     no se aplica filtro de tienda (todas las tiendas del canal).
+ * @param b2bSub       Sub-filtro de B2B. Sólo aplica cuando channel='b2b'.
+ *                     "all" (default) deja Mayorista+UTP juntos.
  */
 export function filterTicketsByChannel(
   tickets: TicketRow[],
   storeMap: Map<string, string>, // cosupc → cosujd
   channel: "b2b" | "b2c" | "total",
-  storeCosujd?: string | null
+  storeCosujd?: string | null,
+  b2bSub: B2bSubchannel = "all",
 ): TicketRow[] {
-  if (channel === "total" && !storeCosujd) return tickets;
+  const subActive = channel === "b2b" && b2bSub !== "all";
+  if (channel === "total" && !storeCosujd && !subActive) return tickets;
   return tickets.filter((t) => {
     const cosujd    = storeMap.get(t.storeCode)?.trim().toUpperCase() ?? "";
     const isB2B     = B2B_STORES.has(cosujd);
     const channelOk = channel === "total" || (channel === "b2b" ? isB2B : !isB2B);
     const storeOk   = !storeCosujd || cosujd === storeCosujd.trim().toUpperCase();
-    return channelOk && storeOk;
+    let subOk = true;
+    if (subActive) {
+      const isUtp = UTP_STORES.has(cosujd);
+      subOk = b2bSub === "utp" ? isUtp : !isUtp;  // "mayorista" = B2B excepto UTP/UNIFORMES
+    }
+    return channelOk && storeOk && subOk;
   });
 }

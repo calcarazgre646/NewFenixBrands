@@ -75,4 +75,44 @@ describe("filterSalesRows", () => {
   it("handles empty input", () => {
     expect(filterSalesRows([], "total", "total", null)).toEqual([]);
   });
+
+  describe("b2bSubchannel", () => {
+    const b2bRows: MonthlySalesRow[] = [
+      makeRow({ channel: "B2B", store: "MAYORISTA", neto: 100 }),
+      makeRow({ channel: "B2B", store: "UTP",       neto: 200 }),
+      makeRow({ channel: "B2B", store: "UNIFORMES", neto: 50 }),
+      makeRow({ channel: "B2C", store: "CERROALTO", neto: 999 }),
+    ];
+
+    it("default 'all' devuelve ambos UTP y Mayorista", () => {
+      const r = filterSalesRows(b2bRows, "total", "b2b", null, "all");
+      expect(r.map(x => x.store).sort()).toEqual(["MAYORISTA", "UNIFORMES", "UTP"]);
+    });
+
+    it("backward compatible: sin pasar 5to arg = 'all'", () => {
+      const r = filterSalesRows(b2bRows, "total", "b2b", null);
+      expect(r).toHaveLength(3);
+    });
+
+    it("'mayorista' excluye UTP y UNIFORMES", () => {
+      const r = filterSalesRows(b2bRows, "total", "b2b", null, "mayorista");
+      expect(r.map(x => x.store)).toEqual(["MAYORISTA"]);
+    });
+
+    it("'utp' incluye tanto UTP como UNIFORMES", () => {
+      const r = filterSalesRows(b2bRows, "total", "b2b", null, "utp");
+      expect(r.map(x => x.store).sort()).toEqual(["UNIFORMES", "UTP"]);
+    });
+
+    it("se ignora cuando channel != b2b (no filtra B2C)", () => {
+      const r = filterSalesRows(b2bRows, "total", "b2c", null, "utp");
+      expect(r).toHaveLength(1);
+      expect(r[0].channel).toBe("B2C");
+    });
+
+    it("se ignora cuando channel='total'", () => {
+      const r = filterSalesRows(b2bRows, "total", "total", null, "mayorista");
+      expect(r).toHaveLength(4);
+    });
+  });
 });

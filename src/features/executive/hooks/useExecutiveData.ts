@@ -279,13 +279,13 @@ export function useExecutiveData(): ExecutiveData {
 
   // ── Filtrado local ─────────────────────────────────────────────────────
   const filteredSales = useMemo(
-    () => filterSalesRows(salesQ.data ?? [], filters.brand, filters.channel, filters.store),
-    [salesQ.data, filters.brand, filters.channel, filters.store],
+    () => filterSalesRows(salesQ.data ?? [], filters.brand, filters.channel, filters.store, filters.b2bSubchannel),
+    [salesQ.data, filters.brand, filters.channel, filters.store, filters.b2bSubchannel],
   );
 
   const filteredPrevSales = useMemo(
-    () => filterSalesRows(prevSalesQ.data ?? [], filters.brand, filters.channel, filters.store),
-    [prevSalesQ.data, filters.brand, filters.channel, filters.store],
+    () => filterSalesRows(prevSalesQ.data ?? [], filters.brand, filters.channel, filters.store, filters.b2bSubchannel),
+    [prevSalesQ.data, filters.brand, filters.channel, filters.store, filters.b2bSubchannel],
   );
 
   // Filtrado local de ventas diarias PY (sin store — la vista no tiene esa dimensión)
@@ -620,7 +620,7 @@ export function useExecutiveData(): ExecutiveData {
     if (filters.brand === "total") {
       // Modo 1: comparar marcas
       const salesAgg = aggregateSalesByBrand(
-        filterSalesRows(salesQ.data, "total", filters.channel, filters.store),
+        filterSalesRows(salesQ.data, "total", filters.channel, filters.store, filters.b2bSubchannel),
         activeMonths,
       );
       const budgetAgg = aggregateBudgetByBrand(
@@ -644,7 +644,7 @@ export function useExecutiveData(): ExecutiveData {
       );
       return generateChannelInsights(salesAgg, budgetAgg, 3);
     }
-  }, [metrics, salesQ.data, budgetQ.data, filters.brand, filters.channel, filters.store, activeMonths, correctedProrata]);
+  }, [metrics, salesQ.data, budgetQ.data, filters.brand, filters.channel, filters.b2bSubchannel, filters.store, activeMonths, correctedProrata]);
 
   // Channel insights (solo para brand="total" — se usa en rotación con brand insights)
   const channelInsights = useMemo((): BrandInsight[] => {

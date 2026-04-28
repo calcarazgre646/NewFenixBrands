@@ -7,6 +7,7 @@
 import { createContext } from "react";
 import type {
   AppFilters,
+  B2bSubchannel,
   BrandFilter,
   ChannelFilter,
   PeriodFilter,
@@ -16,6 +17,7 @@ export interface FilterContextValue {
   filters: AppFilters;
   setBrand:   (brand: BrandFilter) => void;
   setChannel: (channel: ChannelFilter) => void;
+  setB2bSubchannel: (sub: B2bSubchannel) => void;
   setStore:   (store: string | null) => void;
   setPeriod:  (period: PeriodFilter) => void;
   setYear:    (year: number) => void;

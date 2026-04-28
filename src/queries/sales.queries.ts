@@ -21,7 +21,21 @@ import {
 } from "@/api/normalize";
 import { fetchAllRows } from "@/queries/paginate";
 import type { AppFilters } from "@/domain/filters/types";
+import { b2bSubchannelToSucursalFinal } from "@/domain/filters/b2b";
 import { getCalendarDay, getCalendarMonth, getCalendarYear } from "@/domain/period/helpers";
+
+/**
+ * Sub-filtro B2B Mayorista vs UTP. Sólo aplica cuando channel === "b2b"
+ * y subchannel ∈ {"mayorista","utp"}. Ambas tablas (mv_ventas_mensual y
+ * fjdhstvta1) usan v_sucursal_final ∈ {"MAYORISTA","UTP"} para discriminar.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyB2bSubFilter(query: any, filters: AppFilters) {
+  if (filters.channel !== "b2b") return query;
+  const target = b2bSubchannelToSucursalFinal(filters.b2bSubchannel);
+  if (!target) return query;
+  return query.eq("v_sucursal_final", target);
+}
 
 // Supabase TS parser no soporta ñ/acentos en nombres de columnas del ERP legacy.
 // Usamos este cast en todos los .map() para que el código sea type-safe a nivel
@@ -117,6 +131,7 @@ function applyMonthlySalesFilters(
   if (filters.channel !== "total") {
     query = query.eq("v_canal_venta", filters.channel.toUpperCase());
   }
+  query = applyB2bSubFilter(query, filters);
   if (filters.store) {
     query = query.eq("v_sucursal_final", filters.store);
   }
@@ -195,6 +210,7 @@ export async function fetchDailyDetail(
     if (filters.channel !== "total") {
       q = q.eq("v_canal_venta", filters.channel.toUpperCase());
     }
+    q = applyB2bSubFilter(q, filters);
     if (filters.store) {
       q = q.eq("v_sucursal_final", filters.store);
     }
@@ -252,6 +268,7 @@ export async function fetchPriorYearCurrentMonthToDate(
     if (filters.channel !== "total") {
       q = q.eq("v_canal_venta", filters.channel.toUpperCase());
     }
+    q = applyB2bSubFilter(q, filters);
     if (filters.store) {
       q = q.eq("v_sucursal_final", filters.store);
     }
@@ -290,6 +307,7 @@ export async function fetchBrandBreakdown(
       .in("v_mes", months)
       .in("v_canal_venta", ["B2B", "B2C"]);
     if (filters.channel !== "total") q = q.eq("v_canal_venta", filters.channel.toUpperCase());
+    q = applyB2bSubFilter(q, filters);
     if (filters.store) q = q.eq("v_sucursal_final", filters.store);
     return q.order("v_marca").order("v_mes").order("v_sucursal_final").order("v_canal_venta");
   };
@@ -302,6 +320,7 @@ export async function fetchBrandBreakdown(
       .in("v_mes", months)
       .in("v_canal_venta", ["B2B", "B2C"]);
     if (filters.channel !== "total") q = q.eq("v_canal_venta", filters.channel.toUpperCase());
+    q = applyB2bSubFilter(q, filters);
     if (filters.store) q = q.eq("v_sucursal_final", filters.store);
     return q.order("v_marca").order("v_mes");
   };
@@ -606,6 +625,7 @@ export async function fetchTopSkus(
       if (canonical) q = q.ilike("v_marca", `%${canonical}%`);
     }
     if (filters.channel !== "total") q = q.eq("v_canal_venta", filters.channel.toUpperCase());
+    q = applyB2bSubFilter(q, filters);
     if (filters.store) q = q.eq("v_sucursal_final", filters.store);
     return q;
   };

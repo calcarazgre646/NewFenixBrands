@@ -14,26 +14,28 @@
 import type { AppFilters } from "@/domain/filters/types";
 
 // ─── Ventas ───────────────────────────────────────────────────────────────────
+// El sub-filtro B2B forma parte de las keys que dependen de canal — sin esto,
+// cambiar entre Mayorista/UTP no invalidaría cache cuando channel='b2b'.
 export const salesKeys = {
   all: ["sales"] as const,
   monthly: (f: AppFilters) =>
-    ["sales", "monthly", f.brand, f.channel, f.store, f.year] as const,
+    ["sales", "monthly", f.brand, f.channel, f.b2bSubchannel, f.store, f.year] as const,
   dailyDetail: (f: AppFilters) =>
-    ["sales", "daily", f.brand, f.channel, f.store, f.year] as const,
+    ["sales", "daily", f.brand, f.channel, f.b2bSubchannel, f.store, f.year] as const,
   brandBreakdown: (f: AppFilters) =>
-    ["sales", "brands", f.channel, f.store, f.year] as const,
+    ["sales", "brands", f.channel, f.b2bSubchannel, f.store, f.year] as const,
   channelMix: (f: AppFilters) =>
     ["sales", "channels", f.brand, f.store, f.year] as const,
   storeBreakdown: (f: AppFilters) =>
-    ["sales", "stores", f.brand, f.channel, f.year] as const,
+    ["sales", "stores", f.brand, f.channel, f.b2bSubchannel, f.year] as const,
   topSkus: (f: AppFilters) =>
-    ["sales", "topSkus", f.brand, f.channel, f.store, f.year] as const,
+    ["sales", "topSkus", f.brand, f.channel, f.b2bSubchannel, f.store, f.year] as const,
   dayOfWeek: (f: AppFilters) =>
-    ["sales", "dow", f.brand, f.channel, f.store, f.year] as const,
+    ["sales", "dow", f.brand, f.channel, f.b2bSubchannel, f.store, f.year] as const,
   priorYear: (f: AppFilters) =>
-    ["sales", "priorYear", f.brand, f.channel, f.store, f.year] as const,
+    ["sales", "priorYear", f.brand, f.channel, f.b2bSubchannel, f.store, f.year] as const,
   priorYearToDate: (f: AppFilters, toDay: number) =>
-    ["sales", "priorYearToDate", f.brand, f.channel, f.store, f.year, toDay] as const,
+    ["sales", "priorYearToDate", f.brand, f.channel, f.b2bSubchannel, f.store, f.year, toDay] as const,
 
   // ── Wide keys (fetch-once, filter-local — sin filtros de usuario) ──────────
   monthlyWide: (year: number) =>
@@ -66,9 +68,9 @@ export const budgetKeys = {
 export const ticketKeys = {
   all: ["tickets"] as const,
   monthly: (f: AppFilters) =>
-    ["tickets", "monthly", f.channel, f.store, f.year] as const,
+    ["tickets", "monthly", f.channel, f.b2bSubchannel, f.store, f.year] as const,
   priorYear: (f: AppFilters) =>
-    ["tickets", "priorYear", f.channel, f.store, f.year] as const,
+    ["tickets", "priorYear", f.channel, f.b2bSubchannel, f.store, f.year] as const,
 };
 
 // ─── Tiendas ──────────────────────────────────────────────────────────────────

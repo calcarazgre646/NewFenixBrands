@@ -54,7 +54,7 @@ import { filterSalesRows } from "@/queries/filters";
 import { resolvePeriod } from "@/domain/period/resolve";
 import { getCalendarMonth, getCalendarYear, getCalendarDay } from "@/domain/period/helpers";
 import { brandIdToCanonical } from "@/api/normalize";
-import type { PeriodFilter } from "@/domain/filters/types";
+import type { PeriodFilter, B2bSubchannel } from "@/domain/filters/types";
 import {
   calcGrossMargin,
   calcGMROI,
@@ -132,14 +132,21 @@ function filterPriorYearMTD(
   brand: string,
   channel: string,
   store: string | null,
+  b2bSub: B2bSubchannel = "all",
 ): { neto: number; cogs: number; bruto: number; dcto: number } {
   const canonical = brand !== "total" ? brandIdToCanonical(brand) : null;
   const ch = channel !== "total" ? channel.toUpperCase() : null;
+  const subActive = ch === "B2B" && b2bSub !== "all";
   return rows.reduce(
     (acc, r) => {
       if (canonical && r.brand !== canonical) return acc;
       if (ch && r.channel !== ch) return acc;
       if (store && r.store !== store) return acc;
+      if (subActive) {
+        const isUtp = r.store === "UTP" || r.store === "UNIFORMES";
+        if (b2bSub === "utp" && !isUtp) return acc;
+        if (b2bSub === "mayorista" && isUtp) return acc;
+      }
       return {
         neto:  acc.neto  + r.neto,
         cogs:  acc.cogs  + r.cogs,
@@ -274,18 +281,18 @@ export function useKpiDashboard(): UseKpiDashboardResult {
 
   // ── Filtrado local: datos WIDE cacheados → filtrados por brand/channel/store
   const filteredSales = useMemo(
-    () => filterSalesRows(salesQ.data ?? [], filters.brand, filters.channel, filters.store),
-    [salesQ.data, filters.brand, filters.channel, filters.store],
+    () => filterSalesRows(salesQ.data ?? [], filters.brand, filters.channel, filters.store, filters.b2bSubchannel),
+    [salesQ.data, filters.brand, filters.channel, filters.store, filters.b2bSubchannel],
   );
 
   const filteredPrevSales = useMemo(
-    () => filterSalesRows(prevSalesQ.data ?? [], filters.brand, filters.channel, filters.store),
-    [prevSalesQ.data, filters.brand, filters.channel, filters.store],
+    () => filterSalesRows(prevSalesQ.data ?? [], filters.brand, filters.channel, filters.store, filters.b2bSubchannel),
+    [prevSalesQ.data, filters.brand, filters.channel, filters.store, filters.b2bSubchannel],
   );
 
   const filteredPrevMTD = useMemo(
-    () => filterPriorYearMTD(prevCurrentMonthQ.data ?? [], filters.brand, filters.channel, filters.store),
-    [prevCurrentMonthQ.data, filters.brand, filters.channel, filters.store],
+    () => filterPriorYearMTD(prevCurrentMonthQ.data ?? [], filters.brand, filters.channel, filters.store, filters.b2bSubchannel),
+    [prevCurrentMonthQ.data, filters.brand, filters.channel, filters.store, filters.b2bSubchannel],
   );
 
   // ── Período exacto desde datos reales de la BD ────────────────────────────
@@ -332,8 +339,8 @@ export function useKpiDashboard(): UseKpiDashboardResult {
     const storeMap = new Map<string, string>();
     for (const s of storesQ.data ?? []) storeMap.set(s.cosupc, s.cosujd);
 
-    const filteredTickets     = filterTicketsByChannel(ticketsForMonths, storeMap, filters.channel, filters.store);
-    const filteredPrevTickets = filterTicketsByChannel(prevTicketsForMonths, storeMap, filters.channel, filters.store);
+    const filteredTickets     = filterTicketsByChannel(ticketsForMonths, storeMap, filters.channel, filters.store, filters.b2bSubchannel);
+    const filteredPrevTickets = filterTicketsByChannel(prevTicketsForMonths, storeMap, filters.channel, filters.store, filters.b2bSubchannel);
 
     let totalTickets = 0, totalSales = 0;
     for (const t of filteredTickets) { totalTickets += t.tickets; totalSales += t.totalSales; }
@@ -554,7 +561,7 @@ export function useKpiDashboard(): UseKpiDashboardResult {
     storesQ.data, storesQ.isLoading,
     prevCurrentMonthQ.isLoading, prevCurrentMonthQ.error,
     activeMonths, closedMonths,
-    filters.channel, filters.store, filters.brand, filters.period, filters.year,
+    filters.channel, filters.b2bSubchannel, filters.store, filters.brand, filters.period, filters.year,
     needsDayPreciseYoY, calYear,
   ]);
 

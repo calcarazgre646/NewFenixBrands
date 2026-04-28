@@ -15,7 +15,7 @@
  * Lee y escribe en FilterContext. Todos los hooks se actualizan automáticamente.
  */
 import { useFilters } from "@/hooks/useFilters";
-import type { BrandFilter, ChannelFilter, PeriodFilter } from "@/domain/filters/types";
+import type { B2bSubchannel, BrandFilter, ChannelFilter, PeriodFilter } from "@/domain/filters/types";
 
 const BRANDS: { value: BrandFilter; label: string; initial: string; bg: string }[] = [
   { value: "total",    label: "Todas las marcas", initial: "T", bg: "bg-brand-500" },
@@ -28,6 +28,12 @@ const CHANNELS: { value: ChannelFilter; label: string }[] = [
   { value: "total", label: "Total" },
   { value: "b2c",   label: "B2C" },
   { value: "b2b",   label: "B2B" },
+];
+
+const B2B_SUBCHANNELS: { value: B2bSubchannel; label: string }[] = [
+  { value: "all",       label: "Todos" },
+  { value: "mayorista", label: "Mayorista" },
+  { value: "utp",       label: "UTP" },
 ];
 
 const PERIODS: { value: PeriodFilter; label: string }[] = [
@@ -44,7 +50,8 @@ interface FilterBarProps {
 }
 
 export default function FilterBar({ compact = false, brandOnly = false }: FilterBarProps) {
-  const { filters, setBrand, setChannel, setPeriod, isChannelLocked } = useFilters();
+  const { filters, setBrand, setChannel, setB2bSubchannel, setPeriod, isChannelLocked } = useFilters();
+  const showB2bSub = !brandOnly && filters.channel === "b2b";
 
   const pillBase =
     "px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap";
@@ -118,6 +125,48 @@ export default function FilterBar({ compact = false, brandOnly = false }: Filter
                 );
               })}
             </div>
+
+            {/* Sub-canal B2B (sólo cuando channel='b2b') */}
+            {showB2bSub && (
+              <>
+                <div className="hidden lg:flex rounded-lg border border-indigo-200 dark:border-indigo-500/30 overflow-hidden">
+                  {B2B_SUBCHANNELS.map(({ value, label }) => {
+                    const active = filters.b2bSubchannel === value;
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => setB2bSubchannel(value)}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                          active
+                            ? "bg-indigo-500 text-white"
+                            : "bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/10"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="lg:hidden flex gap-1">
+                  {B2B_SUBCHANNELS.map(({ value, label }) => {
+                    const active = filters.b2bSubchannel === value;
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => setB2bSubchannel(value)}
+                        className={`${pillBase} ${
+                          active
+                            ? "bg-indigo-500 text-white border-indigo-500"
+                            : "bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-300 border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 cursor-pointer"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </>
         )}
 
@@ -217,6 +266,26 @@ export default function FilterBar({ compact = false, brandOnly = false }: Filter
               );
             })}
           </div>
+          {showB2bSub && (
+            <div className="mt-2 flex gap-1 flex-wrap">
+              {B2B_SUBCHANNELS.map(({ value, label }) => {
+                const active = filters.b2bSubchannel === value;
+                return (
+                  <button
+                    key={value}
+                    onClick={() => setB2bSubchannel(value)}
+                    className={`${pillBase} ${
+                      active
+                        ? "bg-indigo-500 text-white border-indigo-500"
+                        : "bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-300 border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 cursor-pointer"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
       <div>
