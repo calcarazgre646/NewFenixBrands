@@ -40,6 +40,7 @@ const NoAccessPage         = lazy(() => import("@/features/auth/NoAccessPage"));
 const ChangePasswordPage   = lazy(() => import("@/features/auth/ChangePasswordPage"));
 const UsersPage            = lazy(() => import("@/features/users/UsersPage"));
 const CommissionsPage      = lazy(() => import("@/features/commissions/CommissionsPage"));
+const CommissionsV2Page    = lazy(() => import("@/features/commissions/CommissionsV2Page"));
 const ProjectionPage       = lazy(() => import("@/features/projections/ProjectionPage"));
 const MyProjectionPage     = lazy(() => import("@/features/projections/MyProjectionPage"));
 const MarketingPage        = lazy(() => import("@/features/marketing/MarketingPage"));
@@ -169,6 +170,13 @@ export default function App() {
             <Route path="comisiones" element={
               <PermissionGuard allowed={(p) => p.canViewCommissions}>
                 <FeatureErrorBoundary feature="Comisiones"><CommissionsPage /></FeatureErrorBoundary>
+              </PermissionGuard>
+            } />
+
+            {/* Comisiones v2 (preview) — solo super_user durante PR 2 */}
+            <Route path="comisiones-v2" element={
+              <PermissionGuard allowed={(p) => p.canViewCommissions || p.canViewMyProjection}>
+                <FeatureErrorBoundary feature="Comisiones v2"><CommissionsV2Page /></FeatureErrorBoundary>
               </PermissionGuard>
             } />
 
