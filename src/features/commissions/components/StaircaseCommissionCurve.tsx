@@ -100,12 +100,20 @@ export default function StaircaseCommissionCurve({
       xaxis: [
         {
           x: xMarker,
-          borderColor: "#111827",
+          borderColor: "#0f172a",
           strokeDashArray: 0,
           label: {
             text: `Tú estás aquí · ${cumplimientoPct.toFixed(1)}%`,
-            borderColor: "#111827",
-            style: { color: "#fff", background: "#111827", fontSize: "10px", fontWeight: 600 },
+            borderColor: "#0f172a",
+            borderWidth: 0,
+            offsetY: 6,
+            style: {
+              color: "#ffffff",
+              background: "#0f172a",
+              fontSize: "11px",
+              fontWeight: 700,
+              padding: { left: 10, right: 10, top: 5, bottom: 5 },
+            },
           },
         },
       ],
@@ -116,15 +124,22 @@ export default function StaircaseCommissionCurve({
               y: next.nextTier.value,
               marker: {
                 size: 6,
-                fillColor: "#16a34a",
-                strokeColor: "#fff",
+                fillColor: "#15803d",
+                strokeColor: "#ffffff",
                 strokeWidth: 2,
               },
               label: {
                 text: annotationLabel,
-                borderColor: "#16a34a",
-                offsetY: -8,
-                style: { color: "#fff", background: "#16a34a", fontSize: "10px", fontWeight: 600 },
+                borderColor: "#15803d",
+                borderWidth: 0,
+                offsetY: -10,
+                style: {
+                  color: "#ffffff",
+                  background: "#15803d",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  padding: { left: 10, right: 10, top: 5, bottom: 5 },
+                },
               },
             },
           ]

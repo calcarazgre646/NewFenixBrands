@@ -67,7 +67,7 @@ export default function CommissionsPage() {
       { key: "resumen", label: "Resumen" },
     ];
     if (data.scope === "team") {
-      base.push({ key: "equipo", label: `Equipo · ${data.rows.length}` });
+      base.push({ key: "equipo", label: "Equipo", badge: data.rows.length });
     }
     base.push({ key: "historico", label: "Histórico" });
     return base;
@@ -113,15 +113,25 @@ export default function CommissionsPage() {
             </span>
           )}
 
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(Number(e.target.value))}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
-          >
-            {MONTHS.map((m, i) => (
-              <option key={i + 1} value={i + 1}>{m} {year}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(Number(e.target.value))}
+              className="appearance-none rounded-lg border border-gray-200 bg-white py-1.5 pl-3 pr-8 text-xs font-medium text-gray-700 cursor-pointer dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
+            >
+              {MONTHS.map((m, i) => (
+                <option key={i + 1} value={i + 1}>{m} {year}</option>
+              ))}
+            </select>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="none"
+              className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+            >
+              <path d="M5 8l5 5 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
 
           {data.scope === "team" && (
             <div className="flex rounded-lg border border-gray-200 dark:border-gray-600">
