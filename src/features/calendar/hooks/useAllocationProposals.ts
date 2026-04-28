@@ -117,7 +117,11 @@ export function useAllocationProposals(eventId: string | null | undefined) {
       return approveAllocationProposal(args.proposal.id, args.approvedBy);
     },
     onSuccess: () => {
-      if (eventId) qc.invalidateQueries({ queryKey: eventKeys.proposals(eventId) });
+      if (eventId) {
+        qc.invalidateQueries({ queryKey: eventKeys.proposals(eventId) });
+        // Refrescar historial: el decision_run nuevo aparece acá
+        qc.invalidateQueries({ queryKey: eventKeys.decisionRuns(eventId) });
+      }
     },
   });
 

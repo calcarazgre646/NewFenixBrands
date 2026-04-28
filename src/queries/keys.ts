@@ -214,6 +214,8 @@ export const eventKeys = {
   proposal: (id: string) => ["events", "proposal", id] as const,
   skuConflicts: (eventId: string, skuKey: string) =>
     ["events", "skuConflicts", eventId, skuKey] as const,
+  decisionRuns: (eventId: string) => ["events", "decisionRuns", eventId] as const,
+  decisionActions: (runId: string) => ["events", "decisionActions", runId] as const,
 };
 
 // ─── Cache durations ──────────────────────────────────────────────────────────
