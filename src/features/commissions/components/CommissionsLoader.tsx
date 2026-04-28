@@ -141,7 +141,7 @@ function SelfBody() {
       <HeroCardSk />
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <CurveCard />
-        <DailyChartCard />
+        <DailyChartCard wrapped />
       </div>
       <WhatIfCard />
     </>
@@ -151,13 +151,13 @@ function SelfBody() {
 // ─── Tarjetas individuales ────────────────────────────────────────────────
 
 function CurveCard() {
+  // mb-2 + title 11px + sub 12px — coincide con StaircaseCommissionCurve real
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-      <div className="mb-3 space-y-1.5">
+      <div className="mb-2 space-y-1">
         <Bar w="160px" h="11px" />
-        <Bar w="320px" h="10px" />
+        <Bar w="320px" h="12px" />
       </div>
-      {/* Área del chart con bands sutiles para sugerir el step */}
       <div className="relative h-[260px] overflow-hidden rounded-xl bg-gray-50 dark:bg-gray-900/40">
         <div className="absolute inset-x-4 inset-y-4 flex items-end gap-1.5">
           {[18, 18, 28, 38, 50, 64, 80, 96].map((h, i) => (
@@ -173,14 +173,18 @@ function CurveCard() {
   );
 }
 
-function DailyChartCard() {
+function DailyChartCard({ wrapped = false }: { wrapped?: boolean }) {
+  // Cuando se renderiza como wrapper de "Tu mes día por día" (self), va en p-4.
+  // wrapped=true muestra el título "Tu mes día por día" arriba como en ResumenTab.
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-      <div className="mb-3">
-        <Bar w="140px" h="11px" />
-      </div>
+      {wrapped && (
+        <div className="mb-2">
+          <Bar w="140px" h="11px" />
+        </div>
+      )}
       <div className="relative h-[260px] overflow-hidden rounded-xl bg-gray-50 dark:bg-gray-900/40">
-        {/* línea quebrada que sube */}
+        {/* polyline-ish: barras finas que sugieren la línea acumulada del mes */}
         <div className="absolute inset-x-4 inset-y-4 flex items-end gap-[2px]">
           {Array.from({ length: 30 }).map((_, i) => (
             <div
@@ -196,35 +200,37 @@ function DailyChartCard() {
 }
 
 function HeroCardSk() {
+  // HeroTrinityCard real: rounded-2xl border (band color) → header con bg-white/60
+  // → grid 3 cols con bg-gray-200/50 separator → barra de progreso al pie.
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
-      {/* Header de la card */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-5 py-3 dark:border-gray-700">
+      {/* Header */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200/60 bg-gray-50/60 px-5 py-3 dark:border-gray-700/60 dark:bg-gray-900/30">
         <div className="space-y-1.5">
-          <Bar w="200px" h="14px" />
-          <Bar w="160px" h="10px" />
+          <Bar w="200px" h="14px" />     {/* nombre vendedor (text-sm) */}
+          <Bar w="160px" h="11px" />     {/* rol · canal (text-[11px]) */}
         </div>
-        <span className="ml-auto"><Pill w="90px" h="22px" /></span>
+        <span className="ml-auto"><Pill w="80px" h="22px" /></span>
       </div>
 
-      {/* 3 columnas */}
-      <div className="grid grid-cols-1 gap-px bg-gray-100 dark:bg-gray-700/40 sm:grid-cols-3">
+      {/* 3 columnas — separador real es bg-gray-200/50 */}
+      <div className="grid grid-cols-1 gap-px bg-gray-200/50 dark:bg-gray-700/40 sm:grid-cols-3">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="space-y-2 bg-white p-5 dark:bg-gray-800">
-            <Bar w="55%" h="10px" />
-            <Bar w="75%" h="26px" className="mt-2" />
-            <Bar w="60%" h="11px" className="mt-2" />
-            <Bar w="45%" h="10px" />
+          <div key={i} className="bg-white p-5 dark:bg-gray-800">
+            <Bar w="55%" h="10px" />                                {/* label uppercase */}
+            <Bar w="78%" h="26px" className="mt-2" />               {/* valor text-2xl con mt-2 */}
+            <Bar w="85%" h="11px" className="mt-2" />               {/* sub line 1 (mt-1 después del 2xl) */}
+            <Bar w="55%" h="11px" className="mt-1" />               {/* sub line 2 */}
           </div>
         ))}
       </div>
 
-      {/* Barra de progreso */}
-      <div className="px-5 py-4">
+      {/* Barra inferior de progreso (h-2.5 + footer flex justify-between) */}
+      <div className="px-5 py-3">
         <div className={`${PULSE} h-2.5 !rounded-full`} />
-        <div className="mt-2 flex justify-between">
-          <Bar w="20px" h="9px" />
-          <Bar w="120px" h="9px" />
+        <div className="mt-1.5 flex items-center justify-between">
+          <Bar w="14px" h="10px" />
+          <Bar w="140px" h="10px" />
         </div>
       </div>
     </div>
@@ -232,20 +238,35 @@ function HeroCardSk() {
 }
 
 function WhatIfCard() {
+  // WhatIfSimulator real: p-5, header (mb-3 flex) con título 11px + sub 12px
+  // → input section (space-y-2) con label + (input + texto) + slider
+  // → mt-4 grid con 3 result cards (bg-gray-50 rounded-xl px-3 py-2.5).
   return (
-    <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
-      <Bar w="180px" h="11px" />
-      <Bar w="65%" h="11px" />
-      <div className="flex items-center gap-2">
-        <Bar w="160px" h="36px" className="!rounded-lg" />
-        <Bar w="220px" h="11px" />
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+      {/* Header */}
+      <div className="mb-3">
+        <div className="space-y-1.5">
+          <Bar w="180px" h="11px" />     {/* "What-if · Simulador" */}
+          <Bar w="320px" h="12px" />     {/* subtítulo (text-xs) */}
+        </div>
       </div>
-      <Bar w="100%" h="6px" className="!rounded-full" />
-      <div className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-3">
+
+      {/* Input + slider */}
+      <div className="space-y-2">
+        <Bar w="160px" h="11px" />       {/* label "Ventas adicionales (Gs.)" */}
+        <div className="flex items-center gap-2">
+          <Bar w="160px" h="36px" className="!rounded-lg" />  {/* input number */}
+          <Bar w="240px" h="11px" />                          {/* texto ≈ Gs / día */}
+        </div>
+        <div className={`${PULSE} h-1.5 w-full !rounded-full`} />  {/* range slider track */}
+      </div>
+
+      {/* Resultado — 3 result cards bg-gray-50 */}
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
         {[0, 1, 2].map((i) => (
           <div key={i} className="rounded-xl bg-gray-50 px-3 py-2.5 dark:bg-gray-700/40">
-            <Bar w="60%" h="9px" />
-            <Bar w="70%" h="20px" className="mt-2" />
+            <Bar w="65%" h="10px" />                              {/* label 10px */}
+            <Bar w="70%" h="18px" className="mt-1" />             {/* valor text-base mt-1 */}
           </div>
         ))}
       </div>
