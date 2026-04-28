@@ -1,182 +1,165 @@
 /**
- * features/commissions/CommissionsPage.tsx
+ * CommissionsPage — sección unificada de Comisiones.
  *
- * Página de Comisiones — ventas reales por vendedor de fjdhstvta1.
- * Meta de fmetasucu (nivel tienda). Escalas del pedido de Rodrigo.
+ * Vive en `/comisiones` y absorbe a las antiguas `/proyeccion-vendedor` y
+ * `/mi-proyeccion` (que redirigen aquí). El contenido se ajusta al scope
+ * del usuario:
  *
- * Pendiente: tabla comisiones_metas_vendedor para metas individuales.
- * Pendiente: c_cobrar para comisión de cobranza Mayorista/UTP.
+ *   - super_user / gerencia → tabs Resumen + Equipo + Histórico
+ *   - vendedor              → tabs Resumen + Histórico (sin Equipo)
+ *
+ * Layout: header (título + filtros mes/canal + freshness + tabs) →
+ * contenido por tab.
  */
-import { useState, useMemo } from "react";
-import { formatPYGCompact } from "@/utils/format";
-import { StatCard } from "@/components/ui/stat-card/StatCard";
-import { CHANNEL_LABELS } from "@/domain/commissions/scales";
-import { useCommissionScales } from "@/hooks/useConfig";
-import type { CommissionChannel, CommissionRole } from "@/domain/commissions/types";
-import { useCommissions } from "./hooks/useCommissions";
-import { useFilters } from "@/hooks/useFilters";
-import { useAuth } from "@/hooks/useAuth";
-import { useDataFreshness } from "@/hooks/useDataFreshness";
-import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
+import { useMemo, useState } from "react";
+import { Tabs, type TabItem } from "@/components/ui/tabs/Tabs";
 import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
-import CommissionTable from "./components/CommissionTable";
-import ScalesReference from "./components/ScalesReference";
+import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
+import { CHANNEL_LABELS } from "@/domain/commissions/scales";
+import { useFilters } from "@/hooks/useFilters";
+import { useDataFreshness } from "@/hooks/useDataFreshness";
+import { useCompensation } from "./hooks/useCompensation";
+import ResumenTab from "./components/tabs/ResumenTab";
+import EquipoTab from "./components/tabs/EquipoTab";
+import HistoricoTab from "./components/tabs/HistoricoTab";
+import type { CommissionChannel } from "@/domain/commissions/types";
 
-/** Roles de gerencia/liderazgo — solo visibles para super_user */
-const MANAGEMENT_ROLES: CommissionRole[] = [
-  "gerencia_retail",
-  "gerencia_mayorista",
-  "gerencia_utp",
-];
+type TabKey = "resumen" | "equipo" | "historico";
 
 const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
 export default function CommissionsPage() {
   const { lastDataDay, lastDataMonth, getStatus, getInfo } = useDataFreshness();
   const { filters } = useFilters();
-  const { profile } = useAuth();
-  const isSuperUser = profile?.role === "super_user";
-  const scales = useCommissionScales();
-  const allScales = Object.values(scales);
   const year = filters.year;
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    // Default al mes en curso (getMonth() es 0-indexed, +1 para 1-12)
-    return new Date().getMonth() + 1;
-  });
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
   const [channelFilter, setChannelFilter] = useState<CommissionChannel | "todos">("todos");
-  const [showScales, setShowScales] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>("resumen");
 
-  const { results, summary, isLoading, error } = useCommissions(year, selectedMonth);
+  const data = useCompensation(year, selectedMonth);
 
-  // Filtrar roles de gerencia/liderazgo si no es super_user
-  const visibleResults = useMemo(() => {
-    if (isSuperUser) return results;
-    return results.filter(r => !MANAGEMENT_ROLES.includes(r.rolComision));
-  }, [results, isSuperUser]);
+  // Filtro por canal — aplica a rows. self queda intacto (un único vendedor).
+  const filteredData = useMemo(() => {
+    if (channelFilter === "todos") return data;
+    const filtered = data.rows.filter((r) => r.projection.canal === channelFilter);
+    let totalVA = 0, totalVP = 0, totalCA = 0, totalCP = 0;
+    for (const { projection: p } of filtered) {
+      totalVA += p.ventaActual;
+      totalVP += p.ventaProyectada;
+      totalCA += p.comisionActualGs ?? 0;
+      totalCP += p.comisionProyectadaGs ?? 0;
+    }
+    return {
+      ...data,
+      rows: filtered,
+      summary: {
+        totalVendedores: filtered.length,
+        totalVentaActual: totalVA,
+        totalVentaProyectada: totalVP,
+        totalComisionActualGs: totalCA,
+        totalComisionProyectadaGs: totalCP,
+      },
+    };
+  }, [data, channelFilter]);
 
-  const filtered = useMemo(() => {
-    if (channelFilter === "todos") return visibleResults;
-    return visibleResults.filter(r => r.canal === channelFilter);
-  }, [visibleResults, channelFilter]);
+  const tabs = useMemo<TabItem<TabKey>[]>(() => {
+    const base: TabItem<TabKey>[] = [
+      { key: "resumen", label: "Resumen" },
+    ];
+    if (data.scope === "team") {
+      base.push({ key: "equipo", label: `Equipo · ${data.rows.length}` });
+    }
+    base.push({ key: "historico", label: "Histórico" });
+    return base;
+  }, [data.scope, data.rows.length]);
 
-  const filteredSummary = useMemo(() => {
-    if (!summary) return null;
-    if (channelFilter === "todos") return summary;
-    // Recalculate totals for the filtered channel
-    const totalGs = filtered.reduce((s, r) => s + r.comisionTotalGs, 0);
-    return { ...summary, totalVendedores: filtered.length, totalComisionesGs: totalGs };
-  }, [summary, filtered, channelFilter]);
+  if (data.isLoading) return <PageSkeleton />;
 
-  if (isLoading) return <PageSkeleton />;
-
-  if (error) {
+  if (data.error) {
     return (
       <div className="flex min-h-[400px] items-center justify-center p-4 sm:p-6">
         <div className="rounded-2xl border border-error-200 bg-error-50 px-6 py-4 text-sm text-error-700 dark:border-error-500/20 dark:bg-error-500/10 dark:text-error-400">
-          Error al cargar datos: {error.message}
+          Error al cargar datos: {data.error.message}
         </div>
       </div>
     );
   }
 
-  const s = filteredSummary;
+  const { time } = data;
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
-
-      {/* ═══ Header ═══ */}
-      <div className="exec-anim-1 flex flex-wrap items-center gap-3">
+      {/* Header */}
+      <div className="flex flex-wrap items-center gap-3">
         <div>
           <h1 className="text-lg font-bold text-gray-900 dark:text-white">Comisiones</h1>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Cálculo automático por vendedor — meta vs venta real
+            {data.scope === "self"
+              ? "Tu desempeño y proyección personal"
+              : "Actual + proyección al cierre + histórico — todo en un solo lugar"}
           </p>
         </div>
+
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          {/* Indicadores */}
-          <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-semibold text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400">
-            Datos reales
-          </span>
+          {time.isInProgress && (
+            <span className="inline-flex items-center rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-[10px] font-semibold text-brand-700 dark:border-brand-500/20 dark:bg-brand-500/10 dark:text-brand-400">
+              Día {time.diasTranscurridos}/{time.diasMes} · {time.diasRestantes}d restantes
+            </span>
+          )}
+          {time.isMonthClosed && (
+            <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[10px] font-semibold text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
+              Mes cerrado
+            </span>
+          )}
+
           <DataFreshnessTag
             lastDataDay={lastDataDay}
             lastDataMonth={lastDataMonth}
             freshnessStatus={getStatus("mv_ventas_mensual")}
             refreshedAt={getInfo("mv_ventas_mensual")?.refreshedAt}
           />
-          {/* Month selector */}
+
           <select
             value={selectedMonth}
-            onChange={e => setSelectedMonth(Number(e.target.value))}
+            onChange={(e) => setSelectedMonth(Number(e.target.value))}
             className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
           >
             {MONTHS.map((m, i) => (
               <option key={i + 1} value={i + 1}>{m} {year}</option>
             ))}
           </select>
-          {/* Channel filter */}
-          <div className="flex rounded-lg border border-gray-200 dark:border-gray-600">
-            {(["todos", "retail", "mayorista", "utp"] as const).map(ch => (
-              <button
-                key={ch}
-                onClick={() => setChannelFilter(ch)}
-                className={`px-3 py-1.5 text-[11px] font-medium transition-colors first:rounded-l-lg last:rounded-r-lg ${
-                  channelFilter === ch
-                    ? "bg-brand-500 text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-                }`}
-              >
-                {ch === "todos" ? "Todos" : CHANNEL_LABELS[ch] ?? ch}
-              </button>
-            ))}
-          </div>
+
+          {data.scope === "team" && (
+            <div className="flex rounded-lg border border-gray-200 dark:border-gray-600">
+              {(["todos", "retail", "mayorista", "utp"] as const).map((ch) => (
+                <button
+                  key={ch}
+                  onClick={() => setChannelFilter(ch)}
+                  className={`px-3 py-1.5 text-[11px] font-medium transition-colors first:rounded-l-lg last:rounded-r-lg ${
+                    channelFilter === ch
+                      ? "bg-brand-500 text-white"
+                      : "bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  {ch === "todos" ? "Todos" : CHANNEL_LABELS[ch] ?? ch}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ═══ KPIs ═══ */}
-      <section className="exec-anim-2">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard
-            label="Vendedores"
-            value={String(s?.totalVendedores ?? 0)}
-            sub={`${MONTHS[selectedMonth - 1]} ${year}`}
-          />
-          <StatCard
-            label="Total comisiones"
-            value={formatPYGCompact(s?.totalComisionesGs ?? 0)}
-            sub="Gs. calculados"
-            variant={(s?.totalComisionesGs ?? 0) > 0 ? "accent-positive" : "neutral"}
-          />
-          <StatCard
-            label="Retail"
-            value={formatPYGCompact(s?.byChannel.retail.totalGs ?? 0)}
-            sub={`${s?.byChannel.retail.count ?? 0} vendedores`}
-          />
-          <StatCard
-            label="Mayorista + UTP"
-            value={formatPYGCompact((s?.byChannel.mayorista.totalGs ?? 0) + (s?.byChannel.utp.totalGs ?? 0))}
-            sub={`${(s?.byChannel.mayorista.count ?? 0) + (s?.byChannel.utp.count ?? 0)} vendedores`}
-          />
-        </div>
-      </section>
+      {/* Tabs */}
+      <Tabs items={tabs} active={activeTab} onChange={setActiveTab} size="md" />
 
-      {/* ═══ Tabla de comisiones ═══ */}
-      <section className="exec-anim-3">
-        <CommissionTable results={filtered} />
-      </section>
-
-      {/* ═══ Escalas de referencia ═══ */}
-      <section className="exec-anim-4">
-        <button
-          onClick={() => setShowScales(!showScales)}
-          className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-        >
-          <svg className={`h-3 w-3 transition-transform ${showScales ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-          Escalas de referencia ({allScales.length} roles)
-        </button>
-        {showScales && <ScalesReference scales={allScales} />}
-      </section>
+      {/* Contenido por tab */}
+      <div>
+        {activeTab === "resumen" && <ResumenTab data={filteredData} />}
+        {activeTab === "equipo" && data.scope === "team" && (
+          <EquipoTab data={filteredData} year={year} month={selectedMonth} />
+        )}
+        {activeTab === "historico" && <HistoricoTab data={filteredData} />}
+      </div>
     </div>
   );
 }

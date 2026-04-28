@@ -1,20 +1,21 @@
 /**
  * features/commissions/hooks/useCompensation.ts
  *
- * Hook unificado de compensación. Wrapea `useSellerProjections` (gerencia) +
- * `useMyProjection` (per-vendedor) y expone una API única para la nueva
- * página `/comisiones-v2`:
+ * Hook unificado de compensación de la sección `/comisiones`. Orquesta dos
+ * sub-hooks internos:
  *
- *   - `time`: contexto temporal del mes (días transcurridos, restantes,
- *     isMonthClosed, isInProgress).
+ *   - `useSellerProjections(year, month)` — proyección a nivel equipo
+ *     (asimetría retail/B2B incluida).
+ *   - `useMyProjection(year, month)` — vista personal del vendedor mapeado
+ *     al perfil + serie diaria para el chart.
+ *
+ * Y expone una API única:
+ *
+ *   - `time`: contexto temporal del mes.
  *   - `rows`: una entrada por vendedor con `projection` + `result` (estado
- *     actual derivado de la proyección con días restantes = 0).
- *   - `summary`: agregado del scope (cuando scope=self es solo el vendedor).
- *   - `self`: cuando scope=self, también la serie diaria para el chart.
- *
- * No introduce queries nuevas: reusa los queryKeys ya cacheados por los
- * hooks viejos. PR 3 va a colapsar todo dentro de este hook y borrar los
- * hooks viejos.
+ *     actual derivado de la proyección).
+ *   - `summary`: totales del scope.
+ *   - `self`: detalle personal cuando scope=self y el vendedor está mapeado.
  */
 import { useMemo } from "react";
 import { useCommissionScales } from "@/hooks/useConfig";
@@ -24,8 +25,8 @@ import {
   getCalendarYear,
 } from "@/domain/period/helpers";
 import { resolveMonthTime, type MonthTime } from "@/domain/projections/calculations";
-import { useSellerProjections } from "@/features/projections/hooks/useSellerProjections";
-import { useMyProjection } from "@/features/projections/hooks/useMyProjection";
+import { useSellerProjections } from "./useSellerProjections";
+import { useMyProjection } from "./useMyProjection";
 import { useCompensationScope, type CompensationScope } from "./useCompensationScope";
 import {
   projectionToResult,

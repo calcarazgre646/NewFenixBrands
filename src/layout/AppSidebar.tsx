@@ -50,9 +50,7 @@ const ALL_ANALYSIS_NAV: NavItem[] = [
 
 const ALL_CONTROL_NAV: NavItem[] = [
   { path: "/comisiones", label: "Comisiones", icon: <DollarLineIcon />, allowed: (p) => p.canViewCommissions },
-  { path: "/proyeccion-vendedor", label: "Proyección Vendedor", icon: <DollarLineIcon />, allowed: (p) => p.canViewSellerProjections },
-  { path: "/mi-proyeccion", label: "Mi Proyección", icon: <DollarLineIcon />, allowed: (p) => p.canViewMyProjection },
-  { path: "/usuarios", label: "Usuarios", icon: <GroupIcon />, allowed: (p) => p.canManageUsers },
+  { path: "/usuarios",   label: "Usuarios",   icon: <GroupIcon />,      allowed: (p) => p.canManageUsers },
 ];
 
 const AppSidebar: React.FC = () => {

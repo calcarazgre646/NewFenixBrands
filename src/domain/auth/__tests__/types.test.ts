@@ -211,9 +211,50 @@ describe("getDefaultRoute", () => {
     expect(getDefaultRoute(p)).toBe("/ventas");
   });
 
+  it("vendedor (con código) → /comisiones", () => {
+    const p = derivePermissions(makeProfile({ role: "vendedor", vendedorCodigo: 42 }));
+    expect(getDefaultRoute(p)).toBe("/comisiones");
+  });
+
+  it("vendedor (sin código) → /comisiones (la página muestra cartel de vincular código)", () => {
+    const p = derivePermissions(makeProfile({ role: "vendedor", vendedorCodigo: null }));
+    expect(getDefaultRoute(p)).toBe("/comisiones");
+  });
+
   it("null profile → /signin", () => {
     const p = derivePermissions(null);
     expect(getDefaultRoute(p)).toBe("/signin");
+  });
+});
+
+// ─── derivePermissions — vendedor ────────────────────────────────────────────
+
+describe("derivePermissions — vendedor", () => {
+  const pWithCodigo = derivePermissions(makeProfile({ role: "vendedor", vendedorCodigo: 42 }));
+  const pSinCodigo = derivePermissions(makeProfile({ role: "vendedor", vendedorCodigo: null }));
+
+  it("ve /comisiones (con o sin código asignado)", () => {
+    expect(pWithCodigo.canViewCommissions).toBe(true);
+    expect(pSinCodigo.canViewCommissions).toBe(true);
+  });
+
+  it("aliases legacy de proyección quedan en true (deep links redirigen)", () => {
+    expect(pWithCodigo.canViewSellerProjections).toBe(true);
+    expect(pWithCodigo.canViewMyProjection).toBe(true);
+  });
+
+  it("no ve páginas de gestión ni analítica de equipo", () => {
+    expect(pWithCodigo.canViewExecutive).toBe(false);
+    expect(pWithCodigo.canViewSales).toBe(false);
+    expect(pWithCodigo.canViewActions).toBe(false);
+    expect(pWithCodigo.canViewDepots).toBe(false);
+    expect(pWithCodigo.canViewKpis).toBe(false);
+    expect(pWithCodigo.canManageUsers).toBe(false);
+    expect(pWithCodigo.canViewMarketing).toBe(false);
+  });
+
+  it("canal está bloqueado (no aplica filtro libre)", () => {
+    expect(pWithCodigo.isChannelLocked).toBe(true);
   });
 });
 
