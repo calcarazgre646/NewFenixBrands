@@ -171,13 +171,20 @@ export function useSellerProjections(
       if (existing) {
         existing.ventaNetaMes += s.ventaNeta;
       } else {
+        // Para retail mostramos el código de tienda; para mayorista/UTP la
+        // pseudo-sucursal del ERP ("MAYORISTA"/"UTP") no aporta — preferimos
+        // la zona del vendedor cuando está cargada en metas.
+        const displayLabel =
+          channel === "retail"
+            ? (primaryStore || null)
+            : (sellerGoal?.zona ?? primaryStore ?? null);
         sellerAggs.set(s.vendedorCodigo, {
           identity: {
             vendedorCodigo: s.vendedorCodigo,
             vendedorNombre: s.vendedorNombre,
             rolComision: actualRole,
             canal: channel,
-            sucursalCodigo: primaryStore || null,
+            sucursalCodigo: displayLabel,
           },
           role: actualRole,
           channel,
