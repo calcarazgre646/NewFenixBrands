@@ -276,6 +276,127 @@ export async function rejectAllocationProposal(id: string): Promise<AllocationPr
   return toAllocationProposal(data as DbAllocationProposalRow);
 }
 
+// ─── Decision history per event (Fase C) ────────────────────────────────────
+
+export interface EventDecisionRunSummary {
+  id: string;
+  triggeredAt: string;
+  triggeredBy: string;
+  totalActions: number;
+  totalImpactGs: number;
+  criticalCount: number;
+  proposalVersion: number | null;
+  readinessPctAtApproval: number | null;
+}
+
+export interface EventDecisionActionSnapshot {
+  id: string;
+  rank: number;
+  sku: string;
+  skuComercial: string;
+  talle: string;
+  brand: string;
+  store: string;
+  targetStore: string | null;
+  currentStock: number;
+  suggestedUnits: number;
+  waterfallLevel: string;
+  actionType: string;
+  recommendedAction: string;
+  impactScore: number;
+  risk: string;
+}
+
+interface DbDecisionRunRow {
+  id: string;
+  triggered_at: string;
+  triggered_by: string;
+  total_actions: number;
+  total_impact_gs: number;
+  critical_count: number;
+  filters_snapshot: { eventId?: string; proposalId?: string; proposalVersion?: number } | null;
+  metadata: { readinessPctAtApproval?: number | null } | null;
+}
+
+interface DbDecisionActionRow {
+  id: string;
+  rank: number;
+  sku: string;
+  sku_comercial: string;
+  talle: string;
+  brand: string;
+  store: string;
+  target_store: string | null;
+  current_stock: number;
+  suggested_units: number;
+  waterfall_level: string;
+  action_type: string;
+  recommended_action: string;
+  impact_score: number;
+  risk: string;
+}
+
+/**
+ * Trae los decision_runs de tipo event_allocation que correspondan al evento dado.
+ * Filtra por filters_snapshot->>'eventId' (jsonb operator).
+ */
+export async function fetchEventDecisionRuns(
+  eventId: string,
+): Promise<EventDecisionRunSummary[]> {
+  const { data, error } = await authClient
+    .from("decision_runs")
+    .select(
+      "id, triggered_at, triggered_by, total_actions, total_impact_gs, critical_count, filters_snapshot, metadata",
+    )
+    .eq("run_type", "event_allocation")
+    .filter("filters_snapshot->>eventId", "eq", eventId)
+    .order("triggered_at", { ascending: false });
+  if (error) throw new Error(`Error cargando historial de decisiones: ${error.message}`);
+  return ((data as DbDecisionRunRow[] | null) ?? []).map((row) => ({
+    id: row.id,
+    triggeredAt: row.triggered_at,
+    triggeredBy: row.triggered_by,
+    totalActions: row.total_actions,
+    totalImpactGs: row.total_impact_gs,
+    criticalCount: row.critical_count,
+    proposalVersion: row.filters_snapshot?.proposalVersion ?? null,
+    readinessPctAtApproval: row.metadata?.readinessPctAtApproval ?? null,
+  }));
+}
+
+/**
+ * Trae las decision_actions de un run específico (snapshot detallado).
+ */
+export async function fetchEventDecisionActions(
+  runId: string,
+): Promise<EventDecisionActionSnapshot[]> {
+  const { data, error } = await authClient
+    .from("decision_actions")
+    .select(
+      "id, rank, sku, sku_comercial, talle, brand, store, target_store, current_stock, suggested_units, waterfall_level, action_type, recommended_action, impact_score, risk",
+    )
+    .eq("run_id", runId)
+    .order("rank", { ascending: true });
+  if (error) throw new Error(`Error cargando acciones del run: ${error.message}`);
+  return ((data as DbDecisionActionRow[] | null) ?? []).map((row) => ({
+    id: row.id,
+    rank: row.rank,
+    sku: row.sku,
+    skuComercial: row.sku_comercial,
+    talle: row.talle,
+    brand: row.brand,
+    store: row.store,
+    targetStore: row.target_store,
+    currentStock: row.current_stock,
+    suggestedUnits: row.suggested_units,
+    waterfallLevel: row.waterfall_level,
+    actionType: row.action_type,
+    recommendedAction: row.recommended_action,
+    impactScore: row.impact_score,
+    risk: row.risk,
+  }));
+}
+
 // ─── Cross-event conflicts (Fase B) ──────────────────────────────────────────
 
 export interface SkuConflict {

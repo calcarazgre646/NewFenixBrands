@@ -11,7 +11,7 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 
 ---
 
-## Estado actual (actualizado 27/04/2026)
+## Estado actual (actualizado 28/04/2026)
 
 | Fase | Feature | Estado |
 |------|---------|--------|
@@ -23,6 +23,7 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 3 | ActionQueuePage (`/acciones`) — Waterfall 4 niveles + Lifecycle SKU (linealidad 3x6, sequential 5 pasos, cascade A→B→OUT, mandatory exit 90d) + 2 pestañas | ✅ COMPLETO + LIFECYCLE + AUDITADO (ver docs/LIFECYCLE_04) |
 | 4 | LogisticsPage (`/logistica`) — ETAs importacion, tabla agrupada | ✅ COMPLETO + AUDITADO |
 | 5 | CalendarPage (`/calendario`) — FullCalendar + CRUD + Realtime + Llegadas logística | ✅ COMPLETO + AUDITADO |
+| 5B | **Event Operational App (`/calendario/evento/:id`)** — Vincular SKUs/tiendas, scorecard, allocation proposals versionadas, closed-loop, realtime, historial | ✅ COMPLETO (Fases A+B+C, sesión 28/04/2026) |
 | 6 | UsersPage (`/usuarios`) — CRUD completo, Edge Function, cambio contraseña | ✅ COMPLETO + AUDITADO |
 | 6B | DepotsPage (`/depositos`) — Filtros estandarizados in-page + Novedades/Lanzamientos | ✅ COMPLETO + AUDITADO |
 | 7 | CommissionsPage (`/comisiones`) — Comisiones por vendedor, datos reales, 8 escalas | ⚠️ PARCIAL — Mayorista/UTP esperando datos de Fenix |
@@ -31,8 +32,9 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 9B | MyProjectionPage (`/mi-proyeccion`) — vista personal del vendedor (rol nuevo `vendedor`) | ✅ COMPLETO |
 
 **La app corre:** `npm run dev` → http://localhost:5173
-**Tests:** 1543 passing (45 suites) | TSC 0 errores | Build OK | ESLint 0 errores
+**Tests:** 1681 passing (55 suites) | TSC 0 errores | Build OK | ESLint 0 errores
 **Deploy:** https://fenix-brands-one.vercel.app
+**Sesión 28/04/2026:** Event Operational App — Fases A+B+C (ver abajo)
 **Sesión 22/04/2026:** PricingPage — módulo Precios (ver abajo)
 **Sesión 04/04/2026:** Config editable — Etapas 2-5 (ver abajo)
 **Sesión 30/03/2026:** Ver log detallado abajo
@@ -180,6 +182,133 @@ src/
 - `docs/ETAPA_2_3_CONFIG_IMPLEMENTATION.md` — Documentación completa Etapas 2-5 + seed + estado final
 - `docs/scope freeze + inventario final.md` — Auditoría de ~95 constantes de negocio, clasificación, mapa de impacto
 - `docs/safety net de tests.md` — Auditoría de fragilidad de tests, migración a contract tests
+
+---
+
+## Sesión 28/04/2026 — Event Operational App (Fases A + B + C)
+
+**Pedido del cliente (Rodrigo):** Cuando crean un evento en el calendario (campaña, activación, lanzamiento), poder vincular SKUs y obtener un dashboard accionable: estado de stock, llegadas, cobertura de talles, propuestas de reposición. Búsqueda explícita: "Palantir aplicado a Fenix".
+
+**Diagnóstico arquitectónico (antes de codear):** Es la primera **Operational Application** del proyecto en el sentido Palantir. Object Type "RetailEvent" + Action Types gobernados + Action Log con snapshot de contexto. Categoría Gartner: **Decision Intelligence Platform**. Patrón: closed-loop (propose → review → execute → measure → recálculo).
+
+**Investigación previa de la industria** (Palantir Foundry, Oracle Retail, SAP for Retail, Blue Yonder, o9 Solutions, Toolio): adoptamos vocabulario estándar — Object Type, Link Type, Action Type, Article + Site Assignment, Allocation Proposal, push vs pull engine, Curve Completeness, Store Cluster, Readiness Check, Decision Intelligence Platform.
+
+**Decisiones de producto (validadas con el usuario antes de codear):**
+1. Granularidad SKU: **style-color (sku_comercial)**, no per-talle. Curva derivada en runtime desde `mv_stock_tienda`.
+2. Tiendas: **declaración explícita** del evento. 3 roles: `activation` / `warehouse` / `support`.
+3. Multi-evento: M:N permitido (un SKU puede estar en varios eventos a la vez).
+4. MVP: read-only **+ generador de propuesta** (no solo scorecard).
+5. Naming: tablas en inglés, UI 100% español.
+
+**Limitación técnica documentada:** `productos_importacion` no expone `sku_comercial`. Las llegadas se filtran por brand del evento (informativo, no readiness-driving).
+
+**Bug encontrado al aplicar migration 025:** `calendar_events.id` es TEXT (no UUID). FK `event_id` y `calendar_event_id` quedaron en TEXT. Detectado en primer run, fixeado in-place; el código TS ya pasaba `string`.
+
+### Fase A (PR #38 merged) — Ontología + dashboard accionable
+
+**Migration 025** (BD auth `uxtzzcjimvapjpkeruwb`):
+- `calendar_event_skus` (style-color, M:N, intent: sale/display/launch)
+- `calendar_event_stores` (role: activation/warehouse/support)
+- `allocation_proposals` (versionadas, payload JSONB, status draft/approved/superseded/rejected)
+- FK `calendar_event_id` y `allocation_proposal_id` en `decision_actions`
+- RLS auth read+write en las 3 tablas
+
+**Domain puro `src/domain/events/` (32 tests):**
+- `types.ts` — entidades + Readiness + ReadinessException
+- `curveCompleteness.ts` — `computeNetworkCurves`, `computeEventCurveCoverage`, `summarizeCoverageBySku`
+- `readiness.ts` — `computeReadiness` (scorecard + exceptions ordenadas por severidad)
+- `allocation.ts` — `generateAllocationProposal` (push: transfer → depot → out_of_stock; warehouses como depot extra)
+
+**Hooks `src/features/calendar/hooks/`:**
+- `useEventSkus`, `useEventStores`, `useAllocationProposals`
+- `useEventDashboard` (orchestrator: une event_skus + event_stores + inventory + arrivals + computa readiness y coverages)
+
+**UI `src/features/calendar/`:**
+- `EventDashboardPage` en `/calendario/evento/:eventId`
+- `EventScorecard` (top: readiness%, días-a-evento, counters)
+- 4 widgets: `StockHealthWidget`, `ArrivalsWidget`, `CurveCompletenessWidget` (heatmap), `AllocationProposalCard`
+- `EventSkuPicker`, `EventStorePicker` (modales multi-select con filtros)
+- Botón "Abrir dashboard →" en `EventFormModal` (callback `onOpenDashboard?` opcional)
+
+### Fase B (PR #39 merged) — Closed-loop + diff + conflictos + curva ideal
+
+**Migration 026:** expand CHECK `decision_runs.run_type` con `'event_allocation'`.
+
+**Closed-loop Palantir-style:** al aprobar una propuesta, cada `AllocationLine` se persiste como `decision_action` con:
+- `run_id` de un nuevo `decision_run` (run_type='event_allocation')
+- Snapshot de `current_stock` en (sku, talle, toStore) al momento
+- FKs `calendar_event_id` + `allocation_proposal_id`
+- Mapeo `reason → waterfall_level + action_type`:
+  - `transfer_from_store` / `missing_size` → `store_to_store` + `transfer`
+  - `restock_from_depot` → `depot_to_store` + `restock_from_depot`
+  - `out_of_stock` → `central_to_depot` + `resupply_depot` + risk='critical'
+
+Pure function `buildEventDecisionPayload` (9 tests).
+
+**Comparador v1 vs v2:** `diffProposals(prev, next)` clasifica líneas en `added/removed/changed/unchanged` por key `(sku, talle, fromStore, toStore)`. Botón "Comparar vs vN−1" en `AllocationProposalCard` con tabla diff coloreada (10 tests).
+
+**Detección multi-evento:** `useSkuConflicts(eventId, skus)` cruza SKUs del evento con otros eventos activos (`end_date >= today` o NULL). Banner warning + chip "En N eventos" por SKU en `LinkedSkusCard`.
+
+**Curva ideal:** `idealUnitsLookup?` opcional en `generateAllocationProposal`. Hook deriva target desde `config_store.assortment / talles_de_la_red_para_ese_sku` (vs default `minUnitsPerTalleStore=1` de Fase A). Si la tienda no tiene assortment, fallback a 1 (4 tests).
+
+### Fase C (PR #40) — Adaptive (realtime + historial visible)
+
+**Sin migration nueva.**
+
+**C-1 Realtime:** `useEventRealtime(eventId)` suscribe a `calendar_event_skus`, `calendar_event_stores`, `allocation_proposals` filtrando por `event_id=eq.{eventId}`. Cualquier cambio (otro usuario, otra pestaña, mutation propia) invalida queries del dashboard. Patrón: `authClient.channel(...).on("postgres_changes", { filter }, ...)` (mismo que useCalendar).
+
+**C-2 Historial:** `EventHistoryWidget` al final del dashboard. Trae `decision_runs` de tipo `event_allocation` filtrados por `filters_snapshot->>'eventId'` (jsonb operator). Click "Ver snapshot" expande `decision_actions` con stock al momento, ruta del movimiento, tipo y riesgo. **Cierra visualmente el closed-loop de Fase B**: la data ya estaba persistida; ahora es visible desde el evento.
+
+`approve` mutation invalida también `decisionRuns(eventId)` para refresh inmediato del historial.
+
+### Archivos críticos del módulo Event Operational App
+
+```
+sql/025_calendar_events_skus.sql           — 3 tablas + FKs + RLS (Fase A)
+sql/026_event_allocation_run_type.sql      — expand CHECK run_type (Fase B)
+src/domain/events/
+  types.ts                                 — Object Types: EventSku, EventStore, AllocationProposal, AllocationLine, Readiness
+  readiness.ts                             — computeReadiness (scorecard + exceptions)
+  curveCompleteness.ts                     — computeEventCurveCoverage (heatmap)
+  allocation.ts                            — generateAllocationProposal (push engine)
+  closedLoop.ts                            — buildEventDecisionPayload (Action Log)
+  proposalDiff.ts                          — diffProposals (comparador v1 vs v2)
+src/queries/events.queries.ts              — CRUD + closed-loop + conflicts + history
+src/features/calendar/
+  EventDashboardPage.tsx                   — Operational App view (/calendario/evento/:id)
+  hooks/useEventDashboard.ts               — Orchestrator (readiness + coverages)
+  hooks/useAllocationProposals.ts          — generate + approve (con closed-loop)
+  hooks/useEventRealtime.ts                — Supabase Realtime invalidation
+  hooks/useEventDecisionHistory.ts         — Decision Log queries
+  hooks/useSkuConflicts.ts                 — Cross-event conflicts
+  hooks/useEventSkus.ts, useEventStores.ts — CRUD links
+  components/EventScorecard.tsx
+  components/EventSkuPicker.tsx
+  components/EventStorePicker.tsx
+  components/widgets/StockHealthWidget.tsx
+  components/widgets/ArrivalsWidget.tsx
+  components/widgets/CurveCompletenessWidget.tsx
+  components/widgets/AllocationProposalCard.tsx (con DiffView interna)
+  components/widgets/EventHistoryWidget.tsx
+```
+
+### Pendiente futuro (no para sesiones inmediatas)
+
+| Pieza | Bloqueo |
+|-------|---------|
+| **C-3 Notificaciones email** (Edge Function `check-event-readiness` con Resend) | Cliente debe aplicar 4 DNS records de Resend (mismo bloqueo que MailCenter integration) |
+| **Reservar stock cross-eventos** (warning ya está, falta bloqueo automático) | **Requiere que Rodrigo defina la regla de prioridad: ¿quién gana cuando dos eventos pelean por el mismo SKU?** Opciones a evaluar: por fecha más próxima, por antigüedad de creación, por campo prioridad explícito, o resolución manual con panel de conflictos |
+| **Learning desde aprobaciones** | Necesita 3+ meses de data acumulada de aprobaciones/rechazos para inferir patrones |
+| **Cruce SKU 1-a-1 con productos_importacion** | Requiere que Fenix/Derlys agregue `sku_comercial` en la fuente de imports |
+
+### Verificación final (28/04/2026)
+
+```
+Tests:  1681 passing (55 suites, +55 desde la línea base de Fase A)
+TSC:    0 errores
+ESLint: 0 errores (2 warnings preexistentes en marketing, no relacionados)
+Build:  OK
+```
 
 ---
 

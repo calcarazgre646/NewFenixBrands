@@ -16,6 +16,7 @@ import { useEventSkus } from "./hooks/useEventSkus";
 import { useEventStores } from "./hooks/useEventStores";
 import { useAllocationProposals } from "./hooks/useAllocationProposals";
 import { useSkuConflicts } from "./hooks/useSkuConflicts";
+import { useEventRealtime } from "./hooks/useEventRealtime";
 import { EventScorecard } from "./components/EventScorecard";
 import { EventSkuPicker } from "./components/EventSkuPicker";
 import { EventStorePicker } from "./components/EventStorePicker";
@@ -23,6 +24,7 @@ import { StockHealthWidget } from "./components/widgets/StockHealthWidget";
 import { ArrivalsWidget } from "./components/widgets/ArrivalsWidget";
 import { CurveCompletenessWidget } from "./components/widgets/CurveCompletenessWidget";
 import { AllocationProposalCard } from "./components/widgets/AllocationProposalCard";
+import { EventHistoryWidget } from "./components/widgets/EventHistoryWidget";
 import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
 
 interface CalendarEventRow {
@@ -71,6 +73,9 @@ export default function EventDashboardPage() {
   const skusH = useEventSkus(eventId);
   const storesH = useEventStores(eventId);
   const proposalsH = useAllocationProposals(eventId);
+
+  // Realtime: invalida queries cuando cambian las 3 tablas filtradas por event_id
+  useEventRealtime(eventId);
 
   const [showSkuPicker, setShowSkuPicker] = useState(false);
   const [showStorePicker, setShowStorePicker] = useState(false);
@@ -195,6 +200,9 @@ export default function EventDashboardPage() {
           onReject={(id) => proposalsH.reject(id)}
         />
       </div>
+
+      {/* ── Decision history (closed-loop log) ── */}
+      <EventHistoryWidget eventId={eventId} />
 
       {/* ── Pickers ── */}
       {showSkuPicker && eventId && (
