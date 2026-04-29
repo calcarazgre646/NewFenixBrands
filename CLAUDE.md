@@ -19,7 +19,7 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 0 | SignInPage + ChangePasswordPage (primer login) | ✅ COMPLETO |
 | 1 | KpiDashboardPage (`/kpis`) — 9 core + 50 catálogo + sparklines + UPT activado | ✅ COMPLETO |
 | 1B | ExecutivePage (`/`) — Road to Annual Target, chart acumulado, tabla mensual | ✅ COMPLETO |
-| 2 | SalesPage (`/ventas`) — Metricas, 4 tabs analytics, YoY tiendas, Top/Bottom SKUs | ✅ COMPLETO |
+| 2 | SalesPage (`/ventas`) — Metricas, 4 tabs analytics, YoY tiendas, Top/Bottom SKUs + Sell-through por SKU | ✅ COMPLETO |
 | 3 | ActionQueuePage (`/acciones`) — Waterfall 4 niveles + Lifecycle SKU (linealidad 3x6, sequential 5 pasos, cascade A→B→OUT, mandatory exit 90d) + 2 pestañas | ✅ COMPLETO + LIFECYCLE + AUDITADO (ver docs/LIFECYCLE_04) |
 | 4 | LogisticsPage (`/logistica`) — ETAs importacion, tabla agrupada | ✅ COMPLETO + AUDITADO |
 | 5 | CalendarPage (`/calendario`) — FullCalendar + CRUD + Realtime + Llegadas logística | ✅ COMPLETO + AUDITADO |
@@ -32,8 +32,9 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 9B | MyProjectionPage (`/mi-proyeccion`) — vista personal del vendedor (rol nuevo `vendedor`) | ✅ COMPLETO |
 
 **La app corre:** `npm run dev` → http://localhost:5173
-**Tests:** 1681 passing (55 suites) | TSC 0 errores | Build OK | ESLint 0 errores
+**Tests:** 1756 passing (59 suites) | TSC 0 errores | Build OK | ESLint 0 errores
 **Deploy:** https://fenix-brands-one.vercel.app
+**Sesión 29/04/2026:** Sell-through por SKU en `/ventas` (PR #45)
 **Sesión 28/04/2026:** Event Operational App — Fases A+B+C (ver abajo)
 **Sesión 22/04/2026:** PricingPage — módulo Precios (ver abajo)
 **Sesión 04/04/2026:** Config editable — Etapas 2-5 (ver abajo)
@@ -182,6 +183,44 @@ src/
 - `docs/ETAPA_2_3_CONFIG_IMPLEMENTATION.md` — Documentación completa Etapas 2-5 + seed + estado final
 - `docs/scope freeze + inventario final.md` — Auditoría de ~95 constantes de negocio, clasificación, mapa de impacto
 - `docs/safety net de tests.md` — Auditoría de fragilidad de tests, migración a contract tests
+
+---
+
+## Sesión 29/04/2026 — Sell-through por SKU en /ventas (PR #45)
+
+**Pedido del equipo Fenix (13/03/2026):** identificar productos con mejor performance via velocidad de venta como % del inventario inicial. Cierre de un ticket viejo del backlog.
+
+**Insight clave:** los datos ya estaban vivos en `mv_sth_cohort` (sql/019, alimentando lifecycle/waterfall) pero solo los consumía el motor de decisiones. Faltaba exponerlos en una vista exploratoria.
+
+**Scope reducido (acordado con el usuario):** reusar el card `SkusCard` de `/ventas` en vez de página nueva. Si el cliente pide más, se escala.
+
+### Cambios
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/queries/sth.queries.ts` | + `fetchSthBySku(storeCode?)`. Agrega `mv_sth_cohort` red-wide por SKU técnico (suma todas las tallas y tiendas no-almacén). Acepta filtro por tienda. Devuelve `Map<sku, SkuSthAggregate>`. |
+| `src/queries/keys.ts` | + `sthKeys.bySku(storeCode)` factory. |
+| `src/queries/sales.queries.ts` | + 3 campos opcionales en `TopSkuRow`: `sthPct`, `unitsReceived`, `unitsSoldLifetime`. |
+| `src/features/sales/hooks/useSalesAnalytics.ts` | + query lazy `sthBySkuQ` (mismo gating que `skusQ`). Memo `topSkusWithSth` cruza ambos por SKU técnico. |
+| `src/features/sales/components/SkusCard.tsx` | Selector de orden **Neto $ / STH / Unid** (botón STH se deshabilita si la query no terminó). Pill STH% por fila con escala de color (rojo <30, ámbar 30-60, verde 60-90, azul ≥90) + tooltip "X de Y uds". |
+
+### Comportamiento
+
+- **STH es lifetime** (cohorte completa desde primera entrada del SKU a la red), no ventana del periodo del filtro. Coincide con el pedido textual: "% del inventario inicial".
+- **Respeta filtro de tienda del header:** sin filtro → red-wide; con tienda → solo esa.
+- **SKUs sin cohorte** (recién entrados, <14d) muestran fila sin pill y van al final del orden por STH.
+- **Sin nuevas rutas, tabs, ni tablas.** Cabe en lo que ya existía.
+
+### Verificación + deploy
+
+```
+Tests:  1756 passing (59 suites)
+TSC:    0 errores
+ESLint: 0 errores (2 warnings preexistentes en marketing, no relacionados)
+Build:  OK (3.04s)
+PR:     https://github.com/calcarazgre646/NewFenixBrands/pull/45 (merged --admin)
+Deploy: https://fenix-brands-one.vercel.app ✅
+```
 
 ---
 
