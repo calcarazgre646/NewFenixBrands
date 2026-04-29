@@ -154,6 +154,8 @@ export const commissionKeys = {
     ["commissions", "sellerDaily", year, month] as const,
   transactions: (year: number, month: number, vendedorCodigo: number) =>
     ["commissions", "transactions", year, month, vendedorCodigo] as const,
+  cobranza: (year: number, month: number) =>
+    ["commissions", "cobranza", year, month] as const,
 };
 
 // ─── Freshness ──────────────────────────────────────────────────────────────

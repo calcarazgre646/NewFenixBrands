@@ -28,6 +28,7 @@ import {
   type SellerGoalRow,
 } from "@/queries/commissions.queries";
 import { fetchStoreGoals } from "@/queries/stores.queries";
+import { fetchSellerCobranza } from "@/queries/cobranza.queries";
 import {
   commissionKeys,
   storeKeys,
@@ -45,6 +46,11 @@ import {
   calcCumplimiento,
   calcPercentageCommission,
 } from "@/domain/commissions/calculations";
+import {
+  aggregateCobranzaByVendedor,
+  calcOverallDSO,
+  canonicalSellerName,
+} from "@/domain/cobranza/calculations";
 import { classifySellerRole } from "@/domain/commissions/classify";
 import { useCommissionScales } from "@/hooks/useConfig";
 import {
@@ -61,6 +67,7 @@ import type {
   SellerIdentity,
   SellerProjection,
 } from "@/domain/projections/types";
+import type { CobranzaUnattributed } from "@/domain/cobranza/types";
 
 export interface ProjectionSummary {
   totalVendedores: number;
@@ -68,6 +75,12 @@ export interface ProjectionSummary {
   totalVentaProyectada: number;
   totalComisionActualGs: number;
   totalComisionProyectadaGs: number;
+  totalCobranzaActualGs: number;
+  totalComisionCobranzaActualGs: number;
+  /** Días promedio de pago del scope (B2B). null si no hay cuotas válidas. */
+  overallDSODias: number | null;
+  /** Cobranza no atribuida a ningún vendedor con código (UNIFORMES, sin mapeo). */
+  cobranzaUnattributed: CobranzaUnattributed[];
   byChannel: Record<CommissionChannel, {
     count: number;
     ventaActual: number;
@@ -87,7 +100,7 @@ export function useSellerProjections(
   year: number,
   month: number,
 ): UseSellerProjectionsResult {
-  const [salesQ, dailyQ, storeGoalsQ, sellerGoalsQ] = useQueries({
+  const [salesQ, dailyQ, storeGoalsQ, sellerGoalsQ, cobranzaQ] = useQueries({
     queries: [
       {
         queryKey: commissionKeys.storeLevel(year * 100 + month),
@@ -113,6 +126,12 @@ export function useSellerProjections(
         staleTime: STALE_30MIN,
         gcTime: GC_60MIN,
       },
+      {
+        queryKey: commissionKeys.cobranza(year, month),
+        queryFn: () => fetchSellerCobranza(year, month),
+        staleTime: STALE_30MIN,
+        gcTime: GC_60MIN,
+      },
     ],
   });
 
@@ -122,6 +141,10 @@ export function useSellerProjections(
     if (!salesQ.data || !dailyQ.data || !storeGoalsQ.data || !sellerGoalsQ.data) {
       return { projections: [] as SellerProjection[], summary: null };
     }
+    // cobranzaQ.data puede no estar listo → seguimos sin bloquear, la cobranza
+    // se incorpora cuando llegue. Eso evita que la tabla se quede vacía si
+    // c_cobrar está degradada.
+    const cobranzaRows = cobranzaQ.data ?? [];
 
     const calendarDay = getCalendarDay();
     const calendarMonth = getCalendarMonth();
@@ -145,6 +168,28 @@ export function useSellerProjections(
     // ── Metas individuales (Mayorista/UTP) ──
     const sellerGoalMap = new Map<number, SellerGoalRow>();
     for (const sg of sellerGoalsQ.data) sellerGoalMap.set(sg.vendedorCodigo, sg);
+
+    // ── Lookup nombre canónico → código numérico de vendedor ──
+    // Construido desde sales (v_dsvende canónico) + metas (códigos sin venta).
+    const nameToCodigo = new Map<string, { codigo: number; nombre: string }>();
+    for (const s of salesQ.data) {
+      const canonical = canonicalSellerName(s.vendedorNombre);
+      if (!canonical || s.vendedorCodigo === 999 || s.vendedorCodigo === 99) continue;
+      if (!nameToCodigo.has(canonical)) {
+        nameToCodigo.set(canonical, { codigo: s.vendedorCodigo, nombre: s.vendedorNombre.trim() });
+      }
+    }
+    for (const sg of sellerGoalsQ.data) {
+      const canonical = canonicalSellerName(sg.vendedorNombre);
+      if (!canonical) continue;
+      if (!nameToCodigo.has(canonical)) {
+        nameToCodigo.set(canonical, { codigo: sg.vendedorCodigo, nombre: sg.vendedorNombre.trim() });
+      }
+    }
+
+    // ── Cobranza agregada por vendedor ──
+    const cobranzaResult = aggregateCobranzaByVendedor(cobranzaRows, year, month, nameToCodigo);
+    const cobranzaCargada = cobranzaQ.data != null;
 
     // ── Identidad mensual y total tienda actual + daily tienda agregado ──
     interface SellerAgg {
@@ -263,6 +308,7 @@ export function useSellerProjections(
             año: year,
             mes: month,
             metaVentas: null,
+            // Retail no usa cobranza
             calendarDay,
             calendarMonth,
             calendarYear,
@@ -290,6 +336,7 @@ export function useSellerProjections(
       } else {
         // Mayorista / UTP: meta individual del vendedor
         const goal = sellerGoalMap.get(codigo);
+        const cob = cobranzaResult.byCodigo.get(codigo);
         const projection = buildSellerProjection(
           {
             seller: agg.identity,
@@ -297,6 +344,9 @@ export function useSellerProjections(
             año: year,
             mes: month,
             metaVentas: goal?.metaVentas ?? null,
+            metaCobranza: goal?.metaCobranza ?? 0,
+            cobranzaActual: cobranzaCargada ? (cob?.cobranzaGs ?? 0) : undefined,
+            dsoDias: cob?.dsoDias ?? null,
             calendarDay,
             calendarMonth,
             calendarYear,
@@ -319,6 +369,7 @@ export function useSellerProjections(
         canal: sg.canal,
         sucursalCodigo: sg.zona,
       };
+      const cob = cobranzaResult.byCodigo.get(sg.vendedorCodigo);
       const projection = buildSellerProjection(
         {
           seller: identity,
@@ -326,6 +377,9 @@ export function useSellerProjections(
           año: year,
           mes: month,
           metaVentas: sg.metaVentas,
+          metaCobranza: sg.metaCobranza ?? 0,
+          cobranzaActual: cobranzaCargada ? (cob?.cobranzaGs ?? 0) : undefined,
+          dsoDias: cob?.dsoDias ?? null,
           calendarDay,
           calendarMonth,
           calendarYear,
@@ -341,20 +395,36 @@ export function useSellerProjections(
       || b.ventaProyectada - a.ventaProyectada
     );
 
-    return { projections: out, summary: buildSummary(out) };
-  }, [salesQ.data, dailyQ.data, storeGoalsQ.data, sellerGoalsQ.data, year, month, scales]);
+    return {
+      projections: out,
+      summary: buildSummary(out, cobranzaResult.unattributed, calcOverallDSO(cobranzaResult)),
+    };
+  }, [salesQ.data, dailyQ.data, storeGoalsQ.data, sellerGoalsQ.data, cobranzaQ.data, year, month, scales]);
 
   return {
     projections,
     summary,
-    isLoading: salesQ.isLoading || dailyQ.isLoading || storeGoalsQ.isLoading || sellerGoalsQ.isLoading,
-    error: (salesQ.error ?? dailyQ.error ?? storeGoalsQ.error ?? sellerGoalsQ.error) as Error | null,
+    isLoading:
+      salesQ.isLoading ||
+      dailyQ.isLoading ||
+      storeGoalsQ.isLoading ||
+      sellerGoalsQ.isLoading ||
+      cobranzaQ.isLoading,
+    error: (salesQ.error ??
+      dailyQ.error ??
+      storeGoalsQ.error ??
+      sellerGoalsQ.error ??
+      cobranzaQ.error) as Error | null,
   };
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-function buildSummary(rows: SellerProjection[]): ProjectionSummary {
+function buildSummary(
+  rows: SellerProjection[],
+  cobranzaUnattributed: CobranzaUnattributed[],
+  overallDSODias: number | null,
+): ProjectionSummary {
   const byChannel: ProjectionSummary["byChannel"] = {
     mayorista: { count: 0, ventaActual: 0, ventaProyectada: 0, comisionProyectadaGs: 0 },
     utp:       { count: 0, ventaActual: 0, ventaProyectada: 0, comisionProyectadaGs: 0 },
@@ -365,12 +435,16 @@ function buildSummary(rows: SellerProjection[]): ProjectionSummary {
   let totalVentaProyectada = 0;
   let totalComisionActual = 0;
   let totalComisionProyectada = 0;
+  let totalCobranzaActual = 0;
+  let totalComisionCobranzaActual = 0;
 
   for (const r of rows) {
     totalVentaActual += r.ventaActual;
     totalVentaProyectada += r.ventaProyectada;
     totalComisionActual += r.comisionActualGs ?? 0;
     totalComisionProyectada += r.comisionProyectadaGs ?? 0;
+    totalCobranzaActual += r.cobranzaActual ?? 0;
+    totalComisionCobranzaActual += r.comisionCobranzaActualGs ?? 0;
     const bc = byChannel[r.canal];
     bc.count++;
     bc.ventaActual += r.ventaActual;
@@ -384,6 +458,10 @@ function buildSummary(rows: SellerProjection[]): ProjectionSummary {
     totalVentaProyectada,
     totalComisionActualGs: totalComisionActual,
     totalComisionProyectadaGs: totalComisionProyectada,
+    totalCobranzaActualGs: totalCobranzaActual,
+    totalComisionCobranzaActualGs: totalComisionCobranzaActual,
+    overallDSODias,
+    cobranzaUnattributed,
     byChannel,
   };
 }

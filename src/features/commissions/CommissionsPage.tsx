@@ -18,6 +18,7 @@ import { CHANNEL_LABELS } from "@/domain/commissions/scales";
 import { useFilters } from "@/hooks/useFilters";
 import { useDataFreshness } from "@/hooks/useDataFreshness";
 import { useCompensation } from "./hooks/useCompensation";
+import { buildCompensationSummary } from "./hooks/derive";
 import ResumenTab from "./components/tabs/ResumenTab";
 import EquipoTab from "./components/tabs/EquipoTab";
 import HistoricoTab from "./components/tabs/HistoricoTab";
@@ -38,27 +39,15 @@ export default function CommissionsPage() {
 
   const data = useCompensation(year, selectedMonth);
 
-  // Filtro por canal — aplica a rows. self queda intacto (un único vendedor).
+  // Filtro por canal — aplica a rows + suma del pool unattributed que aplique
+  // (UNIFORMES → UTP/Todos). self queda intacto (un único vendedor).
   const filteredData = useMemo(() => {
     if (channelFilter === "todos") return data;
     const filtered = data.rows.filter((r) => r.projection.canal === channelFilter);
-    let totalVA = 0, totalVP = 0, totalCA = 0, totalCP = 0;
-    for (const { projection: p } of filtered) {
-      totalVA += p.ventaActual;
-      totalVP += p.ventaProyectada;
-      totalCA += p.comisionActualGs ?? 0;
-      totalCP += p.comisionProyectadaGs ?? 0;
-    }
     return {
       ...data,
       rows: filtered,
-      summary: {
-        totalVendedores: filtered.length,
-        totalVentaActual: totalVA,
-        totalVentaProyectada: totalVP,
-        totalComisionActualGs: totalCA,
-        totalComisionProyectadaGs: totalCP,
-      },
+      summary: buildCompensationSummary(filtered, data.cobranzaUnattributed, channelFilter),
     };
   }, [data, channelFilter]);
 

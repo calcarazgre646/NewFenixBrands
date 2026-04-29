@@ -59,6 +59,18 @@ export interface SellerProjection {
   /** % aplicado en la proyección (tramo de la escala) */
   comisionProyectadaPct: number | null;
 
+  // ── Cobranza (Mayorista/UTP, null para Retail o cuando no hay datos) ──
+  /** Meta de cobranza del mes (Gs.). null si no aplica o no está cargada. */
+  metaCobranza: number | null;
+  /** Cobranza efectivamente realizada en el mes (Gs.). null si no se cargó la fuente. */
+  cobranzaActual: number | null;
+  /** Cumplimiento % de cobranza vs meta. null si no aplica. */
+  cumplimientoCobranzaPct: number | null;
+  /** Comisión de cobranza acumulada (Gs.) — calculada con el mismo tramo de la escala del rol. */
+  comisionCobranzaActualGs: number | null;
+  /** DSO (días promedio de pago) del vendedor en el mes. null si no hay cuotas válidas. */
+  dsoDias: number | null;
+
   // ── Estado ──
   /** true si hay meta cargada (Retail siempre; Mayorista/UTP solo si vino de comisiones_metas_vendedor) */
   hasMeta: boolean;
@@ -96,6 +108,16 @@ export interface BuildProjectionInput {
    * sin tabla `comisiones_metas_vendedor`). Cobranza no se proyecta (= 0).
    */
   metaVentas: number | null;
+  /**
+   * Cobranza acumulada del mes (Gs.). undefined si la fuente no está cargada
+   * (proyección queda con cobranza=null). 0 es válido y significa "cargado pero no cobró nada".
+   * Sólo aplica a Mayorista/UTP — Retail siempre debería pasar undefined.
+   */
+  cobranzaActual?: number;
+  /** Meta de cobranza del mes (Gs.). undefined o 0 → no se calcula comisión cobranza. */
+  metaCobranza?: number;
+  /** DSO del vendedor en el mes (días). null si no hay cuotas válidas. */
+  dsoDias?: number | null;
   /** Día calendario actual del sistema (1-31) — fuente de verdad del tiempo */
   calendarDay: number;
   /** Mes calendario actual del sistema (1-12) */

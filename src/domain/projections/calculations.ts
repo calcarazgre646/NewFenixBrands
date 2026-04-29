@@ -115,7 +115,11 @@ export function buildSellerProjection(
   input: BuildProjectionInput,
   scales: Record<string, CommissionScale> = SCALE_BY_ROLE,
 ): SellerProjection {
-  const { seller, daily, año, mes, metaVentas, calendarDay, calendarMonth, calendarYear } = input;
+  const {
+    seller, daily, año, mes,
+    metaVentas, cobranzaActual, metaCobranza, dsoDias,
+    calendarDay, calendarMonth, calendarYear,
+  } = input;
 
   const time = resolveMonthTime(año, mes, calendarDay, calendarMonth, calendarYear);
 
@@ -132,11 +136,16 @@ export function buildSellerProjection(
   const ventaProyectada = projectMonthEnd(ventaActual, ritmoDiario, time.diasRestantes);
 
   const hasMeta = metaVentas != null && metaVentas > 0;
+  const hasMetaCobranza = metaCobranza != null && metaCobranza > 0;
+  const cobranzaCargada = cobranzaActual != null;
+
   let cumplimientoActualPct: number | null = null;
   let cumplimientoProyectadoPct: number | null = null;
   let comisionActualGs: number | null = null;
   let comisionProyectadaGs: number | null = null;
   let comisionProyectadaPct: number | null = null;
+  let cumplimientoCobranzaPct: number | null = null;
+  let comisionCobranzaActualGs: number | null = null;
 
   if (hasMeta) {
     cumplimientoActualPct = round2(calcCumplimiento(ventaActual, metaVentas));
@@ -151,16 +160,22 @@ export function buildSellerProjection(
       mes,
       trimestre: Math.ceil(mes / 3),
       metaVentas: metaVentas,
-      metaCobranza: 0, // cobranza no se proyecta (c_cobrar vacía)
+      metaCobranza: hasMetaCobranza ? metaCobranza : 0,
       sucursalCodigo: seller.sucursalCodigo,
     };
 
-    const actual = calcCommission(goal, ventaActual, 0, scales);
-    const proyectada = calcCommission(goal, ventaProyectada, 0, scales);
+    const cobranzaForCalc = cobranzaCargada ? cobranzaActual : 0;
+    const actual = calcCommission(goal, ventaActual, cobranzaForCalc, scales);
+    const proyectada = calcCommission(goal, ventaProyectada, cobranzaForCalc, scales);
 
     comisionActualGs = actual.comisionVentasGs;
     comisionProyectadaGs = proyectada.comisionVentasGs;
     comisionProyectadaPct = proyectada.comisionVentasPct;
+
+    if (hasMetaCobranza) {
+      cumplimientoCobranzaPct = round2(actual.cumplimientoCobranzaPct);
+      comisionCobranzaActualGs = actual.comisionCobranzaGs;
+    }
   }
 
   return {
@@ -183,6 +198,11 @@ export function buildSellerProjection(
     comisionActualGs,
     comisionProyectadaGs,
     comisionProyectadaPct,
+    metaCobranza: hasMetaCobranza ? metaCobranza : null,
+    cobranzaActual: cobranzaCargada ? cobranzaActual : null,
+    cumplimientoCobranzaPct,
+    comisionCobranzaActualGs,
+    dsoDias: dsoDias ?? null,
     hasMeta,
     isMonthClosed: time.isMonthClosed,
     isInProgress: time.isInProgress,
