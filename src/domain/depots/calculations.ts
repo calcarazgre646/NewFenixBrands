@@ -146,6 +146,64 @@ function aggregateByFieldCentral(
     .sort((a, b) => b.value - a.value);
 }
 
+/**
+ * Desglosa categorías por marca dentro de un nodo central.
+ * WOI por (marca, categoría) usa demanda de la red sobre los items dependientes
+ * que coinciden en marca y categoría (consistente con `aggregateByFieldCentral`).
+ *
+ * Devuelve Record<brand, GroupBreakdown[]> ordenado por valor descendente
+ * dentro de cada marca. Las marcas que no aparecen en nodeItems no incluidas.
+ */
+export function aggregateCategoriesByBrand(
+  nodeItems: InventoryItem[],
+  dependentItems: InventoryItem[],
+  salesHistory: SalesHistoryMap,
+): Record<string, GroupBreakdown[]> {
+  // Unidades y valor del nodo por (marca, categoría)
+  type CatAcc = { units: number; value: number };
+  const nodeMap = new Map<string, Map<string, CatAcc>>();
+  for (const item of nodeItems) {
+    let perBrand = nodeMap.get(item.brand);
+    if (!perBrand) {
+      perBrand = new Map();
+      nodeMap.set(item.brand, perBrand);
+    }
+    const acc = perBrand.get(item.categoria) ?? { units: 0, value: 0 };
+    acc.units += item.units;
+    acc.value += item.value;
+    perBrand.set(item.categoria, acc);
+  }
+
+  // Demanda mensual de la red por (marca, categoría)
+  const demandMap = new Map<string, Map<string, number>>();
+  for (const item of dependentItems) {
+    const store = item.store?.trim().toUpperCase() ?? "";
+    const avg = salesHistory.get(`${store}|${item.sku}`) ?? 0;
+    if (avg <= 0) continue;
+    let perBrand = demandMap.get(item.brand);
+    if (!perBrand) {
+      perBrand = new Map();
+      demandMap.set(item.brand, perBrand);
+    }
+    perBrand.set(item.categoria, (perBrand.get(item.categoria) ?? 0) + avg);
+  }
+
+  const result: Record<string, GroupBreakdown[]> = {};
+  for (const [brand, perBrand] of nodeMap) {
+    const demand = demandMap.get(brand);
+    const rows: GroupBreakdown[] = Array.from(perBrand.entries())
+      .map(([label, v]) => ({
+        label,
+        units: v.units,
+        value: v.value,
+        woi: computeWOI(v.units, demand?.get(label) ?? 0),
+      }))
+      .sort((a, b) => b.value - a.value);
+    result[brand] = rows;
+  }
+  return result;
+}
+
 /** Construye filas de SKU con WOI para un nodo */
 function buildSkuRows(
   items: InventoryItem[],
@@ -420,6 +478,7 @@ export function buildDepotData(
     skuCount: stockSkuCount,
     topBrands: aggregateByFieldCentral(stockItems, "brand", allDependentItems, salesHistory),
     topCategories: aggregateByFieldCentral(stockItems, "categoria", allDependentItems, salesHistory),
+    categoriesByBrand: aggregateCategoriesByBrand(stockItems, allDependentItems, salesHistory),
     topSkuRows: buildSkuRows(stockItems, salesHistory, STOCK_KEY).slice(0, TOP_SKU_LIMIT),
   };
 
@@ -437,6 +496,7 @@ export function buildDepotData(
     skuCount: retailsSkuCount,
     topBrands: aggregateByFieldCentral(retailsItems, "brand", allDependentItems, salesHistory),
     topCategories: aggregateByFieldCentral(retailsItems, "categoria", allDependentItems, salesHistory),
+    categoriesByBrand: aggregateCategoriesByBrand(retailsItems, allDependentItems, salesHistory),
     topSkuRows: buildSkuRows(retailsItems, salesHistory, RETAILS_KEY).slice(0, TOP_SKU_LIMIT),
   };
 

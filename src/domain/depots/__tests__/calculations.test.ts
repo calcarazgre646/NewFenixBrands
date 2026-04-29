@@ -11,6 +11,7 @@ import {
   classifyNoveltyDistribution,
   buildNoveltyData,
   buildDepotData,
+  aggregateCategoriesByBrand,
 } from "../calculations";
 import type { InventoryItem } from "@/queries/inventory.queries";
 import type { SalesHistoryMap } from "@/queries/salesHistory.queries";
@@ -238,6 +239,29 @@ describe("buildDepotData", () => {
     expect(result.stock.topCategories[0].label).toBe("camisa"); // 5M
   });
 
+  it("expone categoriesByBrand en stock y retails", () => {
+    const items = [
+      // STOCK — Martel: camisa 5M + pantalón 2M; Wrangler: vaquero 3M
+      inv({ store: "STOCK", brand: "Martel",   categoria: "camisa",   value: 5000000, units: 50 }),
+      inv({ store: "STOCK", brand: "Wrangler", categoria: "vaquero",  value: 3000000, units: 30 }),
+      inv({ store: "STOCK", brand: "Martel",   categoria: "pantalón", value: 2000000, units: 20 }),
+      // RETAILS — solo Lee: bermuda 4M
+      inv({ store: "RETAILS", brand: "Lee", categoria: "bermuda", value: 4000000, units: 40 }),
+    ];
+
+    const result = buildDepotData(items, new Map());
+
+    // Stock: dos marcas con sus categorías propias, ordenadas por valor desc
+    expect(Object.keys(result.stock.categoriesByBrand).sort()).toEqual(["Martel", "Wrangler"]);
+    expect(result.stock.categoriesByBrand.Martel.map(r => r.label)).toEqual(["camisa", "pantalón"]);
+    expect(result.stock.categoriesByBrand.Wrangler).toHaveLength(1);
+    expect(result.stock.categoriesByBrand.Wrangler[0].label).toBe("vaquero");
+
+    // Retails: solo Lee
+    expect(result.retails.categoriesByBrand.Lee).toHaveLength(1);
+    expect(result.retails.categoriesByBrand.Lee[0].units).toBe(40);
+  });
+
   it("incluye tiendas con 0 inventario pero con ventas históricas", () => {
     const items = [
       inv({ store: "STOCK", sku: "SKU001", units: 100 }),
@@ -283,6 +307,56 @@ describe("buildDepotData", () => {
     const normalRow = rows.find(r => r.sku === "SKU002");
     expect(noveltyRow?.isNovelty).toBe(true);
     expect(normalRow?.isNovelty).toBe(false);
+  });
+});
+
+// ─── aggregateCategoriesByBrand (helper puro) ───────────────────────────────
+
+describe("aggregateCategoriesByBrand", () => {
+  it("agrupa por (marca, categoría) y ordena categorías por valor desc", () => {
+    const items = [
+      inv({ brand: "Martel", categoria: "camisa",   value: 1_000_000, units: 10 }),
+      inv({ brand: "Martel", categoria: "pantalón", value: 3_000_000, units: 30 }),
+      inv({ brand: "Martel", categoria: "camisa",   value:   500_000, units:  5 }), // mismo bucket
+    ];
+    const out = aggregateCategoriesByBrand(items, [], new Map());
+    expect(Object.keys(out)).toEqual(["Martel"]);
+    expect(out.Martel.map(r => r.label)).toEqual(["pantalón", "camisa"]);
+    const camisa = out.Martel.find(r => r.label === "camisa")!;
+    expect(camisa.units).toBe(15); // 10 + 5
+    expect(camisa.value).toBe(1_500_000);
+  });
+
+  it("nodo vacío → record vacío", () => {
+    expect(aggregateCategoriesByBrand([], [], new Map())).toEqual({});
+  });
+
+  it("WOI por (marca, categoría) usa demanda de la red dependiente", () => {
+    const stockItems = [inv({ store: "STOCK", brand: "Martel", categoria: "camisa", units: 100 })];
+    const dependentItems = [inv({ store: "TOLAMB", sku: "SKU001", brand: "Martel", categoria: "camisa" })];
+    const history: SalesHistoryMap = new Map([["TOLAMB|SKU001", 43.3]]);
+
+    const out = aggregateCategoriesByBrand(stockItems, dependentItems, history);
+    expect(out.Martel[0].woi).toBeCloseTo(10, 0); // 100 / (43.3/4.33) ≈ 10
+  });
+
+  it("categoría sin demanda → woi null", () => {
+    const out = aggregateCategoriesByBrand(
+      [inv({ store: "STOCK", brand: "Lee", categoria: "bermuda", units: 50 })],
+      [],
+      new Map(),
+    );
+    expect(out.Lee[0].woi).toBeNull();
+  });
+
+  it("marcas en nodeItems sin demanda en la red → siguen apareciendo con woi null", () => {
+    const out = aggregateCategoriesByBrand(
+      [inv({ store: "STOCK", brand: "Niella", categoria: "remera", units: 20 })],
+      [inv({ store: "TOLAMB", brand: "Otra", categoria: "polera" })],
+      new Map([["TOLAMB|SKU001", 10]]),
+    );
+    expect(out.Niella).toBeDefined();
+    expect(out.Niella[0].woi).toBeNull();
   });
 });
 
