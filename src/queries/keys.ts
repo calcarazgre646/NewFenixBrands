@@ -123,6 +123,7 @@ export const doiAgeKeys = {
 export const sthKeys = {
   all: ["sth"] as const,
   cohort: () => ["sth", "cohort"] as const,
+  bySku: (storeCode?: string | null) => ["sth", "by-sku", storeCode ?? null] as const,
 };
 
 // ─── Depósitos & Cobertura ────────────────────────────────────────────────────
