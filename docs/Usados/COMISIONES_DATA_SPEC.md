@@ -1,6 +1,14 @@
 # Comisiones — Especificacion de Datos
 
-## Estado: Retail FUNCIONAL con datos reales. Mayorista/UTP esperando metas individuales.
+## Estado (29/04/2026): Retail FUNCIONAL. Cobranza Mayorista/UTP CABLEADA. Pendiente seed `meta_cobranza` + regla atribución UNIFORMES.
+
+> **Update 29/04/2026:** `c_cobrar` ya no está vacía: 832K filas, 22K cuotas pagadas en 2026 Ene-Abr. La query `fetchSellerCobranza` joinea `c_cobrar.codigo_cliente → maestro_clientes_mayoristas.cliente_id → vendedor` y atribuye al `v_vended` por nombre canónico. Aplicado defaults razonables en `feat/cobranza-mayorista-utp` (sin Rodrigo) — todos pueden cambiar después:
+> - **Cobranza del período** = Σ `monto_total` con `f_pago` dentro del mes (incluye negativos por NC).
+> - **DSO por cuota** = `f_pago - f_factura` en días; cuotas con DSO < 0 (anomalía) se descartan.
+> - **DSO vendedor** = promedio simple de DSOs válidos del mes.
+> - **DSO scope (KPI)** = ponderado por cantidad de cuotas.
+> - **UNIFORMES (UTP)**: por ahora queda en pool `unattributed` (no se atribuye a Marta/Jorge/Cintia). Aparece en summary scope pero no en filas individuales hasta que Rodrigo defina la regla de reparto.
+> - **Misma escala**: comisión cobranza usa la escala del rol con base = cobranzaReal y cumplimiento vs `meta_cobranza`. Se suma a la comisión de ventas.
 
 ---
 

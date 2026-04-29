@@ -2,9 +2,10 @@
  * CompensationTeamTable — tabla del equipo en la pestaña "Equipo".
  *
  *   + Columna Pace (bullet chart) con bandas semánticas.
+ *   + Columnas Cobranza + DSO visibles cuando hay datos B2B.
  *   + Click en fila → drill a transacciones (drawer lateral).
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { formatPYGCompact } from "@/utils/format";
 import { ROLE_LABELS, CHANNEL_LABELS } from "@/domain/commissions/scales";
 import PaceChart from "./PaceChart";
@@ -40,6 +41,15 @@ export default function CompensationTeamTable({ rows, onRowClick }: Props) {
   const start = page * PAGE_SIZE;
   const visible = rows.slice(start, start + PAGE_SIZE);
 
+  /**
+   * Mostrar columnas de cobranza sólo cuando alguna fila visible tiene meta o
+   * cobranza cargada. Evita ruido en vista 100% retail.
+   */
+  const showCobranza = useMemo(
+    () => rows.some(r => (r.metaCobranza ?? 0) > 0 || (r.cobranzaActual ?? 0) !== 0),
+    [rows],
+  );
+
   if (rows.length === 0) {
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-sm text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500">
@@ -71,6 +81,12 @@ export default function CompensationTeamTable({ rows, onRowClick }: Props) {
               <th className={`${thCls} text-right hidden sm:table-cell`}>Proyección</th>
               <th className={`${thCls} text-left`}>Pace</th>
               <th className={`${thCls} text-right`}>Cumpl. proy.</th>
+              {showCobranza && (
+                <>
+                  <th className={`${thCls} text-right hidden lg:table-cell`}>Cobranza</th>
+                  <th className={`${thCls} text-right hidden xl:table-cell`}>DSO</th>
+                </>
+              )}
               <th className={`${thCls} text-right`}>Comisión proy.</th>
             </tr>
           </thead>
@@ -115,6 +131,32 @@ export default function CompensationTeamTable({ rows, onRowClick }: Props) {
                       ? <CumplimientoBadge pct={r.cumplimientoProyectadoPct} />
                       : <span className="text-[10px] text-gray-400">—</span>}
                   </td>
+                  {showCobranza && (
+                    <>
+                      <td className="hidden lg:table-cell px-3 py-2.5 text-right tabular-nums">
+                        {r.canal === "retail"
+                          ? <span className="text-[10px] text-gray-300 dark:text-gray-600">—</span>
+                          : r.cobranzaActual == null
+                            ? <span className="text-[10px] text-amber-500">Pendiente</span>
+                            : (
+                              <span className="text-gray-700 dark:text-gray-200">
+                                {formatPYGCompact(r.cobranzaActual)}
+                              </span>
+                            )}
+                      </td>
+                      <td className="hidden xl:table-cell px-3 py-2.5 text-right tabular-nums">
+                        {r.canal === "retail"
+                          ? <span className="text-[10px] text-gray-300 dark:text-gray-600">—</span>
+                          : r.dsoDias == null
+                            ? <span className="text-[10px] text-gray-400">—</span>
+                            : (
+                              <span className="text-gray-700 dark:text-gray-200">
+                                {Math.round(r.dsoDias)}d
+                              </span>
+                            )}
+                      </td>
+                    </>
+                  )}
                   <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-gray-900 dark:text-white">
                     {r.comisionProyectadaGs != null
                       ? formatPYGCompact(r.comisionProyectadaGs)

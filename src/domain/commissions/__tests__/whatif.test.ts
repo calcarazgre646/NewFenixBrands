@@ -28,6 +28,11 @@ function projection(overrides: Partial<SellerProjection> = {}): SellerProjection
     comisionActualGs: 0,
     comisionProyectadaGs: 115_000, // 10M × 1.15% (cumplimiento 100% cae en tramo [100,120))
     comisionProyectadaPct: 1.15,
+    metaCobranza: null,
+    cobranzaActual: null,
+    cumplimientoCobranzaPct: null,
+    comisionCobranzaActualGs: null,
+    dsoDias: null,
     hasMeta: true,
     isMonthClosed: false,
     isInProgress: true,

@@ -21,6 +21,12 @@ export interface CompensationSummary {
   totalVentaProyectada: number;
   totalComisionActualGs: number;
   totalComisionProyectadaGs: number;
+  totalCobranzaActualGs: number;
+  totalComisionCobranzaActualGs: number;
+  /** Comisión total del scope (ventas + cobranza acumuladas hasta hoy). */
+  totalComisionTotalActualGs: number;
+  /** DSO promedio del scope (días). null si no hay cuotas válidas. */
+  overallDSODias: number | null;
 }
 
 /**
@@ -29,6 +35,8 @@ export interface CompensationSummary {
  * Mayorista/UTP no tiene meta cargada, los % y Gs. quedan en 0 (UI "Pendiente").
  */
 export function projectionToResult(p: SellerProjection): CommissionResult {
+  const comisionVentasGs = p.comisionActualGs ?? 0;
+  const comisionCobranzaGs = p.comisionCobranzaActualGs ?? 0;
   return {
     vendedorCodigo: p.vendedorCodigo,
     vendedorNombre: p.vendedorNombre,
@@ -40,13 +48,13 @@ export function projectionToResult(p: SellerProjection): CommissionResult {
     ventaReal: p.ventaActual,
     cumplimientoVentasPct: p.cumplimientoActualPct ?? 0,
     comisionVentasPct: 0,
-    comisionVentasGs: p.comisionActualGs ?? 0,
-    metaCobranza: 0,
-    cobranzaReal: 0,
-    cumplimientoCobranzaPct: 0,
+    comisionVentasGs,
+    metaCobranza: p.metaCobranza ?? 0,
+    cobranzaReal: p.cobranzaActual ?? 0,
+    cumplimientoCobranzaPct: p.cumplimientoCobranzaPct ?? 0,
     comisionCobranzaPct: 0,
-    comisionCobranzaGs: 0,
-    comisionTotalGs: p.comisionActualGs ?? 0,
+    comisionCobranzaGs,
+    comisionTotalGs: comisionVentasGs + comisionCobranzaGs,
     tipoComision: "percentage",
     sucursal: p.sucursalCodigo,
   };
@@ -58,12 +66,22 @@ export function buildCompensationSummary(rows: CompensationRow[]): CompensationS
   let totalVentaProyectada = 0;
   let totalComisionActual = 0;
   let totalComisionProyectada = 0;
+  let totalCobranzaActual = 0;
+  let totalComisionCobranzaActual = 0;
+  let dsoSum = 0;
+  let dsoCount = 0;
 
   for (const { projection: p } of rows) {
     totalVentaActual += p.ventaActual;
     totalVentaProyectada += p.ventaProyectada;
     totalComisionActual += p.comisionActualGs ?? 0;
     totalComisionProyectada += p.comisionProyectadaGs ?? 0;
+    totalCobranzaActual += p.cobranzaActual ?? 0;
+    totalComisionCobranzaActual += p.comisionCobranzaActualGs ?? 0;
+    if (p.dsoDias != null) {
+      dsoSum += p.dsoDias;
+      dsoCount += 1;
+    }
   }
 
   return {
@@ -72,6 +90,10 @@ export function buildCompensationSummary(rows: CompensationRow[]): CompensationS
     totalVentaProyectada,
     totalComisionActualGs: totalComisionActual,
     totalComisionProyectadaGs: totalComisionProyectada,
+    totalCobranzaActualGs: totalCobranzaActual,
+    totalComisionCobranzaActualGs: totalComisionCobranzaActual,
+    totalComisionTotalActualGs: totalComisionActual + totalComisionCobranzaActual,
+    overallDSODias: dsoCount > 0 ? dsoSum / dsoCount : null,
   };
 }
 

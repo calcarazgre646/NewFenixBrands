@@ -78,6 +78,9 @@ export default function ResumenTab({ data }: Props) {
   }
 
   // scope === "team"
+  const showCobranzaBand =
+    summary.totalCobranzaActualGs !== 0 || summary.overallDSODias != null;
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -105,10 +108,45 @@ export default function ResumenTab({ data }: Props) {
         />
       </div>
 
+      {showCobranzaBand && (
+        <div className="space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+            B2B — Cobranza Mayorista / UTP
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <StatCard
+              label="Cobranza acumulada"
+              value={formatPYGCompact(summary.totalCobranzaActualGs)}
+              sub="cuotas pagadas en el mes"
+              variant={summary.totalCobranzaActualGs > 0 ? "accent-positive" : "neutral"}
+            />
+            <StatCard
+              label="Comisión cobranza"
+              value={formatPYGCompact(summary.totalComisionCobranzaActualGs)}
+              sub="Gs. acumulados"
+              variant={summary.totalComisionCobranzaActualGs > 0 ? "accent-positive" : "neutral"}
+            />
+            <StatCard
+              label="Días promedio de pago"
+              value={summary.overallDSODias != null
+                ? `${Math.round(summary.overallDSODias)} d`
+                : "—"}
+              sub="DSO ponderado por cuotas"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Tooltips de fórmula (banda inferior) */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1 px-1 text-[10px] text-gray-400 dark:text-gray-500">
         <KpiTooltip label="¿Cómo se proyecta?" formula={F_TOTAL_PROY} />
         <KpiTooltip label="¿Cómo se calcula la comisión total?" formula={F_TOTAL_COMM} />
+        {showCobranzaBand && (
+          <KpiTooltip
+            label="¿Qué es DSO?"
+            formula="Days Sales Outstanding: promedio de días entre f_factura y f_pago de cada cuota cobrada en el mes, ponderado por cantidad de cuotas."
+          />
+        )}
       </div>
 
       {/* Curva de referencia — fila completa */}
