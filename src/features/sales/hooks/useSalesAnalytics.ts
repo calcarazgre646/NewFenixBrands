@@ -29,7 +29,8 @@ import type {
 import { fetchAnnualTickets, filterTicketsByChannel } from "@/queries/tickets.queries";
 import type { TicketRow } from "@/queries/tickets.queries";
 import { fetchStores } from "@/queries/stores.queries";
-import { salesKeys, storeKeys, STALE_30MIN, GC_60MIN } from "@/queries/keys";
+import { fetchSthBySku } from "@/queries/sth.queries";
+import { salesKeys, sthKeys, storeKeys, STALE_30MIN, GC_60MIN } from "@/queries/keys";
 import { brandIdToCanonical } from "@/api/normalize";
 
 import {
@@ -332,6 +333,16 @@ export function useSalesAnalytics({
     gcTime: GC_60MIN,
   });
 
+  // STH agregado red-wide (o por tienda) por SKU. Se cruza con topSkus
+  // para enriquecer cada fila con sell-through. Mismo gating LAZY que skusQ.
+  const sthBySkuQ = useQuery({
+    queryKey: sthKeys.bySku(storeFilters.store ?? null),
+    queryFn: () => fetchSthBySku(storeFilters.store),
+    enabled: enabled && enableSkus,
+    staleTime: STALE_30MIN,
+    gcTime: GC_60MIN,
+  });
+
   const dailyQ = useQuery({
     queryKey: [
       "sales", "daily",
@@ -436,15 +447,34 @@ export function useSalesAnalytics({
   // ── Loading states ─────────────────────────────────────────────────────
   const isLoading = salesCYQ.isLoading || salesPYQ.isLoading;
   const isDowLoading = enableBehavior && dailyQ.isLoading;
-  const isSkusLoading = enableSkus && skusQ.isLoading;
+  const isSkusLoading = enableSkus && (skusQ.isLoading || sthBySkuQ.isLoading);
   const isStoresLoading = ticketsQ.isLoading || storesQ.isLoading;
   const error = salesCYQ.error?.message ?? salesPYQ.error?.message
     ?? skusQ.error?.message ?? dailyQ.error?.message ?? null;
 
+  // Enriquecer topSkus con STH red-wide (lifetime). Si la query de STH no terminó
+  // o el SKU no está en la cohorte (recién entrado, sin units_received), los
+  // campos quedan undefined y el SkusCard solo muestra neto/units como antes.
+  const topSkusWithSth = useMemo<TopSkuRow[]>(() => {
+    const base = skusQ.data ?? [];
+    const sthMap = sthBySkuQ.data;
+    if (!sthMap || sthMap.size === 0) return base;
+    return base.map((row) => {
+      const agg = sthMap.get(row.sku);
+      if (!agg) return row;
+      return {
+        ...row,
+        sthPct: agg.sthPct,
+        unitsReceived: agg.unitsReceived,
+        unitsSoldLifetime: agg.unitsSold,
+      };
+    });
+  }, [skusQ.data, sthBySkuQ.data]);
+
   return {
     brandBreakdown,
     channelMix,
-    topSkus: skusQ.data ?? [],
+    topSkus: topSkusWithSth,
     dayOfWeek,
     storeBreakdown,
     storeBreakdownB2C,

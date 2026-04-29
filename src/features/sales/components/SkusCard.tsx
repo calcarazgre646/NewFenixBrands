@@ -3,6 +3,7 @@
  *
  * Top/Bottom SKUs ranked list with brand badges, weight %, and metrics.
  * Filtro local: "Top Sellers" (mayor venta) vs "Bottom Sellers" (menor venta).
+ * Orden local: por Neto $ (default), por STH (sell-through), o por Unidades.
  */
 import { useState, useMemo, useEffect } from "react";
 import type { TopSkuRow } from "@/queries/sales.queries";
@@ -12,7 +13,22 @@ import { brandColor } from "./salesAnalytics.constants";
 import { LazyLoadPrompt, SectionLabel } from "./salesAnalytics.shared";
 
 type SkuMode = "top" | "bottom";
+type SortKey = "neto" | "sth" | "units";
 const SKU_DISPLAY_LIMIT = 20;
+
+const SORT_OPTIONS: ReadonlyArray<{ key: SortKey; label: string }> = [
+  { key: "neto",  label: "Neto $" },
+  { key: "sth",   label: "STH" },
+  { key: "units", label: "Unid" },
+];
+
+/** Color de la pill STH: rojo <30, ámbar 30-60, verde 60-90, azul ≥90. */
+function sthPillClasses(pct: number): string {
+  if (pct >= 90) return "bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400";
+  if (pct >= 60) return "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-400";
+  if (pct >= 30) return "bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-warning-400";
+  return "bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-400";
+}
 
 export function SkusCard({
   data,
@@ -26,13 +42,30 @@ export function SkusCard({
   filteredStoreName?: string | null;
 }) {
   const [mode, setMode] = useState<SkuMode>("top");
+  const [sortKey, setSortKey] = useState<SortKey>("neto");
+
+  // STH solo es informativo si la query corrió y al menos algún SKU tiene dato.
+  const hasSthData = useMemo(() => data.some((r) => r.sthPct !== undefined), [data]);
+  const effectiveSortKey: SortKey = sortKey === "sth" && !hasSthData ? "neto" : sortKey;
 
   const displayed = useMemo(() => {
     if (data.length === 0) return [];
-    if (mode === "top") return data.slice(0, SKU_DISPLAY_LIMIT);
-    // Bottom: take last N, reverse so worst is #1
-    return data.slice(-SKU_DISPLAY_LIMIT).reverse();
-  }, [data, mode]);
+    // El orden base de `data` ya viene por neto desc (fetchTopSkus). Solo
+    // re-ordenamos si el usuario eligió otra clave.
+    const sorted = effectiveSortKey === "neto"
+      ? data
+      : [...data].sort((a, b) => {
+          if (effectiveSortKey === "sth") {
+            // SKUs sin STH (recién entrados, sin cohorte) van al final en Top y al inicio en Bottom.
+            const av = a.sthPct ?? -1;
+            const bv = b.sthPct ?? -1;
+            return bv - av;
+          }
+          return b.units - a.units;
+        });
+    if (mode === "top") return sorted.slice(0, SKU_DISPLAY_LIMIT);
+    return sorted.slice(-SKU_DISPLAY_LIMIT).reverse();
+  }, [data, mode, effectiveSortKey]);
 
   // Lazy load prompt
   if (data.length === 0 && !isLoading) {
@@ -56,8 +89,8 @@ export function SkusCard({
 
   return (
     <Card padding="lg" className="flex h-full flex-col">
-      {/* Header: label + store badge left, toggle right */}
-      <div className="mb-4 flex items-center justify-between gap-2">
+      {/* Header: label + store badge left, toggles right */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
             {mode === "top" ? "Top Sellers" : "Bottom Sellers"}
@@ -72,29 +105,61 @@ export function SkusCard({
           )}
         </div>
         {!isLoading && data.length > 0 && (
-          <div className="flex shrink-0 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-800">
-            <button
-              type="button"
-              onClick={() => setMode("top")}
-              className={`rounded-md px-2.5 py-1 text-[10px] font-semibold transition-colors ${
-                mode === "top"
-                  ? "bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white"
-                  : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              }`}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {/* Sort selector */}
+            <div
+              role="group"
+              aria-label="Ordenar por"
+              className="flex shrink-0 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-800"
             >
-              Top
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("bottom")}
-              className={`rounded-md px-2.5 py-1 text-[10px] font-semibold transition-colors ${
-                mode === "bottom"
-                  ? "bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white"
-                  : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              }`}
-            >
-              Bottom
-            </button>
+              {SORT_OPTIONS.map((opt) => {
+                const disabled = opt.key === "sth" && !hasSthData;
+                const active = effectiveSortKey === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setSortKey(opt.key)}
+                    disabled={disabled}
+                    title={disabled ? "Sin datos de sell-through todavía" : `Ordenar por ${opt.label}`}
+                    className={`rounded-md px-2 py-1 text-[10px] font-semibold transition-colors ${
+                      active
+                        ? "bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white"
+                        : disabled
+                          ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
+                          : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Top / Bottom */}
+            <div className="flex shrink-0 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-800">
+              <button
+                type="button"
+                onClick={() => setMode("top")}
+                className={`rounded-md px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+                  mode === "top"
+                    ? "bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white"
+                    : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                }`}
+              >
+                Top
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("bottom")}
+                className={`rounded-md px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+                  mode === "bottom"
+                    ? "bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white"
+                    : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                }`}
+              >
+                Bottom
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -130,6 +195,18 @@ export function SkusCard({
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${colors.bg} ${colors.text}`}>
                       {sku.brand}
                     </span>
+                    {sku.sthPct !== undefined && (
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums ${sthPillClasses(sku.sthPct)}`}
+                        title={
+                          sku.unitsReceived !== undefined
+                            ? `Sell-through ${formatPct(sku.sthPct)} · ${Math.round(sku.unitsSoldLifetime ?? 0).toLocaleString("es-PY")} de ${Math.round(sku.unitsReceived).toLocaleString("es-PY")} uds`
+                            : `Sell-through ${formatPct(sku.sthPct)}`
+                        }
+                      >
+                        STH {formatPct(sku.sthPct)}
+                      </span>
+                    )}
                     <span className="font-mono text-[10px] text-gray-400 dark:text-gray-500">
                       {code}{sku.skuComercial ? ` · ${sku.sku}` : ""}
                     </span>

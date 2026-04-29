@@ -86,3 +86,68 @@ export async function fetchSthCohort(): Promise<SthCohortData> {
 
   return { exact, byStoreSku };
 }
+
+// ─── Agregado red-wide por SKU (para ranking de performance) ───────────────
+
+export interface SkuSthAggregate {
+  /** SKU técnico ERP (ej: "7031457") */
+  sku: string;
+  /** Suma de unidades recibidas en toda la red de venta (excluye depósitos/almacenes) */
+  unitsReceived: number;
+  /** Suma de unidades vendidas en toda la red */
+  unitsSold: number;
+  /** Sell-through agregado en escala 0-100 (clampeado a 100). 0 si no hubo entradas. */
+  sthPct: number;
+}
+
+/**
+ * STH agregado red-wide por SKU técnico.
+ *
+ * Agrega TODAS las filas de mv_sth_cohort por SKU (suma todas las talles y todas
+ * las tiendas no-almacén). Sirve para ranking de productos por velocidad de venta:
+ * "qué porcentaje del inventario inicial ya se vendió".
+ *
+ * Diferencia con fetchSthCohort: ese hace lookups exactos (sku+talle+store) o
+ * fallback (mejor talle por sku+store), apunta al motor de lifecycle/waterfall.
+ * Este agrega red-wide, apunta a vistas exploratorias (SkusCard).
+ *
+ * @param storeCode  Si se pasa, restringe el agregado a esa tienda (formato cosujd).
+ *                   Si no, suma todas las tiendas no-almacén.
+ */
+export async function fetchSthBySku(storeCode?: string | null): Promise<Map<string, SkuSthAggregate>> {
+  const buildQuery = () => {
+    let q = dataClient
+      .from("v_sth_cohort")
+      .select("sku, store, units_received, units_sold")
+      .not("store", "in", `(${EXCLUDED_STORES.join(",")})`);
+    if (storeCode) {
+      q = q.eq("store", storeCode.trim().toUpperCase());
+    }
+    return q;
+  };
+
+  const data = await fetchAllRows(buildQuery);
+
+  const acc = new Map<string, SkuSthAggregate>();
+  for (const r of data) {
+    const sku = trimStr(r.sku);
+    if (!sku) continue;
+    const received = toNum(r.units_received);
+    const sold = toNum(r.units_sold);
+    const prev = acc.get(sku);
+    if (prev) {
+      prev.unitsReceived += received;
+      prev.unitsSold += sold;
+    } else {
+      acc.set(sku, { sku, unitsReceived: received, unitsSold: sold, sthPct: 0 });
+    }
+  }
+
+  for (const row of acc.values()) {
+    row.sthPct = row.unitsReceived > 0
+      ? Math.min(100, (row.unitsSold / row.unitsReceived) * 100)
+      : 0;
+  }
+
+  return acc;
+}

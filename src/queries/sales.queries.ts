@@ -100,6 +100,12 @@ export interface TopSkuRow {
   units:       number;
   /** Peso % del SKU sobre el total de ventas del universo consultado (0-100) */
   weightPct:   number;
+  /** Sell-through red-wide agregado (0-100). undefined si la query de STH no se cargó. */
+  sthPct?:     number;
+  /** Unidades recibidas históricas (cohorte completa, red-wide o tienda según filtro). */
+  unitsReceived?: number;
+  /** Unidades vendidas históricas (cohorte completa). Lifetime, no del periodo del filtro. */
+  unitsSoldLifetime?: number;
 }
 
 export interface DayOfWeekRow {
