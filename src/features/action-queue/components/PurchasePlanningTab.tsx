@@ -12,6 +12,8 @@ import { useState, useMemo } from "react";
 import { StatCard } from "@/components/ui/stat-card/StatCard";
 import { formatPYGSuffix } from "@/utils/format";
 import { buildPurchasePlan, summarizeByBrand, computeGapTotals } from "@/domain/actionQueue/purchasePlanning";
+import { buildLineaOptions, buildCategoriaOptions } from "@/domain/actionQueue/dimensionFilters";
+import { FilterPopover, ActiveFilterChip } from "./FilterPopover";
 import type { ActionItemFull } from "@/domain/actionQueue/waterfall";
 
 import { DOI_AGE_THRESHOLDS, FEATURE_PAGE_SIZE } from "@/domain/config/defaults";
@@ -33,26 +35,31 @@ export function PurchasePlanningTab({ items, avgDOI }: Props) {
   const [page, setPage] = useState(0);
   const [brandFilter, setBrandFilter] = useState<string | null>(null);
   const [lineaFilter, setLineaFilter] = useState<string | null>(null);
+  const [categoriaFilter, setCategoriaFilter] = useState<string | null>(null);
 
   // All SKU-level rows
   const allRows = useMemo(() => buildPurchasePlan(items), [items]);
   const brandSummaries = useMemo(() => summarizeByBrand(allRows), [allRows]);
   const allTotals = useMemo(() => computeGapTotals(allRows), [allRows]);
 
-  // Unique lineas for filter
-  const uniqueLineas = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of allRows) set.add(r.linea);
-    return Array.from(set).sort();
-  }, [allRows]);
+  // Dimension options (líneas reales sin ruido + categorías scoped por línea)
+  const lineaOptions = useMemo(
+    () => buildLineaOptions(allRows, { categoria: categoriaFilter }),
+    [allRows, categoriaFilter],
+  );
+  const categoriaOptions = useMemo(
+    () => buildCategoriaOptions(allRows, { linea: lineaFilter }),
+    [allRows, lineaFilter],
+  );
 
   // Filtered rows
   const filteredRows = useMemo(() => {
     let rows = allRows;
     if (brandFilter) rows = rows.filter(r => r.brand === brandFilter);
     if (lineaFilter) rows = rows.filter(r => r.linea === lineaFilter);
+    if (categoriaFilter) rows = rows.filter(r => r.categoria === categoriaFilter);
     return rows;
-  }, [allRows, brandFilter, lineaFilter]);
+  }, [allRows, brandFilter, lineaFilter, categoriaFilter]);
 
   const filteredTotals = useMemo(() => computeGapTotals(filteredRows), [filteredRows]);
   const totalPages = Math.ceil(filteredRows.length / PAGE_SIZE);
@@ -61,11 +68,16 @@ export function PurchasePlanningTab({ items, avgDOI }: Props) {
     return filteredRows.slice(start, start + PAGE_SIZE);
   }, [filteredRows, page]);
 
-  const isFiltered = brandFilter !== null || lineaFilter !== null;
+  const isFiltered = brandFilter !== null || lineaFilter !== null || categoriaFilter !== null;
   const displayTotals = isFiltered ? filteredTotals : allTotals;
 
   const handleBrandFilter = (brand: string | null) => { setBrandFilter(brand); setPage(0); };
-  const handleLineaFilter = (linea: string | null) => { setLineaFilter(linea); setPage(0); };
+  const handleLineaFilter = (linea: string | null) => {
+    setLineaFilter(linea);
+    setCategoriaFilter(null);
+    setPage(0);
+  };
+  const handleCategoriaFilter = (categoria: string | null) => { setCategoriaFilter(categoria); setPage(0); };
 
   // ── Empty state ──
   if (allRows.length === 0) {
@@ -140,35 +152,76 @@ export function PurchasePlanningTab({ items, avgDOI }: Props) {
       </div>
 
       {/* ═══ FILTERS BAR ═══ */}
-      <div className="exec-anim-2 flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-gray-50/60 px-4 py-2.5 dark:border-gray-700 dark:bg-gray-800/40">
+      <div className="exec-anim-2 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50/60 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/40">
         {/* Brand filter */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-            Marca
-          </span>
-          <div className="inline-flex overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-            <FilterBtn active={brandFilter === null} onClick={() => handleBrandFilter(null)}>Todas</FilterBtn>
-            {brandSummaries.map(bs => (
-              <FilterBtn key={bs.brand} active={brandFilter === bs.brand} onClick={() => handleBrandFilter(bs.brand)}>
-                {bs.brand}
-              </FilterBtn>
-            ))}
-          </div>
-        </div>
+        {brandSummaries.length > 0 && (
+          <FilterPopover
+            label="Marca"
+            placeholder="Todas"
+            value={brandFilter}
+            options={brandSummaries.map(bs => ({
+              value: bs.brand,
+              label: bs.brand,
+              count: bs.totalGapUnits,
+            }))}
+            onChange={handleBrandFilter}
+          />
+        )}
 
-        {/* Linea filter */}
-        {uniqueLineas.length > 1 && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-              Tipo
-            </span>
-            <div className="inline-flex overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-              <FilterBtn active={lineaFilter === null} onClick={() => handleLineaFilter(null)}>Todos</FilterBtn>
-              {uniqueLineas.map(l => (
-                <FilterBtn key={l} active={lineaFilter === l} onClick={() => handleLineaFilter(l)}>{l}</FilterBtn>
-              ))}
-            </div>
-          </div>
+        {lineaOptions.length > 0 && (
+          <FilterPopover
+            label="Línea"
+            value={lineaFilter}
+            options={lineaOptions}
+            onChange={handleLineaFilter}
+          />
+        )}
+
+        {categoriaOptions.length > 0 && (
+          <FilterPopover
+            label="Tipo"
+            value={categoriaFilter}
+            options={categoriaOptions}
+            onChange={handleCategoriaFilter}
+          />
+        )}
+
+        {isFiltered && (
+          <>
+            <span className="mx-1 h-4 w-px bg-gray-200 dark:bg-gray-700" aria-hidden />
+            {brandFilter && (
+              <ActiveFilterChip
+                label="Marca"
+                value={brandFilter}
+                onClear={() => handleBrandFilter(null)}
+              />
+            )}
+            {lineaFilter && (
+              <ActiveFilterChip
+                label="Línea"
+                value={lineaFilter}
+                onClear={() => handleLineaFilter(null)}
+              />
+            )}
+            {categoriaFilter && (
+              <ActiveFilterChip
+                label="Tipo"
+                value={categoriaFilter}
+                onClear={() => handleCategoriaFilter(null)}
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                handleBrandFilter(null);
+                handleLineaFilter(null);
+                handleCategoriaFilter(null);
+              }}
+              className="text-[11px] font-medium text-gray-500 hover:text-brand-500 dark:text-gray-400"
+            >
+              Limpiar
+            </button>
+          </>
         )}
 
         <span className="ml-auto text-[11px] text-gray-400 dark:text-gray-500">
@@ -291,22 +344,6 @@ function Th({ children, className }: { children: React.ReactNode; className?: st
     <th className={`px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 ${className ?? ""}`}>
       {children}
     </th>
-  );
-}
-
-function FilterBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
-        active
-          ? "bg-brand-500 font-semibold text-white"
-          : "bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 
