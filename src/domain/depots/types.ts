@@ -51,6 +51,8 @@ export interface CentralNode {
   skuCount:        number;
   topBrands:       GroupBreakdown[];
   topCategories:   GroupBreakdown[];
+  /** Categorías desglosadas por marca (key = label exacto de topBrands). */
+  categoriesByBrand: Record<string, GroupBreakdown[]>;
   topSkuRows:      DepotSkuRow[];
 }
 

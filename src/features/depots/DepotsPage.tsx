@@ -74,8 +74,8 @@ export default function DepotsPage() {
           Nodos centrales
         </p>
         <div className="grid gap-3 lg:grid-cols-2">
-          <CentralNodeCard node={data.stock} />
-          <CentralNodeCard node={data.retails} />
+          <CentralNodeCard node={data.stock} defaultOpen />
+          <CentralNodeCard node={data.retails} defaultOpen={false} />
         </div>
       </section>
 
