@@ -42,6 +42,7 @@ import type {
   DailyProjectionPoint,
   SellerProjection,
 } from "@/domain/projections/types";
+import type { CobranzaUnattributed } from "@/domain/cobranza/types";
 
 // ─── Tipos públicos ────────────────────────────────────────────────────────
 
@@ -60,6 +61,12 @@ export interface UseCompensationResult {
   rows: CompensationRow[];
   /** Vista agregada del scope. */
   summary: CompensationSummary;
+  /**
+   * Pool de cobranza no atribuida a un vendedor individual (UNIFORMES, sin
+   * vendedor declarado). La página decide cuándo agregarlo al summary según
+   * el filtro de canal: UTP/Todos lo incluye, Mayorista/Retail no.
+   */
+  cobranzaUnattributed: CobranzaUnattributed[];
   /** Detalle personal: solo cuando scope=self y vendedorCodigo está mapeado. */
   self: CompensationSelf | null;
   /** Contexto temporal del mes (no depende de hay datos cargados). */
@@ -93,7 +100,16 @@ export function useCompensation(year: number, month: number): UseCompensationRes
     return teamQ.projections.map((p) => ({ projection: p, result: projectionToResult(p) }));
   }, [scope, vendedorCodigo, myQ.projection, teamQ.projections]);
 
-  const summary = useMemo<CompensationSummary>(() => buildCompensationSummary(rows), [rows]);
+  const cobranzaUnattributed = useMemo<CobranzaUnattributed[]>(() => {
+    return teamQ.summary?.cobranzaUnattributed ?? [];
+  }, [teamQ.summary]);
+
+  // Summary inicial: incluye TODO el unattributed (vista "todos").
+  // La página puede recalcular con un canal específico via buildCompensationSummary.
+  const summary = useMemo<CompensationSummary>(
+    () => buildCompensationSummary(rows, cobranzaUnattributed, "todos"),
+    [rows, cobranzaUnattributed],
+  );
 
   const self = useMemo<CompensationSelf | null>(() => {
     if (!isVendedor || vendedorCodigo == null || !myQ.projection) return null;
@@ -109,6 +125,7 @@ export function useCompensation(year: number, month: number): UseCompensationRes
     scope,
     rows,
     summary,
+    cobranzaUnattributed,
     self,
     time,
     scales,

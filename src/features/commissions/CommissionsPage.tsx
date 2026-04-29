@@ -39,14 +39,15 @@ export default function CommissionsPage() {
 
   const data = useCompensation(year, selectedMonth);
 
-  // Filtro por canal — aplica a rows. self queda intacto (un único vendedor).
+  // Filtro por canal — aplica a rows + suma del pool unattributed que aplique
+  // (UNIFORMES → UTP/Todos). self queda intacto (un único vendedor).
   const filteredData = useMemo(() => {
     if (channelFilter === "todos") return data;
     const filtered = data.rows.filter((r) => r.projection.canal === channelFilter);
     return {
       ...data,
       rows: filtered,
-      summary: buildCompensationSummary(filtered),
+      summary: buildCompensationSummary(filtered, data.cobranzaUnattributed, channelFilter),
     };
   }, [data, channelFilter]);
 

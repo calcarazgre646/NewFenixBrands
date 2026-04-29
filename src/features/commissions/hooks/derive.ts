@@ -9,10 +9,27 @@ import type {
   CommissionChannel,
 } from "@/domain/commissions/types";
 import type { SellerProjection } from "@/domain/projections/types";
+import type { CobranzaUnattributed } from "@/domain/cobranza/types";
 
 export interface CompensationRow {
   projection: SellerProjection;
   result:     CommissionResult;
+}
+
+/** Filtro de canal aplicado al summary — controla qué porción del pool unattributed se suma. */
+export type SummaryChannelScope = "todos" | "retail" | "mayorista" | "utp";
+
+/**
+ * Atribución del pool unattributed a un canal:
+ *   - UNIFORMES: por convención del cliente, son ventas UTP. Se atribuye a UTP.
+ *   - SIN_VENDEDOR: ambiguo. Sólo se incluye en "todos" para evitar engañar a un canal específico.
+ *   - Otros buckets: ambiguos. Sólo en "todos".
+ */
+function unattributedBelongsToScope(bucket: string, scope: SummaryChannelScope): boolean {
+  if (scope === "todos") return true;
+  if (scope === "retail" || scope === "mayorista") return false;
+  if (scope === "utp") return bucket === "UNIFORMES";
+  return false;
 }
 
 export interface CompensationSummary {
@@ -60,8 +77,16 @@ export function projectionToResult(p: SellerProjection): CommissionResult {
   };
 }
 
-/** Suma los totales del scope. */
-export function buildCompensationSummary(rows: CompensationRow[]): CompensationSummary {
+/** Suma los totales del scope.
+ *
+ * Si se pasa `unattributed` + `channel`, el pool de cobranza no atribuida
+ * se suma cuando aplica al canal: UNIFORMES → UTP, todo → "todos".
+ */
+export function buildCompensationSummary(
+  rows: CompensationRow[],
+  unattributed: CobranzaUnattributed[] = [],
+  channel: SummaryChannelScope = "todos",
+): CompensationSummary {
   let totalVentaActual = 0;
   let totalVentaProyectada = 0;
   let totalComisionActual = 0;
@@ -81,6 +106,18 @@ export function buildCompensationSummary(rows: CompensationRow[]): CompensationS
     if (p.dsoDias != null) {
       dsoSum += p.dsoDias;
       dsoCount += 1;
+    }
+  }
+
+  // Sumar el pool unattributed que aplica a este canal (cobranza + DSO ponderado).
+  for (const u of unattributed) {
+    if (!unattributedBelongsToScope(u.bucket, channel)) continue;
+    totalCobranzaActual += u.cobranzaGs;
+    if (u.dsoDias != null && u.cuotasCobradas > 0) {
+      // Para que el promedio sea coherente con el de los vendedores individuales,
+      // tratamos el bucket como N "vendedores" virtuales (uno por cuota cobrada).
+      dsoSum += u.dsoDias * u.cuotasCobradas;
+      dsoCount += u.cuotasCobradas;
     }
   }
 
