@@ -17,9 +17,15 @@ import { ActionGroupCard } from "./ActionGroupCard";
 import { FlatGroupSection } from "./FlatGroupSection";
 import { ActionCard } from "./ActionCard";
 import { ActionFilters } from "./ActionFilters";
+import { FilterPopover, ActiveFilterChip } from "./FilterPopover";
 import { filterActions, countByFilterType, type ActionFilterType } from "./ActionFilters.utils";
 import { groupActions } from "@/domain/actionQueue/grouping";
 import type { GroupByMode, ActionGroup } from "@/domain/actionQueue/grouping";
+import {
+  buildLineaOptions,
+  buildCategoriaOptions,
+  filterByDimensions,
+} from "@/domain/actionQueue/dimensionFilters";
 import { StatCard } from "@/components/ui/stat-card/StatCard";
 import type { ActionItemFull } from "@/domain/actionQueue/waterfall";
 import { useStoreConfig } from "@/hooks/useConfig";
@@ -54,17 +60,41 @@ export function ActionsTab({
 
   // Filters
   const [filterType, setFilterType] = useState<ActionFilterType>("all");
+  const [lineaFilter, setLineaFilter] = useState<string | null>(null);
+  const [categoriaFilter, setCategoriaFilter] = useState<string | null>(null);
   const handleFilterTypeChange = useCallback((v: ActionFilterType) => setFilterType(v), []);
+  const handleLineaFilter = useCallback((v: string | null) => {
+    setLineaFilter(v);
+    setCategoriaFilter(null);
+  }, []);
+  const handleCategoriaFilter = useCallback((v: string | null) => {
+    setCategoriaFilter(v);
+  }, []);
 
-  // Pipeline: items → type filter → group
+  // Dimension options (líneas reales sin ruido + categorías scoped por línea activa)
+  const lineaOptions = useMemo(
+    () => buildLineaOptions(items, { categoria: categoriaFilter }),
+    [items, categoriaFilter],
+  );
+  const categoriaOptions = useMemo(
+    () => buildCategoriaOptions(items, { linea: lineaFilter }),
+    [items, lineaFilter],
+  );
+
+  // Pipeline: items → linea/categoria filter → type filter → group
+  const itemsByDimension = useMemo(
+    () => filterByDimensions(items, lineaFilter, categoriaFilter),
+    [items, lineaFilter, categoriaFilter],
+  );
+
   const filteredItems = useMemo(
-    () => filterActions(items, "", filterType),
-    [items, filterType],
+    () => filterActions(itemsByDimension, "", filterType),
+    [itemsByDimension, filterType],
   );
 
   const filterCounts = useMemo(
-    () => countByFilterType(items),
-    [items],
+    () => countByFilterType(itemsByDimension),
+    [itemsByDimension],
   );
 
   const groups = useMemo(
@@ -94,6 +124,57 @@ export function ActionsTab({
             counts={filterCounts}
           />
         </div>
+
+        {(lineaOptions.length > 0 || categoriaOptions.length > 0 || lineaFilter !== null || categoriaFilter !== null) && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {lineaOptions.length > 0 && (
+              <FilterPopover
+                label="Línea"
+                value={lineaFilter}
+                options={lineaOptions}
+                onChange={handleLineaFilter}
+              />
+            )}
+            {categoriaOptions.length > 0 && (
+              <FilterPopover
+                label="Tipo"
+                value={categoriaFilter}
+                options={categoriaOptions}
+                onChange={handleCategoriaFilter}
+              />
+            )}
+
+            {(lineaFilter !== null || categoriaFilter !== null) && (
+              <>
+                <span className="mx-1 h-4 w-px bg-gray-200 dark:bg-gray-700" aria-hidden />
+                {lineaFilter && (
+                  <ActiveFilterChip
+                    label="Línea"
+                    value={lineaFilter}
+                    onClear={() => handleLineaFilter(null)}
+                  />
+                )}
+                {categoriaFilter && (
+                  <ActiveFilterChip
+                    label="Tipo"
+                    value={categoriaFilter}
+                    onClear={() => handleCategoriaFilter(null)}
+                  />
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleLineaFilter(null);
+                    handleCategoriaFilter(null);
+                  }}
+                  className="text-[11px] font-medium text-gray-500 hover:text-brand-500 dark:text-gray-400"
+                >
+                  Limpiar
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ═══ STATS — dynamic per active filter ═══ */}
@@ -116,9 +197,13 @@ export function ActionsTab({
           <p className="text-sm text-gray-500 dark:text-gray-400">
             No se encontraron acciones con los filtros actuales.
           </p>
-          {filterType !== "all" && (
+          {(filterType !== "all" || lineaFilter !== null || categoriaFilter !== null) && (
             <button
-              onClick={() => setFilterType("all")}
+              onClick={() => {
+                setFilterType("all");
+                setLineaFilter(null);
+                setCategoriaFilter(null);
+              }}
               className="mt-2 text-xs font-medium text-brand-500 hover:text-brand-600 dark:text-brand-400"
             >
               Limpiar filtros
