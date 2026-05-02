@@ -54,18 +54,30 @@ describe('checkKpiAvailability', () => {
     })
   })
 
-  // ── GMROI: brand ✓, channel ✗, store ✓ ──
-  describe('gmroi (brand ✓, channel ✗, store ✓)', () => {
+  // ── GMROI: brand ✓, channel ✓, store ✓ ──
+  // Inventario viene de mv_stock_tienda.store → canal derivable vía classifyStore.
+  describe('gmroi (brand ✓, channel ✓, store ✓)', () => {
     it('disponible sin filtros', () => {
       expect(checkKpiAvailability('gmroi', NO_FILTERS)).toEqual({ available: true })
     })
     it('disponible con brand', () => {
       expect(checkKpiAvailability('gmroi', BRAND_FILTER)).toEqual({ available: true })
     })
-    it('NO disponible con channel', () => {
-      const r = checkKpiAvailability('gmroi', CHANNEL_FILTER)
-      expect(r.available).toBe(false)
-      expect(r.reason).toContain('canal')
+    it('disponible con channel', () => {
+      expect(checkKpiAvailability('gmroi', CHANNEL_FILTER)).toEqual({ available: true })
+    })
+    it('disponible con todos los filtros', () => {
+      expect(checkKpiAvailability('gmroi', ALL_FILTERS)).toEqual({ available: true })
+    })
+  })
+
+  // ── inventory_turnover: brand ✓, channel ✓, store ✓ ──
+  describe('inventory_turnover (brand ✓, channel ✓, store ✓)', () => {
+    it('disponible con channel', () => {
+      expect(checkKpiAvailability('inventory_turnover', CHANNEL_FILTER)).toEqual({ available: true })
+    })
+    it('disponible con todos los filtros', () => {
+      expect(checkKpiAvailability('inventory_turnover', ALL_FILTERS)).toEqual({ available: true })
     })
   })
 

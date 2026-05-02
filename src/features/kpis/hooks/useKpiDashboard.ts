@@ -53,7 +53,7 @@ import { salesKeys, inventoryKeys, storeKeys, STALE_30MIN, GC_60MIN } from "@/qu
 import { filterSalesRows } from "@/queries/filters";
 import { resolvePeriod } from "@/domain/period/resolve";
 import { getCalendarMonth, getCalendarYear, getCalendarDay } from "@/domain/period/helpers";
-import { brandIdToCanonical } from "@/api/normalize";
+import { brandIdToCanonical, classifyStore } from "@/api/normalize";
 import type { PeriodFilter, B2bSubchannel } from "@/domain/filters/types";
 import {
   calcGrossMargin,
@@ -321,7 +321,21 @@ export function useKpiDashboard(): UseKpiDashboardResult {
     const prevTicketsForMonths = (prevTicketsQ.data ?? []).filter((t) => closedMonths.includes(t.month));
     const daily          = (dailyQ.data ?? []).filter((r) => activeMonths.includes(r.month));
 
-    const invValue = invQ.data?.totalValue ?? 0;
+    // Inventario filtrado por canal: mv_stock_tienda.store + classifyStore.
+    // Cuando filters.channel = "total" usamos el agregado total. Cuando es
+    // "b2b" / "b2c", sumamos solo las tiendas cuyo classifyStore coincide.
+    // Si filtra por tienda específica, sumamos solo esa.
+    const invValue = (() => {
+      const byStore = invQ.data?.byStore ?? [];
+      if (filters.store) {
+        const target = filters.store.trim().toUpperCase();
+        return byStore.find((s) => s.store === target)?.value ?? 0;
+      }
+      if (filters.channel === "total") return invQ.data?.totalValue ?? 0;
+      return byStore
+        .filter((s) => classifyStore(s.store) === filters.channel)
+        .reduce((sum, s) => sum + s.value, 0);
+    })();
     const months   = activeMonths.length || 1; // guard /0 en GMROI/rotación
 
     // ── Agregar ventas ─────────────────────────────────────────────────────

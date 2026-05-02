@@ -43,6 +43,7 @@ export interface InventoryValueSummary {
   totalValue: number;
   totalUnits: number;
   byBrand: Array<{ brand: string; value: number; units: number }>;
+  byStore: Array<{ store: string; value: number; units: number }>;
 }
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
@@ -116,31 +117,43 @@ export async function fetchInventoryValue(): Promise<InventoryValueSummary> {
   const data = await fetchAllRows(() =>
     dataClient
       .from("mv_stock_tienda")
-      .select("value, units, brand")
+      .select("value, units, brand, store")
       .gt("units", 0)
   );
 
   let totalValue = 0;
   let totalUnits = 0;
   const byBrand = new Map<string, { value: number; units: number }>();
+  const byStore = new Map<string, { value: number; units: number }>();
 
   for (const r of data) {
     const brand = normalizeBrand(r.brand);
+    const store = trimStr(r.store).toUpperCase();
     const val   = toNum(r.value);
     const units = toNum(r.units);
     totalValue += val;
     totalUnits += units;
-    const acc = byBrand.get(brand) ?? { value: 0, units: 0 };
-    acc.value += val;
-    acc.units += units;
-    byBrand.set(brand, acc);
+    const accBrand = byBrand.get(brand) ?? { value: 0, units: 0 };
+    accBrand.value += val;
+    accBrand.units += units;
+    byBrand.set(brand, accBrand);
+    if (store) {
+      const accStore = byStore.get(store) ?? { value: 0, units: 0 };
+      accStore.value += val;
+      accStore.units += units;
+      byStore.set(store, accStore);
+    }
   }
 
   const brandList = Array.from(byBrand.entries())
     .map(([brand, v]) => ({ brand, ...v }))
     .sort((a, b) => b.value - a.value);
 
-  return { totalValue, totalUnits, byBrand: brandList };
+  const storeList = Array.from(byStore.entries())
+    .map(([store, v]) => ({ store, ...v }))
+    .sort((a, b) => b.value - a.value);
+
+  return { totalValue, totalUnits, byBrand: brandList, byStore: storeList };
 }
 
 /**
