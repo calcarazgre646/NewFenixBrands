@@ -100,6 +100,58 @@ describe('checkKpiAvailability', () => {
     })
   })
 
+  // ── sell_through: brand ✓, channel ✓, store ✓ ──
+  // v_sth_cohort tiene store; brand resuelta vía cruce con mv_stock_tienda.
+  describe('sell_through (brand ✓, channel ✓, store ✓)', () => {
+    it('disponible sin filtros', () => {
+      expect(checkKpiAvailability('sell_through', NO_FILTERS)).toEqual({ available: true })
+    })
+    it('disponible con brand', () => {
+      expect(checkKpiAvailability('sell_through', BRAND_FILTER)).toEqual({ available: true })
+    })
+    it('disponible con todos los filtros', () => {
+      expect(checkKpiAvailability('sell_through', ALL_FILTERS)).toEqual({ available: true })
+    })
+  })
+
+  // ── dso: brand ✓, channel ✓, store ✗ ──
+  // c_cobrar no tiene store; mv_ventas_diarias sí soporta brand+channel.
+  describe('dso (brand ✓, channel ✓, store ✗)', () => {
+    it('disponible sin filtros', () => {
+      expect(checkKpiAvailability('dso', NO_FILTERS)).toEqual({ available: true })
+    })
+    it('disponible con brand', () => {
+      expect(checkKpiAvailability('dso', BRAND_FILTER)).toEqual({ available: true })
+    })
+    it('disponible con channel', () => {
+      expect(checkKpiAvailability('dso', CHANNEL_FILTER)).toEqual({ available: true })
+    })
+    it('NO disponible con store', () => {
+      const r = checkKpiAvailability('dso', STORE_FILTER)
+      expect(r.available).toBe(false)
+      expect(r.reason).toContain('tienda')
+    })
+  })
+
+  // ── customer_recurrence: brand ✗, channel ✓, store ✓ ──
+  // v_transacciones_dwh no tiene marca a nivel línea; codigo_sucursal sí da canal/tienda.
+  describe('customer_recurrence (brand ✗, channel ✓, store ✓)', () => {
+    it('disponible sin filtros', () => {
+      expect(checkKpiAvailability('customer_recurrence', NO_FILTERS)).toEqual({ available: true })
+    })
+    it('disponible con channel', () => {
+      expect(checkKpiAvailability('customer_recurrence', CHANNEL_FILTER)).toEqual({ available: true })
+    })
+    it('disponible con store', () => {
+      expect(checkKpiAvailability('customer_recurrence', STORE_FILTER)).toEqual({ available: true })
+    })
+    it('NO disponible con brand', () => {
+      const r = checkKpiAvailability('customer_recurrence', BRAND_FILTER)
+      expect(r.available).toBe(false)
+      expect(r.reason).toContain('marca')
+    })
+  })
+
   // ── KPI inexistente ──
   describe('KPI inexistente', () => {
     it('retorna no disponible', () => {

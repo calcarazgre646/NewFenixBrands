@@ -293,6 +293,22 @@ export function calcPromoUplift(ventasPromo: number, baseline: number): number {
 }
 
 /**
+ * Recurrencia de Clientes = clientes con ≥2 compras / clientes totales × 100
+ * Mide qué proporción del parque de clientes regresa al menos una segunda vez
+ * dentro del período evaluado.
+ *
+ * @param recurrentCustomers  Clientes únicos con ≥2 facturas distintas en el período
+ * @param totalCustomers      Clientes únicos con al menos 1 factura en el período
+ */
+export function calcCustomerRecurrence(
+  recurrentCustomers: number,
+  totalCustomers: number,
+): number {
+  if (totalCustomers <= 0) return 0;
+  return (recurrentCustomers / totalCustomers) * 100;
+}
+
+/**
  * ROI de Promoción = ingresos incrementales / costo de la promo
  * Retorna un ratio (no porcentaje). ROI < 1 → promo a pérdida.
  *

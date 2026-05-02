@@ -22,9 +22,10 @@ describe("buildSearchCatalog()", () => {
     expect(pages.find((p) => p.id === "page_kpis")).toBeUndefined();
   });
 
-  it("contains only core KPIs (9 implemented)", () => {
+  it("contains only core KPIs (12 implemented post sesión 02/05/2026)", () => {
+    // 9 originales + 3 desbloqueos (sell_through, dso, customer_recurrence).
     const kpis = catalog.filter((i) => i.type === "kpi");
-    expect(kpis.length).toBe(9);
+    expect(kpis.length).toBe(12);
   });
 
   it("KPI items have no path (informational only)", () => {

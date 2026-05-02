@@ -10,6 +10,7 @@ import {
   calcUPT,
   classifyMarginHealth,
   marginHealthThresholds,
+  calcCustomerRecurrence,
 } from '../calculations'
 import { DEFAULT_MARGIN_CONFIG } from '@/domain/config/defaults'
 
@@ -94,6 +95,13 @@ describe('classifyMarginHealth', () => {
     expect(classifyMarginHealth(100, 'b2c')).toBe('healthy')
     expect(classifyMarginHealth(100, 'b2b')).toBe('healthy')
   })
+})
+
+describe('calcCustomerRecurrence', () => {
+  it('happy path: 30/100 → 30%', () => expect(calcCustomerRecurrence(30, 100)).toBe(30))
+  it('100% recurrencia', () => expect(calcCustomerRecurrence(50, 50)).toBe(100))
+  it('sin clientes: 0/0 → 0 (no NaN)', () => expect(calcCustomerRecurrence(0, 0)).toBe(0))
+  it('total negativo (defensivo): 5/-1 → 0', () => expect(calcCustomerRecurrence(5, -1)).toBe(0))
 })
 
 describe('marginHealthThresholds', () => {

@@ -124,6 +124,23 @@ export const sthKeys = {
   all: ["sth"] as const,
   cohort: () => ["sth", "cohort"] as const,
   bySku: (storeCode?: string | null) => ["sth", "by-sku", storeCode ?? null] as const,
+  windows: (storeCode?: string | null, brand?: string | null) =>
+    ["sth", "windows", storeCode ?? null, brand ?? "total"] as const,
+  brandMap: () => ["sth", "brandMap"] as const,
+};
+
+// ─── DSO (Days Sales Outstanding) ────────────────────────────────────────────
+export const dsoKeys = {
+  all: ["dso"] as const,
+  byPeriod: (year: number, months: number[], brand?: string | null, channel?: string | null) =>
+    ["dso", "byPeriod", year, [...months].sort((a, b) => a - b).join(","), brand ?? "total", channel ?? "total"] as const,
+};
+
+// ─── Recurrence (clientes que compran ≥2 veces) ─────────────────────────────
+export const recurrenceKeys = {
+  all: ["recurrence"] as const,
+  byPeriod: (year: number, months: number[], channel?: string | null, store?: string | null) =>
+    ["recurrence", "byPeriod", year, [...months].sort((a, b) => a - b).join(","), channel ?? "total", store ?? "all"] as const,
 };
 
 // ─── Depósitos & Cobertura ────────────────────────────────────────────────────
