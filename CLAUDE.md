@@ -11,7 +11,7 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 
 ---
 
-## Estado actual (actualizado 28/04/2026)
+## Estado actual (actualizado 02/05/2026)
 
 | Fase | Feature | Estado |
 |------|---------|--------|
@@ -32,8 +32,9 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 9B | MyProjectionPage (`/mi-proyeccion`) — vista personal del vendedor (rol nuevo `vendedor`) | ✅ COMPLETO |
 
 **La app corre:** `npm run dev` → http://localhost:5173
-**Tests:** 1756 passing (59 suites) | TSC 0 errores | Build OK | ESLint 0 errores
+**Tests:** 1781 passing (60 suites) | TSC 0 errores | Build OK | ESLint 0 errores
 **Deploy:** https://fenix-brands-one.vercel.app
+**Sesión 02/05/2026:** Invitación email Resend (PR #48) + GMROI/Rotación habilitados con filtro B2B/B2C (PR #49) + UPT por factura → bloqueado por Derlys
 **Sesión 29/04/2026:** Sell-through por SKU en `/ventas` (PR #45)
 **Sesión 28/04/2026:** Event Operational App — Fases A+B+C (ver abajo)
 **Sesión 22/04/2026:** PricingPage — módulo Precios (ver abajo)
@@ -1197,4 +1198,68 @@ TSC:    0 errores
 Build:  OK
 Deploy: https://fenix-brands-one.vercel.app ✅
 ```
+
+---
+
+## Sesión 02/05/2026 — Invitación email Resend (PR #48) + Filtro B2B/B2C en GMROI/Rotación (PR #49) + Comentario UPT por factura para Derlys
+
+### 1. PR #48 — Invitación de usuarios por email con Resend
+
+Trabajo previo (uncommitted en main al iniciar la sesión) que se rescató, se aisló a `feat/user-invitation-resend`, se commiteó y se mergeó con `--admin --squash`. Edge Functions `manage-user` y `send-email` integran flujo de invitación cuando un super_user crea un usuario desde `/usuarios`. Template SQL nuevo (`sql/027_user_invitation_template.sql`) + checklist de deploy de Resend en `docs/RESEND_DEPLOY_CHECKLIST.md`. UI: refactor de `UserCreateModal`, `UserEditModal`, `TemplateFormModal`. Tests `users.queries` actualizados.
+
+### 2. Auditoría ticket "UPT detallado por factura" → bloqueado por Derlys
+
+**Pedido del cliente:** "Artículos por ticket con desglose por factura individual. Derlys construyendo tabla con ticket_promedio."
+
+**Hallazgo:** ya estaba documentado en `src/domain/kpis/fenix.catalog.ts` para el KPI `upt`: *"Deshabilitado hasta que Derlys provea vista con items por factura."* y en `docs/Usados/PRODUCTION_READINESS_AUDIT.md:382` como pendiente futuro de Derlys.
+
+**Auditoría BD (15 rondas, ~700 nombres de tabla/vista/RPC probados contra `gwzllatcxxrizxtslkeh`):**
+- `fjdhstvta1` (281,310 filas, líneas de venta) tiene `v_cantvend` pero **no `num_transaccion`** ni equivalente — confirmado probando 17 nombres de columnas alternativas.
+- `v_transacciones_dwh` (214,751 filas, antes vacía en marzo, ahora poblada por Derlys) tiene `num_transaccion` + `id_transaccion_fecha` + `importe_neto` pero **no unidades** — confirmado probando 13 nombres de columnas.
+- `vw_ticket_promedio_diario` agrega día×tienda, no factura individual.
+- **Hallazgo lateral:** `mv_ventas_diarias` (4,466 filas, día×marca×canal) **existe pero ningún `.from()` del código la usa**. Aparece en `data_freshness` como mantenida por Derlys.
+
+**Conclusión:** datos físicamente insuficientes — falta una vista que cruce líneas con `num_transaccion`. **Comentario para el ticket** entregado al cliente, ticket queda en espera de Derlys.
+
+### 3. PR #49 — Habilitar filtro B2B/B2C en GMROI y Rotación de Inventario
+
+**Pedido de Rodrigo (31/03):** "Revisar por qué no todos los KPIs aparecen al seleccionar B2B y B2C."
+
+**Diagnóstico:** los 9 KPIs core de `/kpis` se evaluaron contra el catálogo. Cuando filtra B2B/B2C se caían 3 cards: GMROI, Inventory Turnover y UPT. Los dos primeros porque el catálogo declaraba `channel: false` con justificación "fjdexisemp no tiene canal" — pero hoy ambos se calculan contra `mv_stock_tienda` que sí tiene `store`, y por lo tanto canal es derivable vía `classifyStore`. Comentario obsoleto. UPT queda fuera intencionalmente (ticket separado).
+
+**Verificación BD:**
+- `mv_stock_tienda.store` trae 31 tiendas en formato cosujd (`ESTRELLA`, `UTP`, `UNIFORMES`, `MARTELMCAL`, `WRSSL`, etc.).
+- Cruce con `B2B_STORES = {MAYORISTA, UTP, UNIFORMES}` (en `src/api/normalize.ts`) directo. B2B en stock → UTP+UNIFORMES (Mayorista no carga stock físico). B2C → todas las demás.
+- Solo faltaba: `fetchInventoryValue` no seleccionaba `store` en el SELECT.
+
+### Cambios PR #49 (4 archivos, +60/-21)
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/queries/inventory.queries.ts` | `InventoryValueSummary` agrega `byStore: Array<{ store, value, units }>`. SELECT ahora incluye `store`. Loop computa ambos agregados (byBrand + byStore). Nota: `store` se uppercasa para matchear con `classifyStore`. |
+| `src/domain/kpis/fenix.catalog.ts` | `gmroi` e `inventory_turnover` pasan a `supportedFilters: { brand: true, channel: true, store: true }`. Inputs actualizados: `mv_stock_tienda → SUM(value)` reemplaza al `fjdexisemp` legacy. Nota global del archivo (línea ~55) actualizada. |
+| `src/features/kpis/hooks/useKpiDashboard.ts` | Import `classifyStore`. `invValue` pasa de `invQ.data?.totalValue ?? 0` a una IIFE que: 1) si hay `filters.store` → suma esa tienda; 2) si `channel === "total"` → totalValue; 3) si canal específico → suma `byStore.filter(s => classifyStore(s.store) === filters.channel)`. |
+| `src/domain/kpis/__tests__/filterSupport.test.ts` | Bloque GMROI actualizado (channel ahora ✓ + ALL_FILTERS). Bloque nuevo para `inventory_turnover` con channel + all_filters. |
+
+### Verificación + deploy
+
+```
+Tests:   1781 passing (60 suites, +25 desde baseline)
+TSC:     0 errores
+ESLint:  0 errores (2 warnings preexistentes en marketing/useMarketingProducts.ts)
+Build:   OK (2.92s typecheck → vite 6.33s prod)
+PR #49:  https://github.com/calcarazgre646/NewFenixBrands/pull/49 (merged --admin --squash)
+Deploy:  vercel --prod → https://fenix-brands-1oxfi472w-calcarazgre646s-projects.vercel.app
+         Aliased: https://fenix-brands-one.vercel.app ✅
+```
+
+### Resultado para Rodrigo
+
+Al filtrar canal en `/kpis`:
+- **B2B:** GMROI y Rotación suman valor de UTP+UNIFORMES (las únicas B2B con stock físico).
+- **B2C:** suman las demás tiendas no excluidas.
+- **Total:** sin cambio, mismo `totalValue` que antes.
+- **Por tienda específica:** suma solo esa tienda.
+
+UPT sigue deshabilitado con su mensaje original — bloqueado por la vista de Derlys (ticket aparte, comentario entregado).
 
