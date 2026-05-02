@@ -52,7 +52,7 @@ export type FenixUnit =
  *   - mv_ventas_mensual: soporta brand, channel, store
  *   - fjdhstvta1: soporta brand, channel, store
  *   - vw_ticket_promedio_diario: soporta channel, store — NO brand
- *   - fjdexisemp: soporta brand, store — NO channel
+ *   - mv_stock_tienda: soporta brand, store, y channel (vía classifyStore(store))
  */
 export interface KpiFilterSupport {
   brand:   boolean
@@ -142,10 +142,10 @@ export const FENIX_KPI_CATALOG: readonly FenixKpiSpec[] = [
     inputs: [
       'mv_ventas_mensual.neto',
       'mv_ventas_mensual.costo',
-      'fjdexisemp → SUM(v_valor) como inventario a costo',
+      'mv_stock_tienda → SUM(value) como inventario a costo, agrupable por store',
     ],
-    // fjdexisemp no tiene canal → mínimo: brand ✓, channel ✗, store ✓
-    supportedFilters: { brand: true, channel: false, store: true },
+    // mv_stock_tienda tiene store → canal derivable vía classifyStore(store).
+    supportedFilters: { brand: true, channel: true, store: true },
     calcFn: 'calcGMROI',
     benchmark: { value: 2.0, description: 'GMROI saludable > 2.0x' },
   },
@@ -160,10 +160,10 @@ export const FENIX_KPI_CATALOG: readonly FenixKpiSpec[] = [
     positiveDirection: 'up',
     inputs: [
       'mv_ventas_mensual.costo',
-      'fjdexisemp → SUM(v_valor) como inventario a costo',
+      'mv_stock_tienda → SUM(value) como inventario a costo, agrupable por store',
     ],
-    // fjdexisemp no tiene canal → mínimo: brand ✓, channel ✗, store ✓
-    supportedFilters: { brand: true, channel: false, store: true },
+    // mv_stock_tienda tiene store → canal derivable vía classifyStore(store).
+    supportedFilters: { brand: true, channel: true, store: true },
     calcFn: 'calcInventoryTurnover',
     benchmark: { value: 3.0, description: 'Rotación saludable > 3x anualizado' },
   },
