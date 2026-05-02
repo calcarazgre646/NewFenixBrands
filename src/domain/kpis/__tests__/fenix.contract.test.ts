@@ -104,10 +104,13 @@ describe('Catálogo FenixKPI — integridad', () => {
     }
   })
 
-  it('distribución por PST: 9 core, 2 blocked, 8 next, 15 later, 16 future', () => {
-    expect(getKpisByPst('core').length).toBe(9)
-    expect(getKpisByPst('blocked').length).toBe(2)
-    expect(getKpisByPst('next').length).toBe(8)
+  it('distribución por PST: 12 core, 1 blocked, 6 next, 15 later, 16 future', () => {
+    // Sesión 02/05/2026: sell_through y dso pasan next→core (datos vivos en
+    // v_sth_cohort y c_cobrar+mv_ventas_diarias). customer_recurrence pasa
+    // blocked→core (v_transacciones_dwh + CLIM100).
+    expect(getKpisByPst('core').length).toBe(12)
+    expect(getKpisByPst('blocked').length).toBe(1)
+    expect(getKpisByPst('next').length).toBe(6)
     expect(getKpisByPst('later').length).toBe(15)
     expect(getKpisByPst('future').length).toBe(16)
   })
@@ -134,6 +137,8 @@ describe('Catálogo FenixKPI — integridad', () => {
       // Sprint 2B
       'calcEBITDA', 'calcOTBCompliance', 'calcSellThrough', 'calcOOSRate',
       'calcDSO', 'calcConversionRate', 'calcPromoUplift', 'calcPromoROI',
+      // Sesión 02/05/2026 — desbloqueo recurrencia
+      'calcCustomerRecurrence',
     ])
     for (const kpi of getImplementedKpis()) {
       expect(

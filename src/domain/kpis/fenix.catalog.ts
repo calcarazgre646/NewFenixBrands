@@ -49,10 +49,15 @@ export type FenixUnit =
  * activa ese filtro (valor distinto de "total"/null).
  *
  * Esto se determina por las tablas/vistas de las que depende el KPI:
- *   - mv_ventas_mensual: soporta brand, channel, store
+ *   - mv_ventas_mensual / mv_ventas_diarias: soporta brand, channel, store
  *   - fjdhstvta1: soporta brand, channel, store
  *   - vw_ticket_promedio_diario: soporta channel, store — NO brand
  *   - mv_stock_tienda: soporta brand, store, y channel (vía classifyStore(store))
+ *   - v_sth_cohort: soporta store; brand vía cruce con mv_stock_tienda; channel
+ *     derivado de classifyStore(store)
+ *   - c_cobrar: NO tiene brand/channel/store — DSO segmenta solo por el
+ *     denominador (ventas) cuando aplica brand/channel
+ *   - v_transacciones_dwh: soporta channel/store (vía codigo_sucursal); NO brand
  */
 export interface KpiFilterSupport {
   brand:   boolean
@@ -234,6 +239,64 @@ export const FENIX_KPI_CATALOG: readonly FenixKpiSpec[] = [
     calcFn: 'calcMarkdownDependency',
     benchmark: { value: 35, description: 'Dependencia de ofertas alarmante > 35%' },
   },
+  {
+    id: 'sell_through',
+    name: 'Sell-through 30/60/90',
+    definition: '% vendido del recibido en cohortes de 30/60/90 días.',
+    formula: 'Unid vendidas (cohorte ≤Nd) / Unid recibidas (cohorte ≤Nd) * 100',
+    pst: 'core',
+    category: 'inventory',
+    unit: 'percent',
+    positiveDirection: 'up',
+    inputs: [
+      'v_sth_cohort.units_sold y units_received por (sku, talle, store)',
+      'v_sth_cohort.cohort_age_days = CURRENT_DATE - first_entry_network',
+      'mv_stock_tienda.brand para filtro por marca (cruce por sku)',
+    ],
+    // v_sth_cohort tiene store → channel derivable. brand vía cruce con mv_stock_tienda.
+    supportedFilters: { brand: true, channel: true, store: true },
+    calcFn: 'calcSellThrough',
+    obs: 'Conectado vía v_sth_cohort (alimenta también lifecycle/waterfall)',
+  },
+  {
+    id: 'dso',
+    name: 'DSO',
+    definition: 'Días promedio de cobranza.',
+    formula: 'Saldo CxC del período / Ventas diarias promedio del período',
+    pst: 'core',
+    category: 'finance',
+    unit: 'days',
+    positiveDirection: 'down',
+    inputs: [
+      'c_cobrar.pendiente_de_pago con f_factura en el período',
+      'mv_ventas_diarias.neto / días calendario del período',
+    ],
+    // c_cobrar no tiene store ni brand; mv_ventas_diarias tiene brand+channel.
+    // El saldo CxC no se segmenta por marca/canal — DSO con brand/channel
+    // estima días equivalentes contra esa porción de la venta.
+    supportedFilters: { brand: true, channel: true, store: false },
+    calcFn: 'calcDSO',
+    obs: 'Conectado vía c_cobrar (anteriormente reportada como vacía; activa hoy con 834K filas)',
+  },
+  {
+    id: 'customer_recurrence',
+    name: 'Recurrencia clientes',
+    definition: '% de clientes que compran ≥2 veces en el período.',
+    formula: 'Clientes con ≥2 facturas / Clientes totales * 100',
+    pst: 'core',
+    category: 'customer',
+    unit: 'percent',
+    positiveDirection: 'up',
+    inputs: [
+      'v_transacciones_dwh.codigo_cliente + num_transaccion',
+      'v_transacciones_dwh.codigo_sucursal para canal/tienda',
+    ],
+    // v_transacciones_dwh no tiene marca a nivel línea → brand no soportado.
+    // codigo_sucursal cruzable con stores → cosujd → classifyStore para canal.
+    supportedFilters: { brand: false, channel: true, store: true },
+    calcFn: 'calcCustomerRecurrence',
+    obs: 'Conectado vía v_transacciones_dwh (datos hasta 31/12/2025; 2026 en espera del ETL de Derlys)',
+  },
 
   // ═══════════════════════════════════════════════════════════════════════════
   // BLOCKED — PST vacío pero datos NO disponibles
@@ -255,19 +318,6 @@ export const FENIX_KPI_CATALOG: readonly FenixKpiSpec[] = [
     ],
     supportedFilters: { brand: false, channel: false, store: false },
     obs: 'Falta de datos',
-  },
-  {
-    id: 'customer_recurrence',
-    name: 'Recurrencia clientes',
-    definition: '% de clientes que compran ≥2 veces en período.',
-    formula: 'Clientes con ≥2 compras / Clientes totales * 100',
-    pst: 'blocked',
-    category: 'customer',
-    unit: 'percent',
-    positiveDirection: 'up',
-    inputs: ['CLIM100 (82.905 clientes — programa de duplicación pendiente)'],
-    supportedFilters: { brand: false, channel: false, store: false },
-    obs: 'En espera del programa de duplicación',
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -309,23 +359,6 @@ export const FENIX_KPI_CATALOG: readonly FenixKpiSpec[] = [
     obs: 'Definir fuente de ejecutado y aprobado',
   },
   {
-    id: 'sell_through',
-    name: 'Sell-through 30/60/90',
-    definition: '% vendido del recibido en 30/60/90 días.',
-    formula: 'Unid vendidas periodo / Unid recibidas periodo * 100',
-    pst: 'next',
-    category: 'inventory',
-    unit: 'percent',
-    positiveDirection: 'up',
-    inputs: [
-      'fjdhstvta1.v_cantvend (unidades vendidas)',
-      'externo: histórico de movimientos de entrada/recepción de mercadería',
-    ],
-    supportedFilters: { brand: false, channel: false, store: false },
-    calcFn: 'calcSellThrough',
-    obs: 'Se necesita el histórico de movimientos',
-  },
-  {
     id: 'oos_rate',
     name: '% OOS (quiebres)',
     definition: 'Porcentaje de tiempo o SKU-tiendas sin stock.',
@@ -341,20 +374,6 @@ export const FENIX_KPI_CATALOG: readonly FenixKpiSpec[] = [
     supportedFilters: { brand: false, channel: false, store: false },
     calcFn: 'calcOOSRate',
     obs: 'Se necesita el histórico de movimientos',
-  },
-  {
-    id: 'dso',
-    name: 'DSO',
-    definition: 'Días promedio de cobranza.',
-    formula: 'Ctas por cobrar / Ventas promedio diarias',
-    pst: 'next',
-    category: 'finance',
-    unit: 'days',
-    positiveDirection: 'down',
-    inputs: ['externo: tabla CxC (Cuentas por Cobrar) — canal B2B principalmente'],
-    supportedFilters: { brand: false, channel: false, store: false },
-    calcFn: 'calcDSO',
-    obs: 'Ir con la tabla de CxC',
   },
   {
     id: 'lfl',

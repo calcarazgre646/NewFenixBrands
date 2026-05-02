@@ -49,7 +49,13 @@ import {
   filterTicketsByChannel,
 } from "@/queries/tickets.queries";
 import { fetchStores } from "@/queries/stores.queries";
-import { salesKeys, inventoryKeys, storeKeys, STALE_30MIN, GC_60MIN } from "@/queries/keys";
+import { fetchSellThroughByWindow, fetchSkuBrandMap } from "@/queries/sellThrough.queries";
+import { fetchDSO } from "@/queries/dso.queries";
+import { fetchCustomerRecurrence } from "@/queries/recurrence.queries";
+import {
+  salesKeys, inventoryKeys, storeKeys, sthKeys, dsoKeys, recurrenceKeys,
+  STALE_30MIN, GC_60MIN,
+} from "@/queries/keys";
 import { filterSalesRows } from "@/queries/filters";
 import { resolvePeriod } from "@/domain/period/resolve";
 import { getCalendarMonth, getCalendarYear, getCalendarDay } from "@/domain/period/helpers";
@@ -65,6 +71,9 @@ import {
   calcReturnsRate,
   calcAOV,
   calcUPT,
+  calcCustomerRecurrence,
+  calcDSO,
+  calcSellThrough,
 } from "@/domain/kpis/calculations";
 import type { KpiUnit } from "@/utils/format";
 import { checkKpiAvailability } from "@/domain/kpis/filterSupport";
@@ -279,6 +288,29 @@ export function useKpiDashboard(): UseKpiDashboardResult {
     retry: 2,
   });
 
+  // ── KPIs desbloqueados (sesión 02/05/2026) ───────────────────────────────
+  // sell_through, dso, customer_recurrence — datos vivos en BD operacional.
+
+  // Map sku→brand para filtrar sell-through por marca (v_sth_cohort no tiene brand).
+  const brandCanonical = filters.brand !== "total" ? brandIdToCanonical(filters.brand) : null;
+  const skuBrandMapQ = useQuery({
+    queryKey: sthKeys.brandMap(),
+    queryFn: () => fetchSkuBrandMap(),
+    enabled: brandCanonical !== null,
+    staleTime: STALE_30MIN,
+    gcTime: GC_60MIN,
+  });
+
+  const sthWindowsQ = useQuery({
+    queryKey: sthKeys.windows(filters.store, brandCanonical),
+    queryFn: () => fetchSellThroughByWindow(filters.store, skuBrandMapQ.data ?? null, brandCanonical),
+    // Espera a brandMap solo si hay filtro de marca (sino brandMap no se carga).
+    enabled: brandCanonical === null || skuBrandMapQ.data !== undefined,
+    staleTime: STALE_30MIN,
+    gcTime: GC_60MIN,
+    retry: 1,
+  });
+
   // ── Filtrado local: datos WIDE cacheados → filtrados por brand/channel/store
   const filteredSales = useMemo(
     () => filterSalesRows(salesQ.data ?? [], filters.brand, filters.channel, filters.store, filters.b2bSubchannel),
@@ -294,6 +326,58 @@ export function useKpiDashboard(): UseKpiDashboardResult {
     () => filterPriorYearMTD(prevCurrentMonthQ.data ?? [], filters.brand, filters.channel, filters.store, filters.b2bSubchannel),
     [prevCurrentMonthQ.data, filters.brand, filters.channel, filters.store, filters.b2bSubchannel],
   );
+
+  // ── DSO + Customer Recurrence: dependen de meses provisionales (no requieren
+  //     resolver activeMonths exactos via salesQ — usan rango calendario directo).
+  const channelKey: "b2b" | "b2c" | null =
+    filters.channel === "b2b" || filters.channel === "b2c" ? filters.channel : null;
+
+  const dsoQ = useQuery({
+    queryKey: dsoKeys.byPeriod(filters.year, provisionalMonths, brandCanonical, channelKey),
+    queryFn: () => fetchDSO({
+      year: filters.year,
+      months: provisionalMonths,
+      brand: brandCanonical,
+      channel: channelKey,
+    }),
+    enabled: provisionalMonths.length > 0 && !filters.store,
+    staleTime: STALE_30MIN,
+    gcTime: GC_60MIN,
+    retry: 1,
+  });
+
+  // Recurrence: store viene como cosujd; necesitamos cosupc para query directa.
+  const storeCosupc = useMemo(() => {
+    if (!filters.store) return null;
+    const target = filters.store.trim().toUpperCase();
+    return (storesQ.data ?? []).find((s) => s.cosujd.toUpperCase() === target)?.cosupc ?? null;
+  }, [filters.store, storesQ.data]);
+
+  const storeMapForChannel = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of storesQ.data ?? []) map.set(s.cosupc, s.cosujd);
+    return map;
+  }, [storesQ.data]);
+
+  const recurrenceQ = useQuery({
+    queryKey: recurrenceKeys.byPeriod(filters.year, provisionalMonths, channelKey, filters.store),
+    queryFn: () => fetchCustomerRecurrence({
+      year: filters.year,
+      months: provisionalMonths,
+      channel: channelKey,
+      storeCosupc,
+      storeMap: storeMapForChannel,
+    }),
+    enabled:
+      provisionalMonths.length > 0 &&
+      // Si filtra por tienda, esperar a que tengamos cosupc resuelto.
+      (!filters.store || storeCosupc !== null) &&
+      // brand no soportado en este KPI → si activo, no disparar (UI muestra error).
+      brandCanonical === null,
+    staleTime: STALE_30MIN,
+    gcTime: GC_60MIN,
+    retry: 1,
+  });
 
   // ── Período exacto desde datos reales de la BD ────────────────────────────
   // IMPORTANTE: usar salesQ.data (sin filtrar) para determinar qué meses existen.
@@ -551,6 +635,40 @@ export function useKpiDashboard(): UseKpiDashboardResult {
         value: markdownDep, unit: "percent", yoyPct: markdownYoY, positiveDirection: "down",
         isLoading: salesLoading, error: salesError, sparkline: monthlyMarkdown,
       },
+      // ── KPIs desbloqueados (sesión 02/05/2026) ─────────────────────────
+      // Sell-through 30/60/90: muestra ventana 90d como valor principal con
+      // sparkline de las 3 ventanas (30 → 60 → 90) para dar perspectiva.
+      // calcSellThrough es referencia; el cálculo ya viene agregado de la query.
+      {
+        id: "sell_through", title: "Sell-through 90d",
+        value: sthWindowsQ.data?.windows.find((w) => w.windowDays === 90)?.sthPct
+          ?? calcSellThrough(0, 0),
+        unit: "percent", yoyPct: null, positiveDirection: "up",
+        isLoading: sthWindowsQ.isLoading || (brandCanonical !== null && skuBrandMapQ.isLoading),
+        error: sthWindowsQ.error ? "Error al cargar sell-through" : undefined,
+        sparkline: sthWindowsQ.data?.windows.map((w) => w.sthPct),
+      },
+      {
+        id: "dso", title: "DSO (días cobranza)",
+        value: dsoQ.data ? calcDSO(dsoQ.data.cuentasPorCobrar, dsoQ.data.ventasDiariasPromedio) : 0,
+        unit: "days", yoyPct: null, positiveDirection: "down",
+        isLoading: dsoQ.isLoading,
+        error: dsoQ.error ? "Error al cargar CxC" : undefined,
+      },
+      {
+        id: "customer_recurrence", title: "Recurrencia clientes",
+        value: recurrenceQ.data
+          ? calcCustomerRecurrence(recurrenceQ.data.recurrentCustomers, recurrenceQ.data.totalCustomers)
+          : 0,
+        unit: "percent", yoyPct: null, positiveDirection: "up",
+        isLoading: recurrenceQ.isLoading,
+        // v_transacciones_dwh hoy llega hasta 31/12/2025; explicar antes que falle.
+        error: recurrenceQ.error
+          ? "Error al cargar transacciones"
+          : (!recurrenceQ.isLoading && recurrenceQ.data?.totalCustomers === 0
+              ? "Sin transacciones cargadas para este período (ETL Derlys pendiente para 2026)"
+              : undefined),
+      },
     ];
 
     return rawCards.map((card) => {
@@ -577,6 +695,11 @@ export function useKpiDashboard(): UseKpiDashboardResult {
     activeMonths, closedMonths,
     filters.channel, filters.b2bSubchannel, filters.store, filters.brand, filters.period, filters.year,
     needsDayPreciseYoY, calYear,
+    // KPIs desbloqueados sesión 02/05/2026
+    sthWindowsQ.data, sthWindowsQ.isLoading, sthWindowsQ.error,
+    skuBrandMapQ.isLoading, brandCanonical,
+    dsoQ.data, dsoQ.isLoading, dsoQ.error,
+    recurrenceQ.data, recurrenceQ.isLoading, recurrenceQ.error,
   ]);
 
   return { kpis, periodLabel };
