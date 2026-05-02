@@ -136,6 +136,15 @@ function computeProvisionalMonths(period: PeriodFilter, year: number): number[] 
 // ─── Helpers de filtrado local (solo para queries WIDE) ──────────────────────
 
 /** Filtra y agrega filas PriorYearMTDRow por los filtros activos del usuario. */
+/** "abril 2026" — usado en sub-labels cuando un KPI mostró fallback de período. */
+function formatMonthLabel(year: number, month: number): string {
+  const names = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+  ];
+  return `${names[month - 1]} ${year}`;
+}
+
 function filterPriorYearMTD(
   rows: PriorYearMTDRow[],
   brand: string,
@@ -657,8 +666,11 @@ export function useKpiDashboard(): UseKpiDashboardResult {
         error: dsoQ.error
           ? "Error al cargar CxC"
           : (!dsoQ.isLoading && dsoQ.data && !dsoQ.data.dataAvailable
-              ? "Sin ventas registradas en el período (mv_ventas_diarias se actualiza con un día de retraso)"
+              ? "mv_ventas_diarias sin datos — esperar al refresh del ETL"
               : undefined),
+        note: dsoQ.data?.fallbackApplied
+          ? `Mostrando ${formatMonthLabel(dsoQ.data.actualPeriod.year, dsoQ.data.actualPeriod.months[0])} (último mes con ventas cargadas)`
+          : undefined,
       },
       {
         id: "customer_recurrence", title: "Recurrencia clientes",

@@ -22,6 +22,7 @@ export function KpiCard({
   isLoading,
   error,
   sparkline,
+  note,
 }: KpiCardProps) {
   if (isLoading) return <KpiCardSkeleton label={title} />;
 
@@ -67,7 +68,7 @@ export function KpiCard({
           </span>
         ) : (
           <span className="text-[11px] text-gray-400 dark:text-gray-500">
-            {error ? "Sin datos" : "Sin comparación"}
+            {error ? "Sin datos" : note ?? "Sin comparación"}
           </span>
         )}
       </div>

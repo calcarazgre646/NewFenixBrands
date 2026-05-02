@@ -40,7 +40,7 @@ export interface DSOInput {
 export interface DSOResult {
   /** Saldo abierto total a la fecha (suma de pendiente_de_pago > 0 con f_factura <= periodEnd). */
   cuentasPorCobrar: number;
-  /** Ventas netas del período (suma de neto en mv_ventas_diarias). */
+  /** Ventas netas del período usado (suma de neto en mv_ventas_diarias). */
   ventasPeriodo: number;
   /** Días con datos reales en mv_ventas_diarias dentro del período. */
   diasConDatos: number;
@@ -49,31 +49,49 @@ export interface DSOResult {
   /** DSO en días. 0 cuando dataAvailable=false. */
   dso: number;
   /**
-   * false cuando el período no tiene ventas registradas (ej: mes en curso
-   * sin ETL de mv_ventas_diarias). El consumidor debe mostrar error en vez
-   * de renderizar un cero engañoso.
+   * false cuando ni el período pedido ni el fallback al último mes con datos
+   * tienen ventas. El consumidor debe mostrar error en este caso.
    */
   dataAvailable: boolean;
+  /**
+   * Año-mes efectivamente usado para calcular ventas. Cuando hay fallback
+   * (período pedido vacío), refleja el último mes con datos. La UI puede
+   * mostrarlo como sub-label cuando difiere del período pedido.
+   */
+  actualPeriod: { year: number; months: number[] };
+  /** true si actualPeriod difiere del input (hubo fallback al último mes con datos). */
+  fallbackApplied: boolean;
 }
 
 export async function fetchDSO(input: DSOInput): Promise<DSOResult> {
   if (input.months.length === 0) {
-    return {
-      cuentasPorCobrar: 0,
-      ventasPeriodo: 0,
-      diasConDatos: 0,
-      ventasDiariasPromedio: 0,
-      dso: 0,
-      dataAvailable: false,
-    };
+    return emptyResult({ year: input.year, months: [] }, false);
   }
 
-  const minMonth = Math.min(...input.months);
-  const maxMonth = Math.max(...input.months);
-  const periodStart = `${input.year}-${pad(minMonth)}-01`;
-  const periodEnd = lastDayOfMonth(input.year, maxMonth);
+  // Intento 1: período pedido por el usuario.
+  const primary = await fetchDSOForPeriod(input.year, input.months);
+  if (primary.dataAvailable) return { ...primary, fallbackApplied: false };
 
-  // Saldo abierto a la fecha de corte. NO filtramos por f_factura >= periodStart:
+  // Intento 2: fallback al último mes con datos en mv_ventas_diarias.
+  // Usado típicamente cuando filters.period='currentMonth' y el ETL viene
+  // con un día de retraso. El saldo CxC se recalcula también con el cutoff
+  // de ese mes (snapshot a esa fecha).
+  const lastMonth = await findLastMonthWithData();
+  if (!lastMonth) return { ...primary, fallbackApplied: false }; // sin datos en ningún mes
+
+  const fallback = await fetchDSOForPeriod(lastMonth.year, [lastMonth.month]);
+  return { ...fallback, fallbackApplied: true };
+}
+
+async function fetchDSOForPeriod(
+  year: number,
+  months: number[],
+): Promise<Omit<DSOResult, "fallbackApplied">> {
+  const minMonth = Math.min(...months);
+  const maxMonth = Math.max(...months);
+  const periodEnd = lastDayOfMonth(year, maxMonth);
+
+  // Saldo abierto a la fecha de corte. NO filtramos por f_factura inicial:
   // el saldo es un snapshot acumulado, no un flujo del período.
   const cxcRows = await fetchAllRows(() =>
     dataClient
@@ -86,13 +104,11 @@ export async function fetchDSO(input: DSOInput): Promise<DSOResult> {
   let cuentasPorCobrar = 0;
   for (const r of cxcRows) cuentasPorCobrar += toNum(r.pendiente_de_pago);
 
-  // Ventas del período: una fila por (year, month, day, brand, channel) en
-  // mv_ventas_diarias. Sumamos neto y contamos días distintos con datos.
   const ventasRows = await fetchAllRows(() =>
     dataClient
       .from("mv_ventas_diarias")
       .select("neto, year, month, day")
-      .eq("year", input.year)
+      .eq("year", year)
       .gte("month", minMonth)
       .lte("month", maxMonth),
   );
@@ -100,7 +116,7 @@ export async function fetchDSO(input: DSOInput): Promise<DSOResult> {
   let ventasPeriodo = 0;
   const diasUnicos = new Set<string>();
   for (const r of ventasRows) {
-    if (!input.months.includes(r.month as number)) continue;
+    if (!months.includes(r.month as number)) continue;
     ventasPeriodo += toNum(r.neto);
     diasUnicos.add(`${r.year}-${r.month}-${r.day}`);
   }
@@ -110,9 +126,6 @@ export async function fetchDSO(input: DSOInput): Promise<DSOResult> {
   const ventasDiariasPromedio = dataAvailable ? ventasPeriodo / diasConDatos : 0;
   const dso = dataAvailable ? cuentasPorCobrar / ventasDiariasPromedio : 0;
 
-  // Sentinel: silenciamos periodStart si TS marca como no usado en algún build.
-  void periodStart;
-
   return {
     cuentasPorCobrar,
     ventasPeriodo,
@@ -120,6 +133,34 @@ export async function fetchDSO(input: DSOInput): Promise<DSOResult> {
     ventasDiariasPromedio,
     dso,
     dataAvailable,
+    actualPeriod: { year, months: [...months].sort((a, b) => a - b) },
+  };
+}
+
+/** Encuentra el último (year, month) con al menos una fila en mv_ventas_diarias. */
+async function findLastMonthWithData(): Promise<{ year: number; month: number } | null> {
+  const rows = await fetchAllRows<{ year: number; month: number }>(() =>
+    dataClient
+      .from("mv_ventas_diarias")
+      .select("year, month")
+      .order("year", { ascending: false })
+      .order("month", { ascending: false })
+      .limit(50),
+  );
+  if (rows.length === 0) return null;
+  return { year: rows[0].year, month: rows[0].month };
+}
+
+function emptyResult(period: { year: number; months: number[] }, fallbackApplied: boolean): DSOResult {
+  return {
+    cuentasPorCobrar: 0,
+    ventasPeriodo: 0,
+    diasConDatos: 0,
+    ventasDiariasPromedio: 0,
+    dso: 0,
+    dataAvailable: false,
+    actualPeriod: period,
+    fallbackApplied,
   };
 }
 
