@@ -2,8 +2,8 @@
  * Tests para queries/dso.queries.ts
  *
  * Mockea fetchAllRows con dos respuestas secuenciales: c_cobrar y luego
- * mv_ventas_diarias. Valida días calendario del período, división correcta y
- * edge cases de período vacío / sin ventas.
+ * mv_ventas_diarias. Valida fórmula correcta (saldo total abierto / ventas
+ * diarias del período), edge cases y dataAvailable=false cuando no hay datos.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -32,64 +32,94 @@ beforeEach(() => {
 });
 
 describe("fetchDSO", () => {
-  it("calcula DSO con 1 mes (abril 2026 = 30 días)", async () => {
-    // c_cobrar: 5M Gs. en saldo abierto
+  it("happy path: saldo abierto / ventas diarias promedio", async () => {
+    // c_cobrar: 100M Gs en saldos abiertos
     mockFetchAllRows.mockResolvedValueOnce([
-      { pendiente_de_pago: 3_000_000 },
-      { pendiente_de_pago: 2_000_000 },
+      { pendiente_de_pago: 60_000_000 },
+      { pendiente_de_pago: 40_000_000 },
     ]);
-    // mv_ventas_diarias: 30M neto en abril
-    mockFetchAllRows.mockResolvedValueOnce([
-      { neto: 30_000_000, brand: "Martel", channel: "B2C", year: 2026, month: 4 },
-    ]);
+    // mv_ventas_diarias: 30 días con ventas, 10M Gs cada uno = 300M total
+    const ventas = [];
+    for (let d = 1; d <= 30; d++) ventas.push({ neto: 10_000_000, year: 2026, month: 4, day: d });
+    mockFetchAllRows.mockResolvedValueOnce(ventas);
 
-    const r = await fetchDSO({ year: 2026, months: [4], brand: null, channel: null });
-    expect(r.cuentasPorCobrar).toBe(5_000_000);
-    expect(r.ventasPeriodo).toBe(30_000_000);
-    expect(r.diasPeriodo).toBe(30);
-    expect(r.ventasDiariasPromedio).toBe(1_000_000);
-    expect(r.dso).toBe(5);
+    const r = await fetchDSO({ year: 2026, months: [4] });
+    expect(r.cuentasPorCobrar).toBe(100_000_000);
+    expect(r.ventasPeriodo).toBe(300_000_000);
+    expect(r.diasConDatos).toBe(30);
+    expect(r.ventasDiariasPromedio).toBe(10_000_000);
+    expect(r.dso).toBe(10);
+    expect(r.dataAvailable).toBe(true);
   });
 
-  it("YTD enero+febrero+marzo 2026 = 31+28+31 = 90 días", async () => {
-    mockFetchAllRows.mockResolvedValueOnce([{ pendiente_de_pago: 9_000_000 }]);
-    mockFetchAllRows.mockResolvedValueOnce([{ neto: 90_000_000 }]);
+  it("dataAvailable=false cuando el período no tiene ventas (mv_ventas_diarias atrasada)", async () => {
+    mockFetchAllRows.mockResolvedValueOnce([{ pendiente_de_pago: 5_000_000_000 }]);
+    mockFetchAllRows.mockResolvedValueOnce([]); // sin ventas en el período
 
-    const r = await fetchDSO({ year: 2026, months: [1, 2, 3], brand: null, channel: null });
-    expect(r.diasPeriodo).toBe(90);
-    expect(r.ventasDiariasPromedio).toBe(1_000_000);
-    expect(r.dso).toBe(9);
+    const r = await fetchDSO({ year: 2026, months: [5] });
+    expect(r.cuentasPorCobrar).toBe(5_000_000_000);
+    expect(r.ventasPeriodo).toBe(0);
+    expect(r.diasConDatos).toBe(0);
+    expect(r.dso).toBe(0); // no inflar artificial
+    expect(r.dataAvailable).toBe(false);
   });
 
-  it("retorna ceros cuando months está vacío (no llama a la BD)", async () => {
-    const r = await fetchDSO({ year: 2026, months: [], brand: null, channel: null });
+  it("retorna ceros cuando months está vacío sin tocar BD", async () => {
+    const r = await fetchDSO({ year: 2026, months: [] });
     expect(r).toEqual({
       cuentasPorCobrar: 0,
       ventasPeriodo: 0,
-      diasPeriodo: 0,
+      diasConDatos: 0,
       ventasDiariasPromedio: 0,
       dso: 0,
+      dataAvailable: false,
     });
     expect(mockFetchAllRows).not.toHaveBeenCalled();
   });
 
-  it("división por cero: ventas = 0 → DSO = 0 (no Infinity)", async () => {
-    mockFetchAllRows.mockResolvedValueOnce([{ pendiente_de_pago: 5_000_000 }]);
-    mockFetchAllRows.mockResolvedValueOnce([]);
+  it("usa días con datos REALES, no días calendario (días sin venta no inflan denominador)", async () => {
+    mockFetchAllRows.mockResolvedValueOnce([{ pendiente_de_pago: 100_000_000 }]);
+    // Solo 5 días con ventas (no los 30 del mes)
+    mockFetchAllRows.mockResolvedValueOnce([
+      { neto: 10_000_000, year: 2026, month: 4, day: 1 },
+      { neto: 10_000_000, year: 2026, month: 4, day: 2 },
+      { neto: 10_000_000, year: 2026, month: 4, day: 3 },
+      { neto: 10_000_000, year: 2026, month: 4, day: 4 },
+      { neto: 10_000_000, year: 2026, month: 4, day: 5 },
+    ]);
 
-    const r = await fetchDSO({ year: 2026, months: [4], brand: null, channel: null });
-    expect(r.cuentasPorCobrar).toBe(5_000_000);
-    expect(r.ventasPeriodo).toBe(0);
-    expect(r.dso).toBe(0);
-    expect(Number.isFinite(r.dso)).toBe(true);
+    const r = await fetchDSO({ year: 2026, months: [4] });
+    expect(r.diasConDatos).toBe(5);
+    expect(r.ventasDiariasPromedio).toBe(10_000_000);
+    expect(r.dso).toBe(10); // 100M / 10M
   });
 
-  it("año bisiesto: febrero 2024 = 29 días", async () => {
-    mockFetchAllRows.mockResolvedValueOnce([{ pendiente_de_pago: 0 }]);
-    mockFetchAllRows.mockResolvedValueOnce([{ neto: 29_000_000 }]);
+  it("multi-fila por día (brand × channel) consolida en un solo día único", async () => {
+    mockFetchAllRows.mockResolvedValueOnce([{ pendiente_de_pago: 100_000_000 }]);
+    // Mismo día con 3 filas (3 marcas distintas)
+    mockFetchAllRows.mockResolvedValueOnce([
+      { neto: 4_000_000, year: 2026, month: 4, day: 15 },
+      { neto: 3_000_000, year: 2026, month: 4, day: 15 },
+      { neto: 3_000_000, year: 2026, month: 4, day: 15 },
+    ]);
 
-    const r = await fetchDSO({ year: 2024, months: [2], brand: null, channel: null });
-    expect(r.diasPeriodo).toBe(29);
-    expect(r.ventasDiariasPromedio).toBe(1_000_000);
+    const r = await fetchDSO({ year: 2026, months: [4] });
+    expect(r.diasConDatos).toBe(1);
+    expect(r.ventasPeriodo).toBe(10_000_000);
+    expect(r.ventasDiariasPromedio).toBe(10_000_000);
+    expect(r.dso).toBe(10);
+  });
+
+  it("filtra mes fuera del período aunque la query traiga rango más amplio", async () => {
+    mockFetchAllRows.mockResolvedValueOnce([{ pendiente_de_pago: 50_000_000 }]);
+    // Query trae month 1-4; pedimos solo [4]
+    mockFetchAllRows.mockResolvedValueOnce([
+      { neto: 999_999_999, year: 2026, month: 1, day: 15 }, // debe descartarse
+      { neto: 5_000_000, year: 2026, month: 4, day: 1 },
+    ]);
+
+    const r = await fetchDSO({ year: 2026, months: [4] });
+    expect(r.ventasPeriodo).toBe(5_000_000);
+    expect(r.diasConDatos).toBe(1);
   });
 });
