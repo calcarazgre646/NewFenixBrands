@@ -17,7 +17,7 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 |------|---------|--------|
 | Infra | Rutas, layout, auth, contextos, queries, domain logic | ✅ COMPLETO |
 | 0 | SignInPage + ChangePasswordPage (primer login) | ✅ COMPLETO |
-| 1 | KpiDashboardPage (`/kpis`) — 9 core + 50 catálogo + sparklines + UPT activado | ✅ COMPLETO |
+| 1 | KpiDashboardPage (`/kpis`) — 12 core + 50 catálogo + sparklines + UPT activado + sell_through/dso/recurrence desbloqueados | ✅ COMPLETO |
 | 1B | ExecutivePage (`/`) — Road to Annual Target, chart acumulado, tabla mensual | ✅ COMPLETO |
 | 2 | SalesPage (`/ventas`) — Metricas, 4 tabs analytics, YoY tiendas, Top/Bottom SKUs + Sell-through por SKU | ✅ COMPLETO |
 | 3 | ActionQueuePage (`/acciones`) — Waterfall 4 niveles + Lifecycle SKU (linealidad 3x6, sequential 5 pasos, cascade A→B→OUT, mandatory exit 90d) + 2 pestañas | ✅ COMPLETO + LIFECYCLE + AUDITADO (ver docs/LIFECYCLE_04) |
@@ -32,9 +32,10 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 9B | MyProjectionPage (`/mi-proyeccion`) — vista personal del vendedor (rol nuevo `vendedor`) | ✅ COMPLETO |
 
 **La app corre:** `npm run dev` → http://localhost:5173
-**Tests:** 1781 passing (60 suites) | TSC 0 errores | Build OK | ESLint 0 errores
+**Tests:** 1814 passing (63 suites) | TSC 0 errores | Build OK | ESLint 0 errores
 **Deploy:** https://fenix-brands-one.vercel.app
-**Sesión 02/05/2026:** Invitación email Resend (PR #48) + GMROI/Rotación habilitados con filtro B2B/B2C (PR #49) + UPT por factura → bloqueado por Derlys
+**Sesión 02/05/2026 (tarde):** Desbloqueo 3 KPIs `/kpis` — sell_through 30/60/90 + DSO + recurrencia clientes (PR #51) + fix DSO bug 17K días (PR #52). Distribución PST: 9→12 core, 2→1 blocked, 8→6 next. Ver `docs/SESION_2026-05-02_KPIS_DESBLOQUEO.md`. Pendiente Derlys: enriquecer `c_cobrar` con brand/channel para habilitar filtros DSO (`docs/PENDING_DERLYS_DSO_ENRICHMENT.md`).
+**Sesión 02/05/2026 (mañana):** Invitación email Resend (PR #48) + GMROI/Rotación habilitados con filtro B2B/B2C (PR #49) + UPT por factura → bloqueado por Derlys
 **Sesión 29/04/2026:** Sell-through por SKU en `/ventas` (PR #45)
 **Sesión 28/04/2026:** Event Operational App — Fases A+B+C (ver abajo)
 **Sesión 22/04/2026:** PricingPage — módulo Precios (ver abajo)
@@ -1263,3 +1264,81 @@ Al filtrar canal en `/kpis`:
 
 UPT sigue deshabilitado con su mensaje original — bloqueado por la vista de Derlys (ticket aparte, comentario entregado).
 
+
+
+---
+
+## Sesión 02/05/2026 (tarde) — Desbloqueo 3 KPIs `/kpis` + Fix DSO crítico
+
+**Contexto:** Auditoría manual de KPIs marcados como `next` o `blocked` en `src/domain/kpis/fenix.catalog.ts` para identificar candidatos cuyos datos ya estuvieran vivos en BD `gwzllatcxxrizxtslkeh`.
+
+### Hallazgo
+
+3 KPIs desbloqueables sin esperar a Derlys:
+
+| KPI | PST previo | Bloqueo declarado en catálogo | Realidad BD hoy |
+|---|---|---|---|
+| `sell_through` 30/60/90 | next | "Se necesita el histórico de movimientos" | `v_sth_cohort` viva con 285K filas. Ya consumida por lifecycle/waterfall y `/ventas`. |
+| `dso` | next | "Ir con la tabla de CxC" — la doc decía vacía | **Falso a hoy.** `c_cobrar` con 834K filas; 7.090 con saldo abierto. |
+| `customer_recurrence` | **blocked** | "En espera del programa de duplicación" | **Datos físicamente disponibles.** `v_transacciones_dwh` tiene `codigo_cliente` + `num_transaccion`. Recurrencia es agregación, no requiere "programa de duplicación". |
+
+### PR #51 — Desbloqueo inicial
+
+Cambios principales:
+- `src/queries/sellThrough.queries.ts` (nuevo): `fetchSellThroughByWindow` agrega red-wide para 30/60/90d. Brand resuelta vía cruce SKU→brand contra `mv_stock_tienda` (la vista no tiene brand).
+- `src/queries/dso.queries.ts` (nuevo, luego reescrito en PR #52).
+- `src/queries/recurrence.queries.ts` (nuevo): `fetchCustomerRecurrence` agrupa por `codigo_cliente` con count distinct `num_transaccion` ≥ 2. Filtra por `fecha_formateada LIKE` para evitar problema URL-encoding de la columna `año`. Excluye `codigo_cliente=0`.
+- `src/queries/keys.ts`: `sthKeys.windows`, `sthKeys.brandMap`, `dsoKeys`, `recurrenceKeys`.
+- `src/domain/kpis/fenix.catalog.ts`: 3 KPIs reclasificados.
+- `src/domain/kpis/calculations.ts`: `calcCustomerRecurrence` puro.
+- `src/features/kpis/hooks/useKpiDashboard.ts`: 3 useQuery + 3 cards al `rawCards`.
+- Tests: +32 (17 queries, 14 filterSupport, 1 contract distribución).
+
+Distribución PST resultante: **12 core, 1 blocked, 6 next, 15 later, 16 future = 50**.
+
+### PR #52 — Fix DSO 17.000 días (bug crítico post-deploy)
+
+Tras deployar PR #51, el usuario reportó DSO mostrando ~17K días. Tres bugs encadenados:
+
+**Bug 1 — Fórmula incorrecta:** filtraba el numerador (CxC) por `f_factura` dentro del período. DSO clásico es saldo SNAPSHOT, no flujo del período. Mezclar las dos lógicas produce ratios absurdos (currentMonth devolvía 0; otros períodos: ratios sin sentido).
+
+**Bug 2 — Asimetría brand/channel:** `c_cobrar` no tiene marca/canal/tienda; `mv_ventas_diarias` sí. Filtrar solo el denominador genera DSO matemáticamente incoherente. Ejemplo real: CxC total 80B Gs / ventas Martel 40M/día = "DSO Martel" 2.000 días sin sentido.
+
+**Bug 3 — ETL atrasado:** `mv_ventas_diarias` termina hoy en 2026-04-29. Si el período es mayo 2026, no hay ventas → división por cero manejada como 0 silencioso, ocultando el problema.
+
+Fix:
+- Saldo total snapshot con cutoff `f_factura <= periodEnd` (excluye facturas con fecha futura, hay datos sucios hasta 2027).
+- `supportedFilters: { brand: false, channel: false, store: false }`. La card se deshabilita con mensaje "no disponible con filtro de X" cuando hay filtros.
+- Flag `dataAvailable` en `DSOResult`. Cuando `false`, error didáctico explicando el retraso del ETL.
+
+**Blast radius verificado:** ningún cambio toca `cobranza.queries.ts`, `marketing.queries.ts`, `useSellerProjections.ts` ni el uso de `mv_ventas_diarias` en SalesPage/ExecutivePage (solo freshness display).
+
+### Verificación final
+
+```
+Tests:  1814 passing (63 suites, +33 desde 1781)
+TSC:    0 errores
+ESLint: 0 errores (2 warnings preexistentes en marketing)
+Build:  OK
+PR #51: https://github.com/calcarazgre646/NewFenixBrands/pull/51 (merged --squash --admin)
+PR #52: https://github.com/calcarazgre646/NewFenixBrands/pull/52 (merged --squash --admin)
+Deploy: fenix-brands-a1xzmq0ft → https://fenix-brands-one.vercel.app
+```
+
+### Pendiente Derlys
+
+Para que DSO admita filtros brand/channel/store hace falta:
+
+1. **Tabla mapping `factura_marca`** (la más barata) — view sobre `fjdhstvta1` con marca dominante por `numero_documento`.
+2. **Vista `v_cxc_enriched`** que cruce `c_cobrar` con `factura_marca`.
+3. (Solo si la #1 falla por performance) Columnas en `c_cobrar` directamente.
+
+Spec completa con SQL ejemplo en `docs/PENDING_DERLYS_DSO_ENRICHMENT.md`.
+
+### Aprendizajes
+
+1. **Antes de declarar un KPI bloqueado, probar la BD a hoy.** La doc decía `c_cobrar` vacía; falso desde hace meses.
+2. **Asimetría de filtros = bug.** Si numerador y denominador viven en tablas con distintas dimensiones, o ambos soportan el filtro o ninguno.
+3. **Snapshots ≠ flujos.** DSO/inventario/balances son snapshots a fecha de corte; ventas/COGS son flujos del período. No mezclar.
+4. **`dataAvailable` flag explícito** > silencio con `0`. Un cero engañoso es peor que un mensaje claro.
+5. **`grep` blast radius antes de cambiar firma.** Cambiamos `dsoKeys.byPeriod` y `fetchDSO` — ambos solo se llaman desde un sitio, así que fue seguro. Pero verificado, no asumido.

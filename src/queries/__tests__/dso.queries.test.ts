@@ -33,12 +33,12 @@ beforeEach(() => {
 
 describe("fetchDSO", () => {
   it("happy path: saldo abierto / ventas diarias promedio", async () => {
-    // c_cobrar: 100M Gs en saldos abiertos
+    // Llamada 1 (intento primario): c_cobrar
     mockFetchAllRows.mockResolvedValueOnce([
       { pendiente_de_pago: 60_000_000 },
       { pendiente_de_pago: 40_000_000 },
     ]);
-    // mv_ventas_diarias: 30 días con ventas, 10M Gs cada uno = 300M total
+    // Llamada 2 (intento primario): mv_ventas_diarias
     const ventas = [];
     for (let d = 1; d <= 30; d++) ventas.push({ neto: 10_000_000, year: 2026, month: 4, day: d });
     mockFetchAllRows.mockResolvedValueOnce(ventas);
@@ -50,30 +50,53 @@ describe("fetchDSO", () => {
     expect(r.ventasDiariasPromedio).toBe(10_000_000);
     expect(r.dso).toBe(10);
     expect(r.dataAvailable).toBe(true);
+    expect(r.fallbackApplied).toBe(false);
+    expect(r.actualPeriod).toEqual({ year: 2026, months: [4] });
   });
 
-  it("dataAvailable=false cuando el período no tiene ventas (mv_ventas_diarias atrasada)", async () => {
-    mockFetchAllRows.mockResolvedValueOnce([{ pendiente_de_pago: 5_000_000_000 }]);
-    mockFetchAllRows.mockResolvedValueOnce([]); // sin ventas en el período
+  it("auto-fallback al último mes con datos cuando el período pedido está vacío", async () => {
+    // Llamada 1 (primary cxc): saldo grande
+    mockFetchAllRows.mockResolvedValueOnce([{ pendiente_de_pago: 100_000_000 }]);
+    // Llamada 2 (primary ventas): vacío → trigger fallback
+    mockFetchAllRows.mockResolvedValueOnce([]);
+    // Llamada 3 (findLastMonthWithData): retorna 2026-04
+    mockFetchAllRows.mockResolvedValueOnce([{ year: 2026, month: 4 }]);
+    // Llamada 4 (fallback cxc — recalcula con cutoff abril)
+    mockFetchAllRows.mockResolvedValueOnce([{ pendiente_de_pago: 100_000_000 }]);
+    // Llamada 5 (fallback ventas): 30 días × 10M Gs
+    const ventas = [];
+    for (let d = 1; d <= 30; d++) ventas.push({ neto: 10_000_000, year: 2026, month: 4, day: d });
+    mockFetchAllRows.mockResolvedValueOnce(ventas);
 
     const r = await fetchDSO({ year: 2026, months: [5] });
-    expect(r.cuentasPorCobrar).toBe(5_000_000_000);
-    expect(r.ventasPeriodo).toBe(0);
-    expect(r.diasConDatos).toBe(0);
-    expect(r.dso).toBe(0); // no inflar artificial
+    expect(r.dataAvailable).toBe(true);
+    expect(r.fallbackApplied).toBe(true);
+    expect(r.actualPeriod).toEqual({ year: 2026, months: [4] });
+    expect(r.dso).toBe(10);
+  });
+
+  it("dataAvailable=false cuando ni el período pedido ni mv_ventas_diarias tienen datos", async () => {
+    // Primary
+    mockFetchAllRows.mockResolvedValueOnce([{ pendiente_de_pago: 5_000_000 }]);
+    mockFetchAllRows.mockResolvedValueOnce([]);
+    // findLastMonthWithData: completamente vacío
+    mockFetchAllRows.mockResolvedValueOnce([]);
+
+    const r = await fetchDSO({ year: 2026, months: [5] });
     expect(r.dataAvailable).toBe(false);
+    expect(r.dso).toBe(0);
+    expect(r.fallbackApplied).toBe(false);
   });
 
   it("retorna ceros cuando months está vacío sin tocar BD", async () => {
     const r = await fetchDSO({ year: 2026, months: [] });
-    expect(r).toEqual({
-      cuentasPorCobrar: 0,
-      ventasPeriodo: 0,
-      diasConDatos: 0,
-      ventasDiariasPromedio: 0,
-      dso: 0,
-      dataAvailable: false,
-    });
+    expect(r.cuentasPorCobrar).toBe(0);
+    expect(r.ventasPeriodo).toBe(0);
+    expect(r.diasConDatos).toBe(0);
+    expect(r.ventasDiariasPromedio).toBe(0);
+    expect(r.dso).toBe(0);
+    expect(r.dataAvailable).toBe(false);
+    expect(r.fallbackApplied).toBe(false);
     expect(mockFetchAllRows).not.toHaveBeenCalled();
   });
 
