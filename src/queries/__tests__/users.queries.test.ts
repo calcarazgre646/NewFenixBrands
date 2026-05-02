@@ -220,7 +220,12 @@ describe("updateProfile", () => {
 
 describe("createUser", () => {
   it("calls fetch with correct payload and headers", async () => {
-    setFetchResult(200, { id: "new-uuid", email: "nuevo@fenix.com" });
+    setFetchResult(200, {
+      id: "new-uuid",
+      email: "nuevo@fenix.com",
+      emailSent: true,
+      emailError: null,
+    });
 
     const result = await createUser({
       email: "nuevo@fenix.com",
@@ -253,7 +258,56 @@ describe("createUser", () => {
       vendedorCodigo: null,
     });
 
-    expect(result).toEqual({ id: "new-uuid", email: "nuevo@fenix.com" });
+    expect(result).toEqual({
+      id: "new-uuid",
+      email: "nuevo@fenix.com",
+      emailSent: true,
+      emailError: null,
+    });
+  });
+
+  it("returns emailSent=false with reason when invitation email fails", async () => {
+    setFetchResult(200, {
+      id: "new-uuid-2",
+      email: "nuevo2@fenix.com",
+      emailSent: false,
+      emailError: "Resend rate limit exceeded",
+    });
+
+    const result = await createUser({
+      email: "nuevo2@fenix.com",
+      fullName: "Nuevo Dos",
+      role: "negocio",
+      channelScope: null,
+      cargo: null,
+      vendedorCodigo: null,
+    });
+
+    expect(result.emailSent).toBe(false);
+    expect(result.emailError).toBe("Resend rate limit exceeded");
+    expect(result.id).toBe("new-uuid-2");
+  });
+
+  it("defaults emailSent to false when EF returns legacy shape (id+email only)", async () => {
+    // Compat: si la EF antigua todavía está deployada y no devuelve emailSent,
+    // tratamos como "email no enviado" para que el admin avise manualmente.
+    setFetchResult(200, { id: "legacy-uuid", email: "legacy@fenix.com" });
+
+    const result = await createUser({
+      email: "legacy@fenix.com",
+      fullName: "Legacy",
+      role: "negocio",
+      channelScope: null,
+      cargo: null,
+      vendedorCodigo: null,
+    });
+
+    expect(result).toEqual({
+      id: "legacy-uuid",
+      email: "legacy@fenix.com",
+      emailSent: false,
+      emailError: null,
+    });
   });
 
   it("throws real error message on non-2xx (email already exists)", async () => {

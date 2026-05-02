@@ -9,14 +9,14 @@ import { Modal } from "@/components/ui/modal";
 import type { Role, ChannelScope } from "@/domain/auth/types";
 import { getRoleLabel } from "@/domain/auth/types";
 import { getChannelScopeLabel, validateCreateUser } from "@/domain/users/validation";
-import type { CreateUserData } from "@/queries/users.queries";
+import type { CreateUserData, CreateUserResult } from "@/queries/users.queries";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface UserCreateModalProps {
   isCreating: boolean;
   createError: string | null;
-  onSave: (data: CreateUserData) => Promise<unknown>;
+  onSave: (data: CreateUserData) => Promise<CreateUserResult>;
   onClose: () => void;
 }
 
@@ -40,17 +40,25 @@ export function UserCreateModal({
   const [channelScope, setChannelScope] = useState<ChannelScope>(null);
   const [vendedorCodigo, setVendedorCodigo] = useState<string>("");
   const [localError, setLocalError] = useState<string | null>(null);
+  // Warning amarillo cuando el user se crea pero el email de invitación falla.
+  // El admin tiene que avisar manualmente.
+  const [emailWarning, setEmailWarning] = useState<{ email: string; reason: string | null } | null>(null);
 
-  // Auto-limpiar channel_scope si cambia a rol que no lo usa
+  // Auto-limpiar campos según rol: channel_scope solo aplica a 'negocio',
+  // vendedor_codigo solo a 'vendedor'.
   useEffect(() => {
     if (role !== "negocio") {
       setChannelScope(null);
+    }
+    if (role !== "vendedor") {
+      setVendedorCodigo("");
     }
   }, [role]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLocalError(null);
+    setEmailWarning(null);
 
     const trimmedCodigo = vendedorCodigo.trim();
     const parsedCodigo = trimmedCodigo === "" ? null : Number(trimmedCodigo);
@@ -76,7 +84,13 @@ export function UserCreateModal({
     }
 
     try {
-      await onSave(input);
+      const result = await onSave(input);
+      if (result.emailSent === false) {
+        // Usuario creado, pero el email no salió. Mostramos warning sin cerrar
+        // para que el admin tenga visibles las credenciales y avise manualmente.
+        setEmailWarning({ email: input.email, reason: result.emailError });
+        return;
+      }
       onClose();
     } catch {
       // Error se muestra via createError prop (TanStack Query mutation state)
@@ -158,26 +172,28 @@ export function UserCreateModal({
           </select>
         </div>
 
-        {/* Código de vendedor (required si rol = vendedor) */}
-        <div>
-          <label htmlFor="create-vendedorCodigo" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Código de vendedor {role === "vendedor" && <span className="text-red-500">*</span>}
-          </label>
-          <input
-            id="create-vendedorCodigo"
-            type="number"
-            inputMode="numeric"
-            min={0}
-            value={vendedorCodigo}
-            onChange={(e) => setVendedorCodigo(e.target.value)}
-            placeholder={role === "vendedor" ? "Requerido — código del ERP" : "Vacío si no es vendedor"}
-            required={role === "vendedor"}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-          />
-          <p className="mt-1 text-[11px] text-gray-400">
-            Habilita la vista &laquo;Mi Proyección&raquo;. Debe coincidir con el código del ERP.
-          </p>
-        </div>
+        {/* Código de vendedor (solo visible si rol = vendedor) */}
+        {role === "vendedor" && (
+          <div>
+            <label htmlFor="create-vendedorCodigo" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Código de vendedor <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="create-vendedorCodigo"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              value={vendedorCodigo}
+              onChange={(e) => setVendedorCodigo(e.target.value)}
+              placeholder="Requerido — código del ERP"
+              required
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            />
+            <p className="mt-1 text-[11px] text-gray-400">
+              Habilita la vista &laquo;Mi Proyección&raquo;. Debe coincidir con el código del ERP.
+            </p>
+          </div>
+        )}
 
         {/* Canal (solo visible si rol = negocio) */}
         {role === "negocio" && (
@@ -200,29 +216,62 @@ export function UserCreateModal({
         )}
 
         {/* Error */}
-        {displayError && (
+        {displayError && !emailWarning && (
           <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
             {displayError}
           </div>
         )}
 
+        {/* Email warning: usuario creado pero invitación no se envió */}
+        {emailWarning && (
+          <div className="rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm dark:border-warning-500/30 dark:bg-warning-500/10">
+            <div className="font-semibold text-warning-700 dark:text-warning-400">
+              Usuario creado, pero el email no se envió
+            </div>
+            <div className="mt-1 text-warning-700/90 dark:text-warning-300/90">
+              Avisale manualmente al usuario con estas credenciales:
+            </div>
+            <div className="mt-2 rounded-md bg-white/60 px-3 py-2 font-mono text-xs text-gray-800 dark:bg-gray-900/40 dark:text-gray-200">
+              <div>Email: <span className="font-semibold">{emailWarning.email}</span></div>
+              <div>Contraseña: <span className="font-semibold">fenix123</span></div>
+            </div>
+            {emailWarning.reason && (
+              <div className="mt-2 text-[11px] text-warning-700/70 dark:text-warning-300/70">
+                Motivo: {emailWarning.reason}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex items-center justify-end gap-3 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isCreating}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={isCreating}
-            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-          >
-            {isCreating ? "Creando..." : "Crear Usuario"}
-          </button>
+          {emailWarning ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600"
+            >
+              Entendido
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isCreating}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isCreating}
+                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+              >
+                {isCreating ? "Creando..." : "Crear Usuario"}
+              </button>
+            </>
+          )}
         </div>
       </form>
     </Modal>

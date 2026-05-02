@@ -48,10 +48,14 @@ export function UserEditModal({
     profile.vendedorCodigo != null ? String(profile.vendedorCodigo) : "",
   );
 
-  // Auto-limpiar channel_scope si cambia a rol que no lo usa
+  // Auto-limpiar campos según rol: channel_scope solo aplica a 'negocio',
+  // vendedor_codigo solo a 'vendedor'.
   useEffect(() => {
     if (role !== "negocio") {
       setChannelScope(null);
+    }
+    if (role !== "vendedor") {
+      setVendedorCodigo("");
     }
   }, [role]);
 
@@ -162,25 +166,28 @@ export function UserEditModal({
           </div>
         )}
 
-        {/* Código de vendedor (mapeo a fjdhstvta1.v_vended) */}
-        <div>
-          <label htmlFor="edit-vendedorCodigo" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Código de vendedor
-          </label>
-          <input
-            id="edit-vendedorCodigo"
-            type="number"
-            inputMode="numeric"
-            min={0}
-            value={vendedorCodigo}
-            onChange={(e) => setVendedorCodigo(e.target.value)}
-            placeholder="Vacío si no es vendedor"
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-          />
-          <p className="mt-1 text-[11px] text-gray-400">
-            Habilita la vista &laquo;Mi Proyección&raquo;. Debe coincidir con el código del ERP.
-          </p>
-        </div>
+        {/* Código de vendedor (solo visible si rol = vendedor; mapeo a fjdhstvta1.v_vended) */}
+        {role === "vendedor" && (
+          <div>
+            <label htmlFor="edit-vendedorCodigo" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Código de vendedor <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="edit-vendedorCodigo"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              value={vendedorCodigo}
+              onChange={(e) => setVendedorCodigo(e.target.value)}
+              placeholder="Requerido — código del ERP"
+              required
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            />
+            <p className="mt-1 text-[11px] text-gray-400">
+              Habilita la vista &laquo;Mi Proyección&raquo;. Debe coincidir con el código del ERP.
+            </p>
+          </div>
+        )}
 
         {/* Estado activo */}
         <div>
