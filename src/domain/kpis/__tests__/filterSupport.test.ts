@@ -114,22 +114,25 @@ describe('checkKpiAvailability', () => {
     })
   })
 
-  // ── dso: brand ✓, channel ✓, store ✗ ──
-  // c_cobrar no tiene store; mv_ventas_diarias sí soporta brand+channel.
-  describe('dso (brand ✓, channel ✓, store ✗)', () => {
+  // ── dso: brand ✗, channel ✗, store ✗ ──
+  // c_cobrar no tiene marca/canal/tienda. Filtrar el denominador (ventas) sin
+  // filtrar el numerador (CxC) produciría DSO absurdos por asimetría.
+  describe('dso (brand ✗, channel ✗, store ✗ — solo total)', () => {
     it('disponible sin filtros', () => {
       expect(checkKpiAvailability('dso', NO_FILTERS)).toEqual({ available: true })
     })
-    it('disponible con brand', () => {
-      expect(checkKpiAvailability('dso', BRAND_FILTER)).toEqual({ available: true })
+    it('NO disponible con brand', () => {
+      const r = checkKpiAvailability('dso', BRAND_FILTER)
+      expect(r.available).toBe(false)
+      expect(r.reason).toContain('marca')
     })
-    it('disponible con channel', () => {
-      expect(checkKpiAvailability('dso', CHANNEL_FILTER)).toEqual({ available: true })
+    it('NO disponible con channel', () => {
+      const r = checkKpiAvailability('dso', CHANNEL_FILTER)
+      expect(r.available).toBe(false)
     })
     it('NO disponible con store', () => {
       const r = checkKpiAvailability('dso', STORE_FILTER)
       expect(r.available).toBe(false)
-      expect(r.reason).toContain('tienda')
     })
   })
 

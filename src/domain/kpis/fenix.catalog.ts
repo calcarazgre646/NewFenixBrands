@@ -262,21 +262,21 @@ export const FENIX_KPI_CATALOG: readonly FenixKpiSpec[] = [
     id: 'dso',
     name: 'DSO',
     definition: 'Días promedio de cobranza.',
-    formula: 'Saldo CxC del período / Ventas diarias promedio del período',
+    formula: 'Saldo CxC abierto a la fecha / Ventas diarias promedio del período',
     pst: 'core',
     category: 'finance',
     unit: 'days',
     positiveDirection: 'down',
     inputs: [
-      'c_cobrar.pendiente_de_pago con f_factura en el período',
-      'mv_ventas_diarias.neto / días calendario del período',
+      'c_cobrar.pendiente_de_pago > 0 con f_factura <= periodEnd (snapshot)',
+      'mv_ventas_diarias.neto / días con datos del período',
     ],
-    // c_cobrar no tiene store ni brand; mv_ventas_diarias tiene brand+channel.
-    // El saldo CxC no se segmenta por marca/canal — DSO con brand/channel
-    // estima días equivalentes contra esa porción de la venta.
-    supportedFilters: { brand: true, channel: true, store: false },
+    // c_cobrar no tiene marca/canal/tienda. Filtrar el denominador (ventas)
+    // por brand/channel sin filtrar el numerador (CxC) produciría DSO absurdos
+    // por asimetría matemática. DSO se reporta solo a nivel total.
+    supportedFilters: { brand: false, channel: false, store: false },
     calcFn: 'calcDSO',
-    obs: 'Conectado vía c_cobrar (anteriormente reportada como vacía; activa hoy con 834K filas)',
+    obs: 'Conectado vía c_cobrar (834K filas, 7K con saldo abierto). Solo total — c_cobrar no segmenta por marca/canal/tienda',
   },
   {
     id: 'customer_recurrence',

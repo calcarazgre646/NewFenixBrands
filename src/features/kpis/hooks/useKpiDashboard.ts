@@ -332,15 +332,14 @@ export function useKpiDashboard(): UseKpiDashboardResult {
   const channelKey: "b2b" | "b2c" | null =
     filters.channel === "b2b" || filters.channel === "b2c" ? filters.channel : null;
 
+  // DSO es solo a nivel total — c_cobrar no tiene brand/channel/store. La
+  // disponibilidad por filtros la enforce checkKpiAvailability del catálogo
+  // (supportedFilters: false en las 3); aquí disparamos siempre que el período
+  // tenga meses provisionales, y el card final lo bloqueará si hay filtros.
   const dsoQ = useQuery({
-    queryKey: dsoKeys.byPeriod(filters.year, provisionalMonths, brandCanonical, channelKey),
-    queryFn: () => fetchDSO({
-      year: filters.year,
-      months: provisionalMonths,
-      brand: brandCanonical,
-      channel: channelKey,
-    }),
-    enabled: provisionalMonths.length > 0 && !filters.store,
+    queryKey: dsoKeys.byPeriod(filters.year, provisionalMonths),
+    queryFn: () => fetchDSO({ year: filters.year, months: provisionalMonths }),
+    enabled: provisionalMonths.length > 0,
     staleTime: STALE_30MIN,
     gcTime: GC_60MIN,
     retry: 1,
@@ -650,10 +649,16 @@ export function useKpiDashboard(): UseKpiDashboardResult {
       },
       {
         id: "dso", title: "DSO (días cobranza)",
-        value: dsoQ.data ? calcDSO(dsoQ.data.cuentasPorCobrar, dsoQ.data.ventasDiariasPromedio) : 0,
+        value: dsoQ.data?.dataAvailable
+          ? calcDSO(dsoQ.data.cuentasPorCobrar, dsoQ.data.ventasDiariasPromedio)
+          : 0,
         unit: "days", yoyPct: null, positiveDirection: "down",
         isLoading: dsoQ.isLoading,
-        error: dsoQ.error ? "Error al cargar CxC" : undefined,
+        error: dsoQ.error
+          ? "Error al cargar CxC"
+          : (!dsoQ.isLoading && dsoQ.data && !dsoQ.data.dataAvailable
+              ? "Sin ventas registradas en el período (mv_ventas_diarias se actualiza con un día de retraso)"
+              : undefined),
       },
       {
         id: "customer_recurrence", title: "Recurrencia clientes",

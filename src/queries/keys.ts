@@ -130,10 +130,12 @@ export const sthKeys = {
 };
 
 // ─── DSO (Days Sales Outstanding) ────────────────────────────────────────────
+// Solo a nivel total — c_cobrar no tiene brand/channel/store, así que no
+// segmentamos. El filtro por período es la única dimensión.
 export const dsoKeys = {
   all: ["dso"] as const,
-  byPeriod: (year: number, months: number[], brand?: string | null, channel?: string | null) =>
-    ["dso", "byPeriod", year, [...months].sort((a, b) => a - b).join(","), brand ?? "total", channel ?? "total"] as const,
+  byPeriod: (year: number, months: number[]) =>
+    ["dso", "byPeriod", year, [...months].sort((a, b) => a - b).join(",")] as const,
 };
 
 // ─── Recurrence (clientes que compran ≥2 veces) ─────────────────────────────
