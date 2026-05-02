@@ -20,6 +20,18 @@ const CORS_HEADERS = {
 };
 
 const DEFAULT_PASSWORD = Deno.env.get("DEFAULT_USER_PASSWORD") ?? "fenix123";
+const APP_URL = Deno.env.get("APP_URL") ?? "https://fenixbrands.subestatica.com";
+
+// UUID fijo del template "Invitación de Usuario" en sam_templates
+// (ver sql/027_user_invitation_template.sql).
+const INVITATION_TEMPLATE_ID = "10000000-0000-4000-a000-000000000001";
+
+const ROLE_LABELS: Record<string, string> = {
+  super_user: "Super Usuario",
+  gerencia: "Gerencia",
+  negocio: "Negocio",
+  vendedor: "Vendedor",
+};
 
 function jsonOk(data: unknown) {
   return new Response(JSON.stringify(data), {
@@ -90,7 +102,7 @@ Deno.serve(async (req) => {
     const { action } = body;
 
     if (action === "create") {
-      return await handleCreate(serviceClient, body);
+      return await handleCreate(serviceClient, body, authHeader, supabaseUrl);
     }
 
     if (action === "delete") {
@@ -112,6 +124,8 @@ Deno.serve(async (req) => {
 async function handleCreate(
   client: SupabaseClient,
   body: { email: string; fullName: string; role: string; channelScope: string | null; cargo: string | null; vendedorCodigo?: number | null },
+  authHeader: string,
+  supabaseUrl: string,
 ) {
   const { email, fullName, role, cargo } = body;
   // Guard: JSON "null" string → real null (prevents storing 'null'/'NULL' as text)
@@ -166,7 +180,64 @@ async function handleCreate(
     return jsonError(`Error actualizando perfil: ${updateError.message}`);
   }
 
-  return jsonOk({ id: userId, email });
+  // 3. Enviar email de invitación (soft-fail).
+  //    Si falla, el usuario queda creado igual y devolvemos emailSent=false
+  //    para que la UI le muestre al admin que tiene que avisar manualmente.
+  const { sent: emailSent, error: emailError } = await sendInvitationEmail({
+    authHeader,
+    supabaseUrl,
+    email,
+    fullName,
+    role: role || "negocio",
+  });
+
+  return jsonOk({ id: userId, email, emailSent, emailError });
+}
+
+// ─── Send invitation email (soft-fail) ───────────────────────────────────────
+
+async function sendInvitationEmail(args: {
+  authHeader: string;
+  supabaseUrl: string;
+  email: string;
+  fullName: string;
+  role: string;
+}): Promise<{ sent: boolean; error: string | null }> {
+  try {
+    const res = await fetch(`${args.supabaseUrl}/functions/v1/send-email`, {
+      method: "POST",
+      headers: {
+        Authorization: args.authHeader,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        template_id: INVITATION_TEMPLATE_ID,
+        to_email: args.email,
+        is_test: false,
+        variables: {
+          full_name: args.fullName,
+          email: args.email,
+          temporary_password: DEFAULT_PASSWORD,
+          login_url: `${APP_URL}/signin`,
+          role_label: ROLE_LABELS[args.role] ?? "Usuario",
+        },
+      }),
+    });
+
+    if (res.ok) {
+      console.log(`[manage-user] Invitation email sent to ${args.email}`);
+      return { sent: true, error: null };
+    }
+
+    const errBody = await res.json().catch(() => null);
+    const msg = errBody?.error ?? `send-email returned ${res.status}`;
+    console.error(`[manage-user] Invitation email failed for ${args.email}: ${msg}`);
+    return { sent: false, error: msg };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "send-email fetch error";
+    console.error(`[manage-user] Invitation email exception for ${args.email}: ${msg}`);
+    return { sent: false, error: msg };
+  }
 }
 
 // ─── Delete ──────────────────────────────────────────────────────────────────

@@ -40,6 +40,14 @@ export interface CreateUserData {
   vendedorCodigo:  number | null;
 }
 
+export interface CreateUserResult {
+  id:         string;
+  email:      string;
+  // El user queda creado siempre (si emailSent=false el admin tiene que avisar manualmente).
+  emailSent:  boolean;
+  emailError: string | null;
+}
+
 // ─── Fetch ───────────────────────────────────────────────────────────────────
 
 export async function fetchAllProfiles(): Promise<UserProfileRow[]> {
@@ -131,7 +139,7 @@ async function invokeManageUser(
 
 export async function createUser(
   data: CreateUserData,
-): Promise<{ id: string; email: string }> {
+): Promise<CreateUserResult> {
   const result = await invokeManageUser({
     action: "create",
     email: data.email,
@@ -140,9 +148,14 @@ export async function createUser(
     channelScope: data.channelScope,
     cargo: data.cargo,
     vendedorCodigo: data.vendedorCodigo,
-  });
+  }) as Partial<CreateUserResult> & { id: string; email: string };
 
-  return result as { id: string; email: string };
+  return {
+    id: result.id,
+    email: result.email,
+    emailSent: result.emailSent ?? false,
+    emailError: result.emailError ?? null,
+  };
 }
 
 // ─── Delete (via Edge Function) ──────────────────────────────────────────────

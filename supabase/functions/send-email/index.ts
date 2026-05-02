@@ -26,6 +26,15 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 20;
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
+// ── Whitelist de templates permitidos ────────────────────────────────────────
+// Marketing/SAM está desactivado temporalmente (2026-04-30). Solo el template
+// de invitación de usuario está habilitado. Para reactivar otros flujos:
+//   1. Sumar el UUID del template a ALLOWED_TEMPLATE_IDS, o
+//   2. Comentar el bloque de validación más abajo.
+// El UUID viene de sql/027_user_invitation_template.sql y de manage-user EF.
+const INVITATION_TEMPLATE_ID = "10000000-0000-4000-a000-000000000001";
+const ALLOWED_TEMPLATE_IDS = new Set<string>([INVITATION_TEMPLATE_ID]);
+
 function isRateLimited(userId: string): boolean {
   const now = Date.now();
   const entry = rateLimitMap.get(userId);
@@ -58,6 +67,10 @@ interface SendEmailBody {
   is_test?: boolean;
   override_subject?: string | null;
   override_body?: string | null;
+  // Variables transaccionales (no-marketing). Si vienen, se mergean por encima
+  // de las variables de cliente. Permite reutilizar send-email para emails
+  // como "invitación de usuario" sin acoplarse a sam_customers.
+  variables?: Record<string, string>;
 }
 
 Deno.serve(async (req) => {
@@ -113,6 +126,15 @@ Deno.serve(async (req) => {
     if (!template_id) return jsonError("template_id requerido");
     if (!to_email || !to_email.includes("@")) return jsonError("to_email inválido");
 
+    // ── Whitelist: solo templates explícitamente permitidos ─────────────────
+    if (!ALLOWED_TEMPLATE_IDS.has(template_id)) {
+      console.warn(`[send-email] Blocked template_id=${template_id} (not in whitelist)`);
+      return jsonError(
+        "Este template está temporalmente desactivado. Solo emails de invitación están habilitados.",
+        403,
+      );
+    }
+
     // ── Fetch template ──────────────────────────────────────────────────────
     const { data: template, error: templateError } = await serviceClient
       .from("sam_templates")
@@ -166,6 +188,15 @@ Deno.serve(async (req) => {
           : "";
         variables.tier = customer.tier ?? "";
         variables.erp_code = customer.erp_code ?? "";
+      }
+    }
+
+    // ── Variables transaccionales del caller (override / extras) ────────────
+    if (body.variables && typeof body.variables === "object") {
+      for (const [key, value] of Object.entries(body.variables)) {
+        if (typeof value === "string") {
+          variables[key] = value;
+        }
       }
     }
 

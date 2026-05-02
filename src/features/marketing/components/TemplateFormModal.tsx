@@ -2,11 +2,26 @@
  * features/marketing/components/TemplateFormModal.tsx
  *
  * Modal para crear/editar template de mensaje SAM.
+ *
+ * NOTA — Envío de prueba deshabilitado (2026-04-30):
+ * El módulo Marketing/SAM aún no está validado en producción para envíos
+ * reales. Por ahora la única integración con Resend en uso es el email de
+ * invitación de usuarios. El botón "Enviar prueba" se renderiza como
+ * `disabled` con copy explicativo.
+ *
+ * Para reactivar:
+ *   1. Volver a importar `useEmailConfig` desde `../hooks/useEmailConfig`.
+ *   2. Restaurar los hooks `useEmailConfig`, `selectedRecipient`,
+ *      `testFeedback` y la función `handleSendTest` (ver `git log`
+ *      en este archivo previo a 2026-04-30).
+ *   3. Reemplazar el bloque "Envío de prueba deshabilitado" por el botón
+ *      activo que llama a `handleSendTest`.
+ *   4. Sumar el template_id correspondiente a `ALLOWED_TEMPLATE_IDS` en
+ *      `supabase/functions/send-email/index.ts` y redeployar.
  */
 import { useState } from "react";
 import { Spinner } from "@/components/ui/spinner/Spinner";
 import type { SamTemplate, MessageChannel } from "@/domain/marketing/types";
-import { useEmailConfig } from "../hooks/useEmailConfig";
 
 interface Props {
   template: SamTemplate | null;
@@ -25,10 +40,6 @@ export function TemplateFormModal({ template, onSave, onClose, isSaving }: Props
   const [subject, setSubject] = useState(template?.subject ?? "");
   const [body, setBody] = useState(template?.body ?? "");
 
-  const { config, sendTest, isSending, sendError } = useEmailConfig();
-  const [selectedRecipient, setSelectedRecipient] = useState<string>("");
-  const [testFeedback, setTestFeedback] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const data = {
@@ -45,46 +56,6 @@ export function TemplateFormModal({ template, onSave, onClose, isSaving }: Props
   function insertVariable(v: string) {
     setBody((prev) => prev + v);
   }
-
-  async function handleSendTest() {
-    setTestFeedback(null);
-    const recipients = config?.testRecipients ?? [];
-    if (recipients.length === 0) {
-      setTestFeedback({
-        kind: "err",
-        msg: "Configurá al menos un destinatario de prueba en la pestaña Configuración.",
-      });
-      return;
-    }
-    const toEmail = selectedRecipient || recipients[0];
-
-    // Si hay cambios no guardados necesitamos un template_id. Exige guardar primero.
-    if (!isEdit) {
-      setTestFeedback({
-        kind: "err",
-        msg: "Guardá el template primero para poder enviar una prueba.",
-      });
-      return;
-    }
-
-    try {
-      await sendTest({
-        templateId: template!.id,
-        toEmail,
-        overrideSubject: subject || null,
-        overrideBody: body,
-      });
-      setTestFeedback({ kind: "ok", msg: `Enviado a ${toEmail}. Revisá la bandeja.` });
-    } catch (e) {
-      setTestFeedback({
-        kind: "err",
-        msg: e instanceof Error ? e.message : "Error enviando prueba",
-      });
-    }
-  }
-
-  const canSendTest = channel === "email" && isEdit && !!body && !!subject;
-  const recipients = config?.testRecipients ?? [];
 
   // Simple preview replacing variables with sample data
   const preview = body
@@ -156,54 +127,31 @@ export function TemplateFormModal({ template, onSave, onClose, isSaving }: Props
             </div>
           )}
 
-          {/* Enviar prueba (solo email, solo templates guardados) */}
+          {/* Enviar prueba — deshabilitado mientras Marketing/Resend no está validado en producción.
+              Para reactivar: quitar la prop `disabled` forzada y los textos de "deshabilitado",
+              y agregar este template_id a la whitelist en supabase/functions/send-email/index.ts. */}
           {channel === "email" && isEdit && (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
+            <div className="rounded-lg border border-warning-200 bg-warning-50 p-3 dark:border-warning-500/30 dark:bg-warning-500/10">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex-1">
-                  <div className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    Enviar prueba
+                  <div className="text-xs font-medium text-warning-700 dark:text-warning-400">
+                    Envío de prueba deshabilitado
                   </div>
-                  <div className="text-[11px] text-gray-500 dark:text-gray-400">
-                    Manda este template (con los cambios actuales como override) a uno de los
-                    destinatarios configurados.
+                  <div className="text-[11px] text-warning-700/80 dark:text-warning-300/80">
+                    El envío de emails desde Marketing está temporalmente desactivado. Por ahora
+                    solo se envían correos de invitación a usuarios nuevos.
                   </div>
                 </div>
-                {recipients.length > 1 && (
-                  <select
-                    aria-label="Destinatario de prueba"
-                    value={selectedRecipient || recipients[0]}
-                    onChange={(e) => setSelectedRecipient(e.target.value)}
-                    className="rounded-lg border border-gray-200 px-2 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  >
-                    {recipients.map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
-                )}
                 <button
                   type="button"
-                  onClick={handleSendTest}
-                  disabled={!canSendTest || isSending}
-                  className="inline-flex items-center gap-2 rounded-lg border border-brand-500 bg-white px-3 py-1.5 text-xs font-medium text-brand-500 hover:bg-brand-50 disabled:opacity-50 dark:bg-transparent dark:hover:bg-brand-500/10"
+                  disabled
+                  aria-disabled="true"
+                  title="Envío de prueba deshabilitado temporalmente"
+                  className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-400 opacity-60 dark:border-gray-700 dark:bg-transparent dark:text-gray-500"
                 >
-                  {isSending && <Spinner />}
                   Enviar prueba
                 </button>
               </div>
-              {(testFeedback || sendError) && (
-                <p
-                  className={`mt-2 text-[11px] ${
-                    testFeedback?.kind === "ok"
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-red-600 dark:text-red-400"
-                  }`}
-                >
-                  {testFeedback?.msg ?? sendError}
-                </p>
-              )}
             </div>
           )}
 
