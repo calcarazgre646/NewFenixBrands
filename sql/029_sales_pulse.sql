@@ -32,7 +32,7 @@ CREATE OR REPLACE FUNCTION compute_sales_pulse(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, pg_catalog
 AS $$
 DECLARE
   v_week_end          date;
