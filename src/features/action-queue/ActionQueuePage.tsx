@@ -18,6 +18,8 @@ import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessT
 import { ActionsTab } from "./components/ActionsTab";
 import { PurchasePlanningTab } from "./components/PurchasePlanningTab";
 import { ActionQueueLoader } from "./components/ActionQueueLoader";
+import DeclareViewFilters from "@/components/filters/DeclareViewFilters";
+import { ALL_FILTERS_ENABLED } from "@/domain/filters/viewSupport";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -46,6 +48,9 @@ export default function ActionQueuePage() {
 
   return (
     <div className="space-y-6">
+      {/* Filtros globales viven en el AppHeader. */}
+      <DeclareViewFilters support={ALL_FILTERS_ENABLED} />
+
       {/* ═══ TAB BAR — full width, top ═══ */}
       <div className="flex items-center justify-between border-b border-gray-200 px-4 sm:px-6 dark:border-gray-700">
         <div className="flex items-center gap-0" role="tablist">

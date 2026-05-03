@@ -3,7 +3,7 @@
  *
  * Página de Precios.
  * Lectura: PVP, PVM, Costo y márgenes MBP/MBM por SKU Comercial.
- * Filtro de marca: global vía header (useFilters).
+ * Filtros globales: solo Marca aplica (canal y período no, ver FILTER_REASONS).
  * Agrupación visual: Marca → SKU en la tabla.
  */
 import { useMemo } from "react";
@@ -14,6 +14,8 @@ import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessT
 import { calcMBP, calcMBM, isNovelty, MIN_VALID_PRICE } from "@/domain/pricing/calculations";
 import { usePricing } from "./hooks/usePricing";
 import { PricingTable } from "./components/PricingTable";
+import DeclareViewFilters from "@/components/filters/DeclareViewFilters";
+import { FILTER_REASONS } from "@/domain/filters/viewSupport";
 
 export default function PricingPage() {
   const { lastDataDay, lastDataMonth, getStatus, getInfo } = useDataFreshness();
@@ -58,11 +60,20 @@ export default function PricingPage() {
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
+      {/* Filtros globales viven en el AppHeader. */}
+      <DeclareViewFilters
+        support={{
+          brand: true,
+          channel: FILTER_REASONS.noChannelPricing,
+          period: FILTER_REASONS.noPeriodSnapshot,
+        }}
+      />
+
       <div className="exec-anim-1 flex flex-wrap items-center gap-3">
         <div>
           <h1 className="text-lg font-bold text-gray-900 dark:text-white">Precios</h1>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            PVP, PVM y márgenes por SKU comercial. Filtrá por marca desde el header.
+            PVP, PVM y márgenes por SKU comercial.
           </p>
         </div>
         <div className="ml-auto">

@@ -4,7 +4,7 @@
  * Header principal: toggle sidebar, indicador de datos frescos,
  * toggle de tema, notificaciones, menú de usuario.
  */
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useContext } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useSidebar } from "@/hooks/useSidebar";
 import { useScrollDirection } from "@/hooks/useScrollDirection";
@@ -12,12 +12,13 @@ import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
 import NotificationDropdown from "@/components/header/NotificationDropdown";
 import { useFilters } from "@/hooks/useFilters";
 import { useAuth } from "@/hooks/useAuth";
-import FilterBar from "@/components/filters/FilterBar";
 import GlobalSearch from "@/components/search/GlobalSearch";
+import GlobalFilters from "@/components/filters/GlobalFilters";
+import { ViewFilterSupportContext } from "@/context/viewFilters.context";
 
 const AppHeader: React.FC = () => {
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
-  const { filters, resetFilters } = useFilters();
+  const { resetFilters } = useFilters();
   const { user, profile, logout } = useAuth();
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -42,8 +43,8 @@ const AppHeader: React.FC = () => {
     navigate("/signin");
   }
   const scrollDir = useScrollDirection();
-  const hideFilters = pathname === "/calendario" || pathname === "/usuarios" || pathname === "/comisiones" || pathname === "/ayuda";
-  const hasInPageFilters = pathname === "/" || pathname === "/ventas" || pathname === "/acciones" || pathname === "/logistica" || pathname === "/depositos" || pathname === "/precios" || pathname.startsWith("/kpis");
+  const viewFilters = useContext(ViewFilterSupportContext);
+  const filtersSupport = viewFilters?.support ?? null;
 
   // Header visible when: at top, scrolling up, or mobile sidebar is open
   const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
@@ -136,25 +137,14 @@ const AppHeader: React.FC = () => {
           </div>
         </div>
 
-        {/* Desktop: toggle sidebar */}
-        <button
-          className="hidden lg:flex items-center justify-center w-10 h-10 text-gray-500 border border-gray-200 rounded-lg dark:border-gray-800 dark:text-gray-400 lg:h-11 lg:w-11"
-          onClick={handleToggle}
-          aria-label="Toggle Sidebar"
-        >
-          <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
-            <path fillRule="evenodd" clipRule="evenodd" d="M0.583252 1C0.583252 0.585788 0.919038 0.25 1.33325 0.25H14.6666C15.0808 0.25 15.4166 0.585786 15.4166 1C15.4166 1.41421 15.0808 1.75 14.6666 1.75L1.33325 1.75C0.919038 1.75 0.583252 1.41422 0.583252 1ZM0.583252 11C0.583252 10.5858 0.919038 10.25 1.33325 10.25L14.6666 10.25C15.0808 10.25 15.4166 10.5858 15.4166 11C15.4166 11.4142 15.0808 11.75 14.6666 11.75L1.33325 11.75C0.919038 11.75 0.583252 11.4142 0.583252 11ZM1.33325 5.25C0.919038 5.25 0.583252 5.58579 0.583252 6C0.583252 6.41421 0.919038 6.75 1.33325 6.75L7.99992 6.75C8.41413 6.75 8.74992 6.41421 8.74992 6C8.74992 5.58579 8.41413 5.25 7.99992 5.25L1.33325 5.25Z" fill="currentColor" />
-          </svg>
-        </button>
-
-        {/* Filtros globales — solo desktop, oculto en calendario */}
-        {!hideFilters && (
-          <div className="hidden lg:flex lg:items-center lg:gap-3 lg:flex-1">
-            <FilterBar filters={filters} compact brandOnly={hasInPageFilters} />
-            {pathname === "/acciones" && <ChannelSelector />}
-          </div>
-        )}
-        {hideFilters && <div className="hidden lg:flex lg:flex-1" />}
+        {/* Filtros globales — alineados a la izquierda del header desktop.
+            (Toggle del sidebar removido del header: el del propio sidebar ya
+            cumple esa función y libera ~50px para los 3 dropdowns.)
+            Cada Page declara su `support` con <DeclareViewFilters>. Las vistas
+            que no lo declaran no muestran la barra. */}
+        <div className="hidden lg:flex lg:items-center lg:gap-3 lg:flex-1">
+          {filtersSupport && <GlobalFilters support={filtersSupport} />}
+        </div>
 
         {/* Buscador global — desktop */}
         <div className="hidden lg:block">
@@ -182,46 +172,8 @@ const AppHeader: React.FC = () => {
       </div>
 
     </header>
-
-    {/* Brand chips — deshabilitado, ahora los filtros están in-page en ExecutiveFilters */}
-    {/* {!hideFilters && (
-      <div className={`mobile-brand-chips px-4 py-2.5 bg-gray-50/50 dark:bg-gray-900/50 lg:hidden sticky top-[40px] ${isMobileOpen ? "sidebar-open" : ""}`} style={{ zIndex: 1 }}>
-        <FilterBar filters={filters} compact brandOnly />
-      </div>
-    )} */}
     </>
   );
 };
-
-function ChannelSelector() {
-  const { filters, setChannel } = useFilters();
-  const channel = filters.channel;
-  return (
-    <div className="inline-flex overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-      <button
-        type="button"
-        onClick={() => setChannel("b2c")}
-        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-          channel === "b2c"
-            ? "bg-brand-500 font-semibold text-white"
-            : "bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
-        }`}
-      >
-        B2C
-      </button>
-      <button
-        type="button"
-        onClick={() => setChannel("b2b")}
-        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-          channel === "b2b"
-            ? "bg-brand-500 font-semibold text-white"
-            : "bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
-        }`}
-      >
-        B2B
-      </button>
-    </div>
-  );
-}
 
 export default AppHeader;

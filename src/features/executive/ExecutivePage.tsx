@@ -21,7 +21,8 @@ import type { ApexOptions } from "apexcharts";
 import ResponsiveChart from "@/components/ui/chart/ResponsiveChart";
 import { useExecutiveData } from "./hooks/useExecutiveData";
 import { InsightBar } from "./components/InsightBar";
-import { ExecutiveFilters } from "./components/ExecutiveFilters";
+import DeclareViewFilters from "@/components/filters/DeclareViewFilters";
+import { ALL_FILTERS_ENABLED } from "@/domain/filters/viewSupport";
 import { MonthlyPerformanceTable } from "./components/MonthlyPerformanceTable";
 import { MONTH_SHORT, MONTH_FULL } from "@/domain/period/helpers";
 import { formatPYGSuffix, formatCompact, formatChange } from "@/utils/format";
@@ -349,27 +350,24 @@ export default function ExecutivePage() {
 
       {/* ═══ TIER 1: COMMAND CENTER ═══════════════════════════════════════ */}
 
-      {/* Context Filters (in-page, hierarchical) */}
+      {/* Filtros globales viven en el AppHeader (junto al buscador). */}
+      <DeclareViewFilters support={ALL_FILTERS_ENABLED} />
+
+      {/* Indicador de freshness — debajo del header */}
       <div className="exec-anim-1">
-        {/* Desktop: datos izq + filtros der en una fila */}
-        <div className="hidden lg:flex lg:flex-wrap lg:items-center lg:justify-between lg:gap-3">
+        <div className="hidden lg:flex lg:justify-end">
           <DataFreshnessTag
             lastDataDay={lastDataDay}
             lastDataMonth={lastDataMonth}
             freshnessStatus={salesFreshness}
             refreshedAt={salesRefreshedAt}
           />
-          <ExecutiveFilters />
         </div>
-        {/* Mobile: datos arriba centrado + filtros abajo */}
-        <div className="flex flex-col gap-2 lg:hidden">
-          <div className="text-center">
-            <DataFreshnessTag
-              lastDataDay={lastDataDay}
-              lastDataMonth={lastDataMonth}
-            />
-          </div>
-          <ExecutiveFilters />
+        <div className="text-center lg:hidden">
+          <DataFreshnessTag
+            lastDataDay={lastDataDay}
+            lastDataMonth={lastDataMonth}
+          />
         </div>
       </div>
 

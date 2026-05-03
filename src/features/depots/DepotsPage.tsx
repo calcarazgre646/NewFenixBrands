@@ -24,6 +24,8 @@ import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
 import { formatNumber } from "@/utils/format";
 import { useDataFreshness } from "@/hooks/useDataFreshness";
 import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
+import DeclareViewFilters from "@/components/filters/DeclareViewFilters";
+import { FILTER_REASONS } from "@/domain/filters/viewSupport";
 
 export default function DepotsPage() {
   const { lastDataDay, lastDataMonth, getStatus, getInfo } = useDataFreshness();
@@ -43,6 +45,15 @@ export default function DepotsPage() {
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
+
+      {/* Filtros globales viven en el AppHeader. */}
+      <DeclareViewFilters
+        support={{
+          brand: true,
+          channel: FILTER_REASONS.noChannelInventory,
+          period: FILTER_REASONS.noPeriodDepots,
+        }}
+      />
 
       {/* ═══ Context bar ═══ */}
       <div className="exec-anim-1 flex flex-wrap items-center gap-3">

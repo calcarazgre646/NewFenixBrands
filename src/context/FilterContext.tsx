@@ -34,20 +34,9 @@ import {
   type ChannelFilter,
   type PeriodFilter,
 } from "@/domain/filters/types";
+import { scopeToChannel } from "@/domain/filters/scopeMapping";
 import { useAuth } from "@/hooks/useAuth";
 import { FilterContext, type FilterContextValue } from "@/context/filter.context";
-
-/**
- * Mapea channel_scope del perfil al ChannelFilter de la app.
- * Los sub-canales B2B se mapean a "b2b" por ahora (la data no distingue sub-canales aún).
- */
-function scopeToChannel(scope: string | null): ChannelFilter {
-  if (!scope || scope === "total") return "total";
-  if (scope === "b2c") return "b2c";
-  // b2b_mayoristas y b2b_utp → ambos son "b2b" en la data actual
-  if (scope.startsWith("b2b")) return "b2b";
-  return "total";
-}
 
 export function FilterProvider({ children }: { children: ReactNode }) {
   const { permissions } = useAuth();

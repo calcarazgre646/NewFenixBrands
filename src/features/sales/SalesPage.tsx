@@ -5,7 +5,7 @@
  *
  * Estructura (consistente con ExecutivePage):
  *   TIER 1 (Command Center — above the fold):
- *     - Filtros in-page (DataFreshnessTag + ExecutiveFilters)
+ *     - DataFreshnessTag (filtros globales viven en el AppHeader)
  *     - Grid 3 columnas: Hero Ventas + 2 mini-cards + Margen Bruto
  *   TIER 2 (Analytics — below fold):
  *     - Cards independientes: Marcas, Canal, Comportamiento, SKUs
@@ -28,7 +28,8 @@ import { Card } from "@/components/ui/card/Card";
 import { Skeleton } from "@/components/ui/skeleton/Skeleton";
 import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
 import { useDataFreshness } from "@/hooks/useDataFreshness";
-import { ExecutiveFilters } from "@/features/executive/components/ExecutiveFilters";
+import DeclareViewFilters from "@/components/filters/DeclareViewFilters";
+import { ALL_FILTERS_ENABLED } from "@/domain/filters/viewSupport";
 
 
 // ─── Main component ──────────────────────────────────────────────────────────
@@ -148,16 +149,18 @@ export default function SalesPage() {
 
       {/* ═══ TIER 1: COMMAND CENTER ═══════════════════════════════════════ */}
 
-      {/* Filtros — consistente con Inicio */}
+      {/* Filtros globales viven en el AppHeader. */}
+      <DeclareViewFilters support={ALL_FILTERS_ENABLED} />
+
+      {/* Indicador de freshness */}
       <div className="exec-anim-1">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
           <DataFreshnessTag
             lastDataDay={lastDataDay}
             lastDataMonth={lastDataMonth}
             freshnessStatus={salesFreshness}
             refreshedAt={salesRefreshedAt}
           />
-          <ExecutiveFilters />
         </div>
       </div>
 
