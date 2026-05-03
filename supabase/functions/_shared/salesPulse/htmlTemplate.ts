@@ -21,8 +21,8 @@ import {
   formatDelta,
   formatPyg,
   freshnessAge,
-} from "./narrative";
-import type { SalesPulsePayload } from "./types";
+} from "./narrative.ts";
+import type { SalesPulsePayload } from "./types.ts";
 
 interface RenderOptions {
   /** Link a la app para el botón "Ver detalle". Default: producción Vercel. */

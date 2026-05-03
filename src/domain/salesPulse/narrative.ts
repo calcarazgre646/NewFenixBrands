@@ -22,7 +22,7 @@ import type {
   SalesPulseSales,
   SkuMover,
   StoreMover,
-} from "./types";
+} from "./types.ts";
 
 // ─── Helpers numéricos defensivos ───────────────────────────────────────────
 
