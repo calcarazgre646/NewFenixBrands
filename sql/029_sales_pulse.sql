@@ -146,7 +146,7 @@ BEGIN
     WHERE make_date(year, month, day) BETWEEN v_prev_week_start AND v_prev_week_end
     GROUP BY brand
   )
-  SELECT COALESCE(jsonb_agg(row_to_jsonb(t) ORDER BY t.wow_pct DESC NULLS LAST) FILTER (WHERE rn <= 3), '[]'::jsonb)
+  SELECT COALESCE(jsonb_agg(pg_catalog.row_to_jsonb(t) ORDER BY t.wow_pct DESC NULLS LAST) FILTER (WHERE rn <= 3), '[]'::jsonb)
   INTO v_movers_brands
   FROM (
     SELECT
@@ -169,7 +169,7 @@ BEGIN
   -- ── Bloque 3.b: top 3 SKUs por neto de la semana ───────────────────────
   -- Va contra fjdhstvta1 directo (mv_ventas_diarias no tiene SKU).
   -- Cruza con dim_maestro_comercial vía sku_comercial para descripción.
-  SELECT COALESCE(jsonb_agg(row_to_jsonb(t) ORDER BY t.neto DESC) FILTER (WHERE rn <= 3), '[]'::jsonb)
+  SELECT COALESCE(jsonb_agg(pg_catalog.row_to_jsonb(t) ORDER BY t.neto DESC) FILTER (WHERE rn <= 3), '[]'::jsonb)
   INTO v_movers_skus
   FROM (
     SELECT
@@ -205,7 +205,7 @@ BEGIN
       AND make_date(v_año::int, v_mes::int, v_dia::int) BETWEEN v_prev_week_start AND v_prev_week_end
     GROUP BY UPPER(TRIM(v_sucursal_final))
   )
-  SELECT COALESCE(jsonb_agg(row_to_jsonb(t) ORDER BY t.wow_pct DESC NULLS LAST) FILTER (WHERE rn <= 3), '[]'::jsonb)
+  SELECT COALESCE(jsonb_agg(pg_catalog.row_to_jsonb(t) ORDER BY t.wow_pct DESC NULLS LAST) FILTER (WHERE rn <= 3), '[]'::jsonb)
   INTO v_movers_stores
   FROM (
     SELECT
@@ -265,7 +265,7 @@ BEGIN
   SELECT jsonb_build_object(
     'count', (SELECT COUNT(*) FROM novelty),
     'examples', COALESCE((
-      SELECT jsonb_agg(row_to_jsonb(e))
+      SELECT jsonb_agg(pg_catalog.row_to_jsonb(e))
       FROM (
         SELECT sku_comercial AS sku, description, brand, units_in_depot AS units
         FROM novelty ORDER BY units_in_depot DESC LIMIT 3
@@ -293,7 +293,7 @@ BEGIN
   SELECT jsonb_build_object(
     'count', (SELECT COUNT(*) FROM low_sth),
     'examples', COALESCE((
-      SELECT jsonb_agg(row_to_jsonb(e))
+      SELECT jsonb_agg(pg_catalog.row_to_jsonb(e))
       FROM (
         SELECT sku, description, brand, units_received, sth_pct
         FROM low_sth ORDER BY sth_pct ASC, units_received DESC LIMIT 3
@@ -339,7 +339,7 @@ BEGIN
   FROM mv_ventas_diarias;
 
   SELECT jsonb_build_object(
-    'sources', COALESCE(jsonb_agg(row_to_jsonb(f) ORDER BY f.source_name), '[]'::jsonb),
+    'sources', COALESCE(jsonb_agg(pg_catalog.row_to_jsonb(f) ORDER BY f.source_name), '[]'::jsonb),
     'max_data_date', v_max_data_date
   )
   INTO v_freshness
