@@ -19,6 +19,7 @@ import {
   GroupIcon,
   MegaphoneIcon,
   TableIcon,
+  EnvelopeIcon,
 } from "@/icons";
 import { useSidebar } from "@/hooks/useSidebar";
 import { useAuth } from "@/hooks/useAuth";
@@ -49,8 +50,9 @@ const ALL_ANALYSIS_NAV: NavItem[] = [
 ];
 
 const ALL_CONTROL_NAV: NavItem[] = [
-  { path: "/comisiones", label: "Comisiones", icon: <DollarLineIcon />, allowed: (p) => p.canViewCommissions },
-  { path: "/usuarios",   label: "Usuarios",   icon: <GroupIcon />,      allowed: (p) => p.canManageUsers },
+  { path: "/comisiones",   label: "Comisiones",   icon: <DollarLineIcon />, allowed: (p) => p.canViewCommissions },
+  { path: "/usuarios",     label: "Usuarios",     icon: <GroupIcon />,      allowed: (p) => p.canManageUsers },
+  { path: "/sales-pulse",  label: "Sales Pulse",  icon: <EnvelopeIcon />,   allowed: (p) => p.canManageSalesPulse },
 ];
 
 const AppSidebar: React.FC = () => {

@@ -61,6 +61,8 @@ export interface Permissions {
   canViewMarketing: boolean;
   /** Editar config del remitente de email marketing (from alias, destinatarios de prueba) */
   canConfigureEmailSender: boolean;
+  /** Gestionar el Sales Pulse Semanal: subscribers, historial y envíos manuales */
+  canManageSalesPulse: boolean;
   /** Gestión (futuro SettingsPage) */
   canManageUsers:   boolean;
   /** Filtro de canal bloqueado (usuario no puede cambiarlo) */
@@ -101,6 +103,7 @@ export function derivePermissions(profile: UserProfile | null): Permissions {
       canViewMyProjection: isSeller,
       canViewMarketing: true,
       canConfigureEmailSender: role === "super_user",
+      canManageSalesPulse: role === "super_user",
       canManageUsers:   role === "super_user",
       isChannelLocked:  false,
       lockedChannel:    null,
@@ -130,6 +133,7 @@ export function derivePermissions(profile: UserProfile | null): Permissions {
       canViewMyProjection: true,
       canViewMarketing: false,
       canConfigureEmailSender: false,
+      canManageSalesPulse: false,
       canManageUsers:   false,
       isChannelLocked:  true,
       lockedChannel:    null,
@@ -152,6 +156,7 @@ export function derivePermissions(profile: UserProfile | null): Permissions {
     canViewMyProjection: isSeller,
     canViewMarketing: false,
     canConfigureEmailSender: false,
+    canManageSalesPulse: false,
     canManageUsers:   false,
     isChannelLocked:  channelScope !== "total" && channelScope !== null,
     lockedChannel:    channelScope,
@@ -174,6 +179,7 @@ const EMPTY_PERMISSIONS: Permissions = {
   canViewMyProjection: false,
   canViewMarketing: false,
   canConfigureEmailSender: false,
+  canManageSalesPulse: false,
   canManageUsers:   false,
   isChannelLocked:  true,
   lockedChannel:    null,
