@@ -21,7 +21,7 @@ import type { ApexOptions } from "apexcharts";
 import ResponsiveChart from "@/components/ui/chart/ResponsiveChart";
 import { useExecutiveData } from "./hooks/useExecutiveData";
 import { InsightBar } from "./components/InsightBar";
-import { ExecutiveFilters } from "./components/ExecutiveFilters";
+import GlobalFilters from "@/components/filters/GlobalFilters";
 import { MonthlyPerformanceTable } from "./components/MonthlyPerformanceTable";
 import { MONTH_SHORT, MONTH_FULL } from "@/domain/period/helpers";
 import { formatPYGSuffix, formatCompact, formatChange } from "@/utils/format";
@@ -349,27 +349,29 @@ export default function ExecutivePage() {
 
       {/* ═══ TIER 1: COMMAND CENTER ═══════════════════════════════════════ */}
 
-      {/* Context Filters (in-page, hierarchical) */}
+      {/* Filtros globales (in-page, top-left, consistente entre vistas) */}
       <div className="exec-anim-1">
-        {/* Desktop: datos izq + filtros der en una fila */}
-        <div className="hidden lg:flex lg:flex-wrap lg:items-center lg:justify-between lg:gap-3">
-          <DataFreshnessTag
-            lastDataDay={lastDataDay}
-            lastDataMonth={lastDataMonth}
-            freshnessStatus={salesFreshness}
-            refreshedAt={salesRefreshedAt}
-          />
-          <ExecutiveFilters />
+        {/* Desktop: filtros izq + freshness der */}
+        <div className="hidden lg:flex lg:flex-wrap lg:items-center lg:gap-3">
+          <GlobalFilters />
+          <div className="ml-auto">
+            <DataFreshnessTag
+              lastDataDay={lastDataDay}
+              lastDataMonth={lastDataMonth}
+              freshnessStatus={salesFreshness}
+              refreshedAt={salesRefreshedAt}
+            />
+          </div>
         </div>
-        {/* Mobile: datos arriba centrado + filtros abajo */}
+        {/* Mobile: filtros arriba + freshness centrada */}
         <div className="flex flex-col gap-2 lg:hidden">
+          <GlobalFilters />
           <div className="text-center">
             <DataFreshnessTag
               lastDataDay={lastDataDay}
               lastDataMonth={lastDataMonth}
             />
           </div>
-          <ExecutiveFilters />
         </div>
       </div>
 

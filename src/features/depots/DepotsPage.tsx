@@ -24,6 +24,8 @@ import { PageSkeleton } from "@/components/ui/skeleton/Skeleton";
 import { formatNumber } from "@/utils/format";
 import { useDataFreshness } from "@/hooks/useDataFreshness";
 import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
+import GlobalFilters from "@/components/filters/GlobalFilters";
+import { FILTER_REASONS } from "@/domain/filters/viewSupport";
 
 export default function DepotsPage() {
   const { lastDataDay, lastDataMonth, getStatus, getInfo } = useDataFreshness();
@@ -44,8 +46,15 @@ export default function DepotsPage() {
   return (
     <div className="space-y-5 p-4 sm:p-6">
 
-      {/* ═══ Context bar ═══ */}
+      {/* ═══ Filtros globales (top-left) + Context bar ═══ */}
       <div className="exec-anim-1 flex flex-wrap items-center gap-3">
+        <GlobalFilters
+          support={{
+            brand: true,
+            channel: FILTER_REASONS.noChannelInventory,
+            period: FILTER_REASONS.noPeriodDepots,
+          }}
+        />
         <DataFreshnessTag
           lastDataDay={lastDataDay}
           lastDataMonth={lastDataMonth}

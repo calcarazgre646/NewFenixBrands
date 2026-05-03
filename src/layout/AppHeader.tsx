@@ -12,12 +12,11 @@ import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
 import NotificationDropdown from "@/components/header/NotificationDropdown";
 import { useFilters } from "@/hooks/useFilters";
 import { useAuth } from "@/hooks/useAuth";
-import FilterBar from "@/components/filters/FilterBar";
 import GlobalSearch from "@/components/search/GlobalSearch";
 
 const AppHeader: React.FC = () => {
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
-  const { filters, resetFilters } = useFilters();
+  const { resetFilters } = useFilters();
   const { user, profile, logout } = useAuth();
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -42,8 +41,6 @@ const AppHeader: React.FC = () => {
     navigate("/signin");
   }
   const scrollDir = useScrollDirection();
-  const hideFilters = pathname === "/calendario" || pathname === "/usuarios" || pathname === "/comisiones" || pathname === "/ayuda";
-  const hasInPageFilters = pathname === "/" || pathname === "/ventas" || pathname === "/acciones" || pathname === "/logistica" || pathname === "/depositos" || pathname === "/precios" || pathname.startsWith("/kpis");
 
   // Header visible when: at top, scrolling up, or mobile sidebar is open
   const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
@@ -147,14 +144,9 @@ const AppHeader: React.FC = () => {
           </svg>
         </button>
 
-        {/* Filtros globales — solo desktop, oculto en calendario */}
-        {!hideFilters && (
-          <div className="hidden lg:flex lg:items-center lg:gap-3 lg:flex-1">
-            <FilterBar filters={filters} compact brandOnly={hasInPageFilters} />
-            {pathname === "/acciones" && <ChannelSelector />}
-          </div>
-        )}
-        {hideFilters && <div className="hidden lg:flex lg:flex-1" />}
+        {/* Spacer para empujar las acciones a la derecha — los filtros viven
+            ahora in-page (top-left de cada Page) vía <GlobalFilters />. */}
+        <div className="hidden lg:flex lg:flex-1" />
 
         {/* Buscador global — desktop */}
         <div className="hidden lg:block">
@@ -182,46 +174,8 @@ const AppHeader: React.FC = () => {
       </div>
 
     </header>
-
-    {/* Brand chips — deshabilitado, ahora los filtros están in-page en ExecutiveFilters */}
-    {/* {!hideFilters && (
-      <div className={`mobile-brand-chips px-4 py-2.5 bg-gray-50/50 dark:bg-gray-900/50 lg:hidden sticky top-[40px] ${isMobileOpen ? "sidebar-open" : ""}`} style={{ zIndex: 1 }}>
-        <FilterBar filters={filters} compact brandOnly />
-      </div>
-    )} */}
     </>
   );
 };
-
-function ChannelSelector() {
-  const { filters, setChannel } = useFilters();
-  const channel = filters.channel;
-  return (
-    <div className="inline-flex overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-      <button
-        type="button"
-        onClick={() => setChannel("b2c")}
-        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-          channel === "b2c"
-            ? "bg-brand-500 font-semibold text-white"
-            : "bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
-        }`}
-      >
-        B2C
-      </button>
-      <button
-        type="button"
-        onClick={() => setChannel("b2b")}
-        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-          channel === "b2b"
-            ? "bg-brand-500 font-semibold text-white"
-            : "bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
-        }`}
-      >
-        B2B
-      </button>
-    </div>
-  );
-}
 
 export default AppHeader;

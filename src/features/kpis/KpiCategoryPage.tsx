@@ -18,7 +18,7 @@ import {
 } from "@/domain/kpis/categories";
 import type { KpiCategory } from "@/domain/kpis/types";
 import type { FenixPst } from "@/domain/kpis/fenix.catalog";
-import { ExecutiveFilters } from "@/features/executive/components/ExecutiveFilters";
+import GlobalFilters from "@/components/filters/GlobalFilters";
 
 // ─── Filter options ──────────────────────────────────────────────────────────
 
@@ -64,24 +64,24 @@ export default function KpiCategoryPage() {
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
-      {/* Breadcrumb + Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="mb-2 flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
-            <Link to="/kpis" className="hover:text-brand-500">Dashboard</Link>
-            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            <span className="text-gray-600 dark:text-gray-400">{category.shortName}</span>
-          </div>
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-            {category.name}
-          </h1>
-          <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-            {category.description}
-          </p>
+      {/* Filtros globales — top-left, consistente entre vistas */}
+      <GlobalFilters />
+
+      {/* Breadcrumb + Header de categoría */}
+      <div>
+        <div className="mb-2 flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+          <Link to="/kpis" className="hover:text-brand-500">Dashboard</Link>
+          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          <span className="text-gray-600 dark:text-gray-400">{category.shortName}</span>
         </div>
-        <ExecutiveFilters />
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+          {category.name}
+        </h1>
+        <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+          {category.description}
+        </p>
       </div>
 
       {/* Stats Bar + Filter */}

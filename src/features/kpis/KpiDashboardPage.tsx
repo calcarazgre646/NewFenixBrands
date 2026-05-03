@@ -7,7 +7,7 @@
 import { Link } from "react-router";
 import { useKpiDashboard } from "./hooks/useKpiDashboard";
 import { KpiCard, LockedKpiCard } from "./components/KpiCard";
-import { ExecutiveFilters } from "@/features/executive/components/ExecutiveFilters";
+import GlobalFilters from "@/components/filters/GlobalFilters";
 import {
   getOrderedCategories,
   getKpisByCategory,
@@ -24,15 +24,17 @@ export default function KpiDashboardPage() {
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <DataFreshnessTag
-          lastDataDay={lastDataDay}
-          lastDataMonth={lastDataMonth}
-          freshnessStatus={getStatus("mv_ventas_diarias")}
-          refreshedAt={getInfo("mv_ventas_diarias")?.refreshedAt}
-        />
-        <ExecutiveFilters />
+      {/* Header: filtros globales (izq) + freshness (der) */}
+      <div className="flex flex-wrap items-center gap-3">
+        <GlobalFilters />
+        <div className="ml-auto">
+          <DataFreshnessTag
+            lastDataDay={lastDataDay}
+            lastDataMonth={lastDataMonth}
+            freshnessStatus={getStatus("mv_ventas_diarias")}
+            refreshedAt={getInfo("mv_ventas_diarias")?.refreshedAt}
+          />
+        </div>
       </div>
 
       {/* KPIs disponibles */}

@@ -5,7 +5,7 @@
  *
  * Estructura (consistente con ExecutivePage):
  *   TIER 1 (Command Center — above the fold):
- *     - Filtros in-page (DataFreshnessTag + ExecutiveFilters)
+ *     - Filtros globales (top-left) + DataFreshnessTag (top-right)
  *     - Grid 3 columnas: Hero Ventas + 2 mini-cards + Margen Bruto
  *   TIER 2 (Analytics — below fold):
  *     - Cards independientes: Marcas, Canal, Comportamiento, SKUs
@@ -28,7 +28,7 @@ import { Card } from "@/components/ui/card/Card";
 import { Skeleton } from "@/components/ui/skeleton/Skeleton";
 import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
 import { useDataFreshness } from "@/hooks/useDataFreshness";
-import { ExecutiveFilters } from "@/features/executive/components/ExecutiveFilters";
+import GlobalFilters from "@/components/filters/GlobalFilters";
 
 
 // ─── Main component ──────────────────────────────────────────────────────────
@@ -148,16 +148,18 @@ export default function SalesPage() {
 
       {/* ═══ TIER 1: COMMAND CENTER ═══════════════════════════════════════ */}
 
-      {/* Filtros — consistente con Inicio */}
+      {/* Filtros globales — top-left, consistente entre vistas */}
       <div className="exec-anim-1">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <DataFreshnessTag
-            lastDataDay={lastDataDay}
-            lastDataMonth={lastDataMonth}
-            freshnessStatus={salesFreshness}
-            refreshedAt={salesRefreshedAt}
-          />
-          <ExecutiveFilters />
+        <div className="flex flex-wrap items-center gap-3">
+          <GlobalFilters />
+          <div className="ml-auto">
+            <DataFreshnessTag
+              lastDataDay={lastDataDay}
+              lastDataMonth={lastDataMonth}
+              freshnessStatus={salesFreshness}
+              refreshedAt={salesRefreshedAt}
+            />
+          </div>
         </div>
       </div>
 

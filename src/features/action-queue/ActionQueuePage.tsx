@@ -18,6 +18,7 @@ import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessT
 import { ActionsTab } from "./components/ActionsTab";
 import { PurchasePlanningTab } from "./components/PurchasePlanningTab";
 import { ActionQueueLoader } from "./components/ActionQueueLoader";
+import GlobalFilters from "@/components/filters/GlobalFilters";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -45,8 +46,21 @@ export default function ActionQueuePage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* ═══ TAB BAR — full width, top ═══ */}
+    <div className="space-y-4">
+      {/* ═══ GLOBAL FILTERS — top-left consistente ═══ */}
+      <div className="flex flex-wrap items-center gap-3 px-4 pt-4 sm:px-6 sm:pt-6">
+        <GlobalFilters />
+        <div className="ml-auto">
+          <DataFreshnessTag
+            lastDataDay={lastDataDay}
+            lastDataMonth={lastDataMonth}
+            freshnessStatus={worstStatus(["mv_stock_tienda", "mv_doi_edad"])}
+            refreshedAt={getInfo("mv_stock_tienda")?.refreshedAt}
+          />
+        </div>
+      </div>
+
+      {/* ═══ TAB BAR — full width ═══ */}
       <div className="flex items-center justify-between border-b border-gray-200 px-4 sm:px-6 dark:border-gray-700">
         <div className="flex items-center gap-0" role="tablist">
           <TabButton
@@ -89,12 +103,6 @@ export default function ActionQueuePage() {
             )}
           </TabButton>
         </div>
-        <DataFreshnessTag
-          lastDataDay={lastDataDay}
-          lastDataMonth={lastDataMonth}
-          freshnessStatus={worstStatus(["mv_stock_tienda", "mv_doi_edad"])}
-          refreshedAt={getInfo("mv_stock_tienda")?.refreshedAt}
-        />
       </div>
 
       {/* ═══ TAB CONTENT ═══ */}

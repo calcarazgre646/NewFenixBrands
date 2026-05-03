@@ -16,6 +16,8 @@ import { LogisticsStatCards } from "./components/LogisticsStatCards";
 import { BrandPipelineCards } from "./components/BrandPipelineCards";
 import { OriginBreakdownCard } from "./components/OriginBreakdownCard";
 import { LogisticsTable } from "./components/LogisticsTable";
+import GlobalFilters from "@/components/filters/GlobalFilters";
+import { FILTER_REASONS } from "@/domain/filters/viewSupport";
 
 import { DEFAULT_LOGISTICS_FRESHNESS } from "@/domain/config/defaults";
 
@@ -62,8 +64,15 @@ export default function LogisticsPage() {
   return (
     <div className="space-y-5 p-4 sm:p-6">
 
-      {/* ═══ TIER 1 — Contexto + Filtros ═══ */}
-      <div className="exec-anim-1 flex flex-wrap items-center gap-2">
+      {/* ═══ TIER 1 — Filtros globales + Contexto + Toggle Activos/Todos ═══ */}
+      <div className="exec-anim-1 flex flex-wrap items-center gap-3">
+        <GlobalFilters
+          support={{
+            brand: true,
+            channel: FILTER_REASONS.noChannelInventory,
+            period: FILTER_REASONS.noPeriodLogistics,
+          }}
+        />
         <DataFreshnessTag
           lastDataDay={lastLoad ? lastLoad.getDate() : null}
           lastDataMonth={lastLoad ? lastLoad.getMonth() + 1 : null}
