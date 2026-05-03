@@ -27,6 +27,30 @@
 
 ---
 
+### F1.5 — Workflow de Aprobación de Markdown (Fase 2 del ticket "Carga de markdown por SKU")
+
+**Que es:** Sub-caso especifico de F1 aplicado solo al markdown manual cargado en `/precios`. El solicitante (gerencia / brand manager) carga un descuento; el Gte Comercial recibe email + bandeja de aprobacion en la app; aprueba o rechaza con comentario; al aprobar el markdown se aplica al precio efectivo.
+
+**Estado:** Fase 1 entregada (PR #55, 04/05/2026) — markdown manual ya se aplica directo. Fase 2 **bloqueada por definiciones de proceso del cliente** (ver `docs/PENDING_CLIENT.md` → "Workflow de aprobación de markdown"):
+1. Quien solicita / quien aprueba / backups / SLA
+2. Vigencia obligatoria o configurable
+3. ¿Aplica también a PVM mayorista?
+4. ¿Conexión con recomendaciones de markdown del lifecycle (`/acciones`)?
+
+**Implementación (cuando se desbloquee):**
+- Status `pending_approval` antes de `is_active=true` (ya reservado en columna `status` de `sku_markdowns`)
+- Edge Function existente `send-email` (Resend) → notificación al Gte Comercial
+- Bandeja de aprobación: nueva ruta o tab dentro de `/precios` con lista de pendientes + botones aprobar/rechazar + comentario
+- Auto-expiración por `valid_until` vencido (cron Supabase o trigger)
+- Métricas: tiempos de respuesta, % aprobados, markdown promedio aprobado
+
+**Prerequisitos:** Definiciones del cliente (4 preguntas en `PENDING_CLIENT.md`).
+**Dificultad:** Baja (infra ya está)
+**Estimación:** 1 sprint (5 días)
+**Impacto:** Alto — cierra el ciclo de control de precios
+
+---
+
 ### F2 — Dashboard de Resultados (RECOMENDADO SEGUNDO)
 
 **Que es:** Panel que mide si las recomendaciones del motor realmente mejoran el negocio. Compara el estado del inventario antes y despues de ejecutar acciones.

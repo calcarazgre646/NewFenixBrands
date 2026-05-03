@@ -1,5 +1,35 @@
 # Datos Pendientes del Cliente (Fenix SA)
 
+## Workflow de aprobación de markdown (Fase 2 del ticket "Carga de markdown por SKU")
+
+**Estado:** Fase 1 entregada (PR #55, 04/05/2026) — gerencia/super-usuario cargan markdown manual por SKU desde `/precios` y se aplica directo. Fase 2 (workflow de aprobación al Gte Comercial) **bloqueada por definiciones de proceso del cliente**.
+
+**Lo que necesitamos de Rodrigo / Gte Comercial:**
+
+1. **¿Quién pide y quién aprueba?**
+   - ¿Solicitan también roles "negocio" (vendedores / brand managers) o solo gerencia?
+   - ¿Quién es el aprobador final? ¿Solo Rodrigo? ¿Hay backup si está fuera?
+   - ¿Cuánto tiempo tiene el aprobador antes de auto-rechazar el pedido?
+
+2. **¿Vigencia obligatoria?**
+   - Hoy se puede dejar abierto y apagarlo a mano. Decidir si todo markdown debe **expirar solo** (ej. 30 días por defecto) o si la duración la elige el solicitante.
+
+3. **¿Aplica también a precio mayorista (PVM)?**
+   - Hoy solo afecta el precio retail (PVP). Si quieren que un descuento también afecte ventas mayoristas, hay que confirmarlo y agregar columna en BD.
+
+4. **¿Conexión con el lifecycle automático?**
+   - El sistema ya recomienda "Markdown Selectivo / Progresivo / Liquidación" en `/acciones` para SKUs con bajo sell-through. Hoy son dos circuitos separados: el sistema recomienda, el humano carga.
+   - ¿Quieren que al aprobar una recomendación de `/acciones` se cargue el markdown automáticamente? ¿O mantener separados?
+
+**Estructura preparada en código (Fase 1):**
+- Tabla `sku_markdowns` ya tiene columna `status` con valores reservados `pending_approval` y `rejected`. No hace falta migration nueva para Fase 2 — solo cambiar el flujo.
+- Edge Function `send-email` (Resend) ya existe — lista para notificar al aprobador.
+- Permiso `canEditPricing` ya separado de `canViewPricing` — base para distinguir solicitantes vs aprobadores.
+
+**Tiempo estimado tras desbloqueo:** ~1 sprint (5 días) para Fase 2 completa: workflow + email + bandeja de aprobación + auto-expiración.
+
+---
+
 ## Lógica inversa exhibición↔depósito (ticket Rodrigo, audio 17/03)
 
 **Pedido:** descontar las ventas desde exhibición usando misma lógica waterfall pero inversa, gateada por capacidad física de cada tienda.
