@@ -128,19 +128,21 @@ CREATE TRIGGER trg_sales_pulse_subscribers_updated
 --   supabase secrets set CRON_SECRET=<random-string> --project-ref uxtzzcjimvapjpkeruwb
 
 
--- ─── 5. Cron job lunes 11:30 UTC = lunes 8:30 AM PYT ────────────────────────
--- Refresca a las :15 de cada hora; a las :30 ya hay data fresca de hoy
--- aunque ETL del lunes raramente trae datos del lunes mismo. El RPC pide
--- semana cerrada (lunes anterior → domingo anterior), así que no depende
--- de data fresca del lunes.
+-- ─── 5. Cron job lunes 17:00 UTC = lunes 14:00 PYT ──────────────────────────
+-- El RPC pide semana cerrada (lunes anterior → domingo anterior), así que no
+-- depende del refresh del lunes. El refresh corre :15 cada hora; al 17:00 UTC
+-- ya hay varias pasadas garantizadas.
 
-SELECT cron.unschedule('sales-pulse-monday') WHERE EXISTS (
-  SELECT 1 FROM cron.job WHERE jobname = 'sales-pulse-monday'
-);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'sales-pulse-monday') THEN
+    PERFORM cron.unschedule('sales-pulse-monday');
+  END IF;
+END $$;
 
 SELECT cron.schedule(
   'sales-pulse-monday',
-  '30 11 * * 1',
+  '0 17 * * 1',
   $$
   SELECT net.http_post(
     url     := 'https://uxtzzcjimvapjpkeruwb.supabase.co/functions/v1/send-sales-pulse',
