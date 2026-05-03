@@ -21,9 +21,12 @@
 
 
 -- ─── 0. Extensiones requeridas ──────────────────────────────────────────────
--- pg_cron ya estaba habilitada (refresh cron en 011). pg_net hace falta para
--- invocar la EF desde adentro del cron.
+-- pg_cron + pg_net en el proyecto AUTH. Ojo: el proyecto data ya tiene pg_cron
+-- (de sql/011_data_freshness.sql) pero el proyecto AUTH puede no tenerla.
+-- Si CREATE EXTENSION pg_cron tira "permission denied", activarla desde el
+-- Dashboard → Database → Extensions → pg_cron → toggle ON, y volver a correr.
 
+CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
 

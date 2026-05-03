@@ -58,6 +58,8 @@ SELECT name, created_at FROM vault.secrets WHERE name = 'sales_pulse_cron_secret
 
 ## D3 — Aplicar migration en proyecto AUTH
 
+> **Pre-paso:** el proyecto AUTH puede no tener `pg_cron` habilitada (a diferencia del proyecto DATA que sí la tiene desde `sql/011_data_freshness.sql`). Si la migration tira `relation "cron.job" does not exist`, activá la extensión desde **Dashboard → Database → Extensions → pg_cron → toggle ON** y volvé a correr la migration completa (es idempotente).
+
 ```sql
 -- En SQL Editor del proyecto uxtzzcjimvapjpkeruwb
 -- Pegar y ejecutar contenido completo de:
