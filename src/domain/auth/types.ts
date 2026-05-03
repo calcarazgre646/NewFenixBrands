@@ -51,6 +51,8 @@ export interface Permissions {
   canViewLogistics: boolean;
   canViewDepots:    boolean;
   canViewPricing:   boolean;
+  /** Editar markdown manual sobre la lista de precios (Promoción por SKU). */
+  canEditPricing:   boolean;
   canViewCalendar:  boolean;
   canViewCommissions: boolean;
   canViewSellerProjections: boolean;
@@ -91,6 +93,7 @@ export function derivePermissions(profile: UserProfile | null): Permissions {
       canViewLogistics: true,
       canViewDepots:    true,
       canViewPricing:   true,
+      canEditPricing:   true,
       canViewCalendar:  true,
       canViewCommissions: true,
       canViewSellerProjections: true,
@@ -117,6 +120,7 @@ export function derivePermissions(profile: UserProfile | null): Permissions {
       canViewLogistics: false,
       canViewDepots:    false,
       canViewPricing:   false,
+      canEditPricing:   false,
       canViewCalendar:  false,
       canViewCommissions: true,
       // Aliases legacy para deep links / código antiguo. Mantienen el mismo
@@ -141,6 +145,7 @@ export function derivePermissions(profile: UserProfile | null): Permissions {
     canViewLogistics: true,
     canViewDepots:    false,
     canViewPricing:   false,
+    canEditPricing:   false,
     canViewCalendar:  true,
     canViewCommissions: false,
     canViewSellerProjections: false,
@@ -162,6 +167,7 @@ const EMPTY_PERMISSIONS: Permissions = {
   canViewLogistics: false,
   canViewDepots:    false,
   canViewPricing:   false,
+  canEditPricing:   false,
   canViewCalendar:  false,
   canViewCommissions: false,
   canViewSellerProjections: false,

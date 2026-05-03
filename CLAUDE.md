@@ -27,13 +27,15 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 6 | UsersPage (`/usuarios`) — CRUD completo, Edge Function, cambio contraseña | ✅ COMPLETO + AUDITADO |
 | 6B | DepotsPage (`/depositos`) — Filtros estandarizados in-page + Novedades/Lanzamientos | ✅ COMPLETO + AUDITADO |
 | 7 | CommissionsPage (`/comisiones`) — Comisiones por vendedor, datos reales, 8 escalas | ⚠️ PARCIAL — Mayorista/UTP esperando datos de Fenix |
-| 8 | PricingPage (`/precios`) — PVP, PVM, costo, MBP%, MBM%, Novedad, Promoción por SKU comercial | ⚠️ PARCIAL — Promoción pendiente fuente de datos |
+| 8 | PricingPage (`/precios`) — PVP, PVM, costo, MBP%, MBM%, Novedad, Promoción editable por SKU comercial (markdown manual) | ✅ COMPLETO Fase 1 — workflow de aprobación pendiente Fase 2 |
 | 9A | ProjectionPage (`/proyeccion-vendedor`) — gerencia/super_user, run-rate lineal + comisiones proyectadas | ✅ COMPLETO |
 | 9B | MyProjectionPage (`/mi-proyeccion`) — vista personal del vendedor (rol nuevo `vendedor`) | ✅ COMPLETO |
 
 **La app corre:** `npm run dev` → http://localhost:5173
 **Tests:** 1841 passing (66 suites) | TSC 0 errores | Build OK | ESLint 0 errores
 **Deploy:** https://fenix-brands-one.vercel.app
+**Sesión 04/05/2026:** Carga de markdown por SKU Fase 1 — columna "Promoción" de `/precios` pasa de placeholder a editable. Tabla nueva `sku_markdowns` en BD AUTH (append-only, RLS write=super_user/gerencia, UNIQUE parcial sobre is_active=true). Domain puro `markdown.ts` (applyMarkdown, calcMbpEffective, validators). Modal con preview de PVP efectivo + MBP% recalculado + nota opcional. PVP en tabla muestra efectivo + original tachado cuando hay markdown. Permiso nuevo `canEditPricing`. Status `pending_approval`/`rejected` reservados para Fase 2 (workflow de aprobación al Gte Comercial). 1856 tests (+17 markdown, −3 getPromotionStatus removido). Doc en `docs/SESION_2026-05-04_MARKDOWN.md`. **Pendiente operador:** aplicar `sql/028_sku_markdowns.sql` en Supabase AUTH + `vercel --prod`.
+
 **Sesión 03/05/2026:** Filtros globales unificados (PR #54) — `<GlobalFilters>` único en `AppHeader` reemplaza FilterBar + ExecutiveFilters + ChannelSelector ad-hoc. UI custom DS-aligned (rounded-xl, shadow-theme-lg, paleta brand-*), trigger compacto (solo valor + caret), sub-canal B2B nesteado con rayita vertical tree-view (Mayorista/UTP indentados). Cada Page declara su soporte vía `<DeclareViewFilters support={...}>` (ViewFilterSupportProvider). Filtros que no aplican: disabled + tooltip explicativo. Toggle desktop del sidebar removido del header (era duplicado). 9 vistas migradas, 4 sin filtros no declaran. +26 tests puros (viewSupport, compositeChannel, scopeMapping). Deploy `fenix-brands-iic6o50xr` aliased a producción. Doc completa en `docs/SESION_2026-05-03_FILTROS_GLOBALES.md` + `docs/AUDIT_GLOBAL_FILTERS_2026-05-03.md` + `docs/REDESIGN_GLOBAL_FILTERS_2026-05-03.md`.
 **Sesión 02/05/2026 (tarde):** Desbloqueo 3 KPIs `/kpis` — sell_through 30/60/90 + DSO + recurrencia clientes (PR #51) + fix DSO bug 17K días (PR #52). Distribución PST: 9→12 core, 2→1 blocked, 8→6 next. Ver `docs/SESION_2026-05-02_KPIS_DESBLOQUEO.md`. Pendiente Derlys: enriquecer `c_cobrar` con brand/channel para habilitar filtros DSO (`docs/PENDING_DERLYS_DSO_ENRICHMENT.md`).
 **Sesión 02/05/2026 (mañana):** Invitación email Resend (PR #48) + GMROI/Rotación habilitados con filtro B2B/B2C (PR #49) + UPT por factura → bloqueado por Derlys
@@ -50,13 +52,14 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 
 ## Proximo trabajo
 
-**Pricing — PARCIAL (22/04/2026):**
-- ✅ Domain puro: `calcMBP`, `calcMBM`, `isNovelty` (reutilizada de depots), `getPromotionStatus` placeholder
-- ✅ Query: `fetchPrices` con dedup por `sku_comercial` + filtro de marca server-side
-- ✅ UI: tabla agrupada Marca→SKU con pagination, stats (SKUs, MBP prom, MBM prom, margen negativo)
-- ✅ Permiso `canViewPricing` (super_user + gerencia), ruta `/precios`, sidebar debajo de Depósitos
-- ⚠️ Promoción Activa: `getPromotionStatus` retorna `{ active: false, markdownPct: 0 }` hasta que el cliente defina fuente de datos (posibles: flag + % en `dim_maestro_comercial`, comparación histórica, tabla dedicada `promociones`)
-- TODO: pedir criterio a Rodrigo/Derlys para Promoción Activa
+**Pricing — COMPLETO Fase 1 (carga manual de markdown, 04/05/2026):**
+- ✅ Domain puro: `calcMBP`, `calcMBM`, `isNovelty`, `applyMarkdown`, `calcMbpEffective`, `validateMarkdownPct`
+- ✅ Query: `fetchPrices` (dedup por sku_comercial + filtro marca) + `fetchActiveMarkdowns` + `upsertMarkdown` (supersede previo + insert) + `clearMarkdown` (mark expired, no DELETE)
+- ✅ UI: tabla con PVP efectivo + tachado del original cuando hay markdown, MBP% recalculado, columna Promoción editable (pill clickeable) o `+ Cargar` con borde dashed
+- ✅ Modal `MarkdownEditModal`: input %, nota opcional, preview de PVP efectivo + MBP%, botón "Quitar promoción"
+- ✅ Permisos `canViewPricing` (ver) + `canEditPricing` (editar) — ambos super_user + gerencia
+- ✅ Audit append-only: tabla `sku_markdowns` con `superseded_at`/`superseded_by`, UNIQUE parcial sobre `is_active=true`
+- ⏸️ Fase 2 (futuro PR): workflow de aprobación Gte Comercial — status `pending_approval` ya reservado en columna `status` + email vía Edge Function existente + bandeja de aprobación + auto-expiración por `valid_until`
 
 **Config editable — COMPLETA (Etapas 2-5):**
 - ✅ Comisiones: 8 escalas en `config_commission_scale` → loop completo BD→UI

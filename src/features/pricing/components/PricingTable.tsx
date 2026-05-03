@@ -5,7 +5,8 @@
  * Sin paginación. Click en header para ordenar (asc/desc).
  */
 import { useState, useMemo } from "react";
-import { calcMBP, calcMBM, isNovelty, getPromotionStatus, MIN_VALID_PRICE } from "@/domain/pricing/calculations";
+import { calcMBP, calcMBM, isNovelty, MIN_VALID_PRICE } from "@/domain/pricing/calculations";
+import { applyMarkdown, type ActiveMarkdown } from "@/domain/pricing/markdown";
 import { formatPYGSuffix } from "@/utils/format";
 import type { PricingRow } from "@/queries/pricing.queries";
 
@@ -23,31 +24,48 @@ type SortKey =
 type SortDir = "asc" | "desc";
 
 interface EnrichedRow extends PricingRow {
+  /** MBP sobre PVP efectivo (post-markdown si hay; idéntico al base si no). */
   mbp: number;
   mbm: number;
   novelty: boolean;
   promoActive: boolean;
   promoMarkdown: number;
+  /** PVP efectivo después de aplicar markdown. Igual a `pvp` si no hay markdown. */
+  pvpEffective: number;
 }
 
-export function PricingTable({ rows }: { rows: PricingRow[] }) {
+interface PricingTableProps {
+  rows: PricingRow[];
+  /** Markdowns activos por sku_comercial. Empty Map si nadie cargó nada. */
+  markdownsBySku: Map<string, ActiveMarkdown>;
+  /** Solo super_user/gerencia editan. Cuando false, la celda es read-only. */
+  canEdit: boolean;
+  /** Click sobre la celda Promoción → abrir modal de edición. */
+  onEditMarkdown?: (row: PricingRow) => void;
+}
+
+export function PricingTable({ rows, markdownsBySku, canEdit, onEditMarkdown }: PricingTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("brand");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const enriched: EnrichedRow[] = useMemo(
     () =>
       rows.map(r => {
-        const promo = getPromotionStatus(r.skuComercial || r.sku);
+        const md = markdownsBySku.get(r.skuComercial || r.sku) ?? null;
+        const pvpEffective = md ? applyMarkdown(r.pvp, md.markdownPct) : r.pvp;
         return {
           ...r,
-          mbp: calcMBP(r.pvp, r.costo),
+          // MBP/MBM sobre el precio efectivo. PVM (mayorista) no recibe
+          // markdown en Fase 1 — se mantiene calc sobre pvm base.
+          mbp: calcMBP(pvpEffective, r.costo),
           mbm: calcMBM(r.pvm, r.costo),
           novelty: isNovelty(r.estComercial),
-          promoActive: promo.active,
-          promoMarkdown: promo.markdownPct,
+          promoActive: md != null,
+          promoMarkdown: md?.markdownPct ?? 0,
+          pvpEffective,
         };
       }),
-    [rows]
+    [rows, markdownsBySku]
   );
 
   const sorted = useMemo(() => {
@@ -116,10 +134,10 @@ export function PricingTable({ rows }: { rows: PricingRow[] }) {
                   {formatPYGSuffix(row.costo)}
                 </td>
                 <td className="whitespace-nowrap px-3 py-2.5 text-right text-[11px] tabular-nums text-gray-900 dark:text-white">
-                  {formatPYGSuffix(row.pvp)}
+                  <PvpCell pvp={row.pvp} effective={row.pvpEffective} hasMarkdown={row.promoActive} />
                 </td>
-                <td className={`whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-semibold tabular-nums ${marginColor(row.mbp, row.pvp, row.costo)}`}>
-                  {formatMargin(row.mbp, row.pvp, row.costo)}
+                <td className={`whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-semibold tabular-nums ${marginColor(row.mbp, row.pvpEffective, row.costo)}`}>
+                  {formatMargin(row.mbp, row.pvpEffective, row.costo)}
                 </td>
                 <td className="whitespace-nowrap px-3 py-2.5 text-right text-[11px] tabular-nums text-gray-700 dark:text-gray-300">
                   {formatPYGSuffix(row.pvm)}
@@ -131,7 +149,12 @@ export function PricingTable({ rows }: { rows: PricingRow[] }) {
                   <YesNoPill yes={row.novelty} />
                 </td>
                 <td className="whitespace-nowrap px-3 py-2.5 text-center">
-                  <PromoCell active={row.promoActive} markdownPct={row.promoMarkdown} />
+                  <PromoCell
+                    active={row.promoActive}
+                    markdownPct={row.promoMarkdown}
+                    canEdit={canEdit}
+                    onClick={canEdit && onEditMarkdown ? () => onEditMarkdown(row) : undefined}
+                  />
                 </td>
               </tr>
             ))}
@@ -238,14 +261,55 @@ function YesNoPill({ yes }: { yes: boolean }) {
   return <span className="text-[11px] text-gray-300 dark:text-gray-600">No</span>;
 }
 
-function PromoCell({ active, markdownPct }: { active: boolean; markdownPct: number }) {
-  if (!active) {
-    return <span className="text-[11px] text-gray-300 dark:text-gray-600">No</span>;
+function PvpCell({ pvp, effective, hasMarkdown }: { pvp: number; effective: number; hasMarkdown: boolean }) {
+  if (!hasMarkdown || effective === pvp) {
+    return <span className="tabular-nums">{formatPYGSuffix(pvp)}</span>;
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-warning-50 px-2 py-0.5 text-[10px] font-semibold text-warning-700 dark:bg-warning-500/20 dark:text-warning-300">
-      Sí
-      <span className="tabular-nums opacity-80">−{markdownPct.toFixed(0)}%</span>
+    <span className="inline-flex flex-col items-end leading-tight">
+      <span className="tabular-nums font-semibold text-warning-700 dark:text-warning-300">{formatPYGSuffix(effective)}</span>
+      <span className="tabular-nums text-[10px] text-gray-400 line-through dark:text-gray-500">{formatPYGSuffix(pvp)}</span>
     </span>
+  );
+}
+
+interface PromoCellProps {
+  active: boolean;
+  markdownPct: number;
+  canEdit: boolean;
+  onClick?: () => void;
+}
+
+function PromoCell({ active, markdownPct, canEdit, onClick }: PromoCellProps) {
+  if (active) {
+    const pill = (
+      <span className="inline-flex items-center gap-1 rounded-full bg-warning-50 px-2 py-0.5 text-[10px] font-semibold text-warning-700 dark:bg-warning-500/20 dark:text-warning-300">
+        −{markdownPct.toFixed(0)}%
+      </span>
+    );
+    if (!canEdit) return pill;
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="cursor-pointer rounded-full transition-opacity hover:opacity-80"
+        title="Editar promoción"
+      >
+        {pill}
+      </button>
+    );
+  }
+  if (!canEdit) {
+    return <span className="text-[11px] text-gray-300 dark:text-gray-600">—</span>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-[10px] font-medium text-gray-500 transition-colors hover:border-brand-500 hover:text-brand-600 dark:border-gray-600 dark:text-gray-400 dark:hover:border-brand-400 dark:hover:text-brand-300"
+      title="Cargar promoción"
+    >
+      + Cargar
+    </button>
   );
 }

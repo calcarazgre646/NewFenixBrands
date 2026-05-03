@@ -59,17 +59,5 @@ export interface PromotionStatus {
   markdownPct: number;
 }
 
-/**
- * Estado de promoción de un SKU.
- *
- * TODO: pendiente definición de cliente (Rodrigo/Derlys).
- * No hay fuente de datos todavía. Opciones posibles:
- *   - Campo nuevo en dim_maestro_comercial (flag promo + %)
- *   - Comparar precio actual vs histórico para inferir markdown
- *   - Tabla/vista "promociones" con vigencia por SKU
- *
- * Hasta definir criterio: retorna estado neutro (sin promo).
- */
-export function getPromotionStatus(_sku: string): PromotionStatus {
-  return { active: false, markdownPct: 0 };
-}
+/** Estado neutro — usado cuando un SKU no tiene markdown cargado. */
+export const NO_PROMOTION: PromotionStatus = { active: false, markdownPct: 0 };

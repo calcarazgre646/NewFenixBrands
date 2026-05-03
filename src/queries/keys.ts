@@ -229,6 +229,13 @@ export const pricingKeys = {
   list: (brand?: string | null) => ["pricing", "list", brand ?? "total"] as const,
 };
 
+// ─── Markdowns (cargados manualmente sobre la lista de precios) ─────────────
+export const markdownKeys = {
+  all: ["markdowns"] as const,
+  active: (brand?: string | null) => ["markdowns", "active", brand ?? "total"] as const,
+  history: (skuComercial: string) => ["markdowns", "history", skuComercial] as const,
+};
+
 // ─── Calendar Events: SKUs, stores, allocation proposals ─────────────────────
 export const eventKeys = {
   all: ["events"] as const,
