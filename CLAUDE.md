@@ -11,7 +11,7 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 
 ---
 
-## Estado actual (actualizado 02/05/2026)
+## Estado actual (actualizado 03/05/2026)
 
 | Fase | Feature | Estado |
 |------|---------|--------|
@@ -32,8 +32,9 @@ Reconstruccion completa de FenixBrands (plataforma analytics para empresa de ind
 | 9B | MyProjectionPage (`/mi-proyeccion`) — vista personal del vendedor (rol nuevo `vendedor`) | ✅ COMPLETO |
 
 **La app corre:** `npm run dev` → http://localhost:5173
-**Tests:** 1814 passing (63 suites) | TSC 0 errores | Build OK | ESLint 0 errores
+**Tests:** 1841 passing (66 suites) | TSC 0 errores | Build OK | ESLint 0 errores
 **Deploy:** https://fenix-brands-one.vercel.app
+**Sesión 03/05/2026:** Filtros globales unificados (PR #54) — `<GlobalFilters>` único en `AppHeader` reemplaza FilterBar + ExecutiveFilters + ChannelSelector ad-hoc. UI custom DS-aligned (rounded-xl, shadow-theme-lg, paleta brand-*), trigger compacto (solo valor + caret), sub-canal B2B nesteado con rayita vertical tree-view (Mayorista/UTP indentados). Cada Page declara su soporte vía `<DeclareViewFilters support={...}>` (ViewFilterSupportProvider). Filtros que no aplican: disabled + tooltip explicativo. Toggle desktop del sidebar removido del header (era duplicado). 9 vistas migradas, 4 sin filtros no declaran. +26 tests puros (viewSupport, compositeChannel, scopeMapping). Deploy `fenix-brands-iic6o50xr` aliased a producción. Doc completa en `docs/SESION_2026-05-03_FILTROS_GLOBALES.md` + `docs/AUDIT_GLOBAL_FILTERS_2026-05-03.md` + `docs/REDESIGN_GLOBAL_FILTERS_2026-05-03.md`.
 **Sesión 02/05/2026 (tarde):** Desbloqueo 3 KPIs `/kpis` — sell_through 30/60/90 + DSO + recurrencia clientes (PR #51) + fix DSO bug 17K días (PR #52). Distribución PST: 9→12 core, 2→1 blocked, 8→6 next. Ver `docs/SESION_2026-05-02_KPIS_DESBLOQUEO.md`. Pendiente Derlys: enriquecer `c_cobrar` con brand/channel para habilitar filtros DSO (`docs/PENDING_DERLYS_DSO_ENRICHMENT.md`).
 **Sesión 02/05/2026 (mañana):** Invitación email Resend (PR #48) + GMROI/Rotación habilitados con filtro B2B/B2C (PR #49) + UPT por factura → bloqueado por Derlys
 **Sesión 29/04/2026:** Sell-through por SKU en `/ventas` (PR #45)
