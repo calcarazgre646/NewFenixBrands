@@ -63,6 +63,10 @@ DECLARE
   v_target_table      text;
   v_target_query      text;
 BEGIN
+  -- Subir el timeout local del RPC: el bloque que toca fjdhstvta1 (280K filas)
+  -- puede pasar el default de 8s del request via PostgREST.
+  PERFORM set_config('statement_timeout', '60s', true);
+
   v_week_end        := p_week_start + interval '6 days';
   v_prev_week_start := p_week_start - interval '7 days';
   v_prev_week_end   := p_week_start - interval '1 day';
@@ -181,6 +185,11 @@ BEGIN
       ROW_NUMBER() OVER (ORDER BY SUM(f.v_vtasimpu) DESC) AS rn
     FROM fjdhstvta1 f
     WHERE f.v_canal_venta IN ('B2C', 'B2B')
+      AND f.v_año::int = EXTRACT(year FROM p_week_start)::int
+      AND f.v_mes::int = ANY (ARRAY[
+            EXTRACT(month FROM p_week_start)::int,
+            EXTRACT(month FROM v_week_end)::int
+          ])
       AND make_date(f.v_año::int, f.v_mes::int, f.v_dia::int) BETWEEN p_week_start AND v_week_end
     GROUP BY f.v_sku
     HAVING SUM(f.v_vtasimpu) > 0
@@ -194,6 +203,11 @@ BEGIN
            SUM(v_vtasimpu) AS neto_week
     FROM fjdhstvta1
     WHERE v_canal_venta IN ('B2C', 'B2B')
+      AND v_año::int = EXTRACT(year FROM p_week_start)::int
+      AND v_mes::int = ANY (ARRAY[
+            EXTRACT(month FROM p_week_start)::int,
+            EXTRACT(month FROM v_week_end)::int
+          ])
       AND make_date(v_año::int, v_mes::int, v_dia::int) BETWEEN p_week_start AND v_week_end
     GROUP BY UPPER(TRIM(v_sucursal_final)), v_canal_venta
   ),
@@ -202,6 +216,11 @@ BEGIN
            SUM(v_vtasimpu) AS neto_prev
     FROM fjdhstvta1
     WHERE v_canal_venta IN ('B2C', 'B2B')
+      AND v_año::int = EXTRACT(year FROM v_prev_week_start)::int
+      AND v_mes::int = ANY (ARRAY[
+            EXTRACT(month FROM v_prev_week_start)::int,
+            EXTRACT(month FROM v_prev_week_end)::int
+          ])
       AND make_date(v_año::int, v_mes::int, v_dia::int) BETWEEN v_prev_week_start AND v_prev_week_end
     GROUP BY UPPER(TRIM(v_sucursal_final))
   )
