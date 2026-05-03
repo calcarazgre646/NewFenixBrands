@@ -35,17 +35,17 @@ describe("renderSalesPulseHtml", () => {
     expect(html.startsWith("<!DOCTYPE html>")).toBe(true);
     expect(html).toContain("<html lang=\"es\">");
     expect(html).toContain("Sales Pulse · Sem 18");
-    expect(html).toContain("Pulso de la semana");
-    expect(html).toContain("Cumplimiento mensual");
+    expect(html).toContain("Semana 18");
+    expect(html).toContain("Cumplimiento de Mayo 2026");
     expect(html).toContain("Top movers");
     expect(html).toContain("Alertas accionables");
   });
 
   it("incluye headline con fechas y deltas", () => {
     const html = renderSalesPulseHtml(FIXTURE_FULL, { now: NOW });
-    expect(html).toContain("Semana 18 (27 abr – 3 may)");
-    expect(html).toContain("▲ +23.0% WoW");
-    expect(html).toContain("▲ +36.7% YoY");
+    expect(html).toContain("Semana 18 · 27 abr – 3 may");
+    expect(html).toContain("WoW ▲ +23.0%");
+    expect(html).toContain("YoY ▲ +36.7%");
   });
 
   it("incluye los 3 bloques de movers cuando hay datos", () => {
@@ -59,7 +59,7 @@ describe("renderSalesPulseHtml", () => {
   it("renderea las 3 alertas con tono correcto", () => {
     const html = renderSalesPulseHtml(FIXTURE_FULL, { now: NOW });
     expect(html).toContain("Novedades sin distribuir");
-    expect(html).toContain("2 SKUs en depósito");
+    expect(html).toContain("2 SKUs viven en depósito");
     expect(html).toContain("Sell-through bajo");
     expect(html).toContain("Días de cobranza (DSO)");
     expect(html).toContain("42 días");
@@ -86,10 +86,11 @@ describe("renderSalesPulseHtml", () => {
                  run_rate_projection: 0, gap_to_target: 0 },
     });
     const html = renderSalesPulseHtml(noTarget, { now: NOW });
-    expect(html).toContain("sin meta cargada");
-    // No barra de progreso cuando no hay meta
-    expect(html).not.toMatch(/background:#15803d;width:/);
-    expect(html).not.toMatch(/background:#1d4ed8;width:/);
+    expect(html).toContain("meta sin cargar");
+    expect(html).toContain("Sin cargar");
+    // Sin barra de progreso cuando no hay meta (no aparece tabla con width%)
+    expect(html).not.toMatch(/background:#465fff;width:\d/);
+    expect(html).not.toMatch(/background:#027a48;width:\d/);
   });
 
   it("escapa HTML en datos del usuario", () => {

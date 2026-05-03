@@ -3,12 +3,15 @@
  *
  * Render del Sales Pulse a HTML inline-styled para email.
  *
- * Decisiones de diseño:
- *   - Layout tabular (compatibilidad con Outlook + Gmail).
- *   - CSS 100% inline; no dependemos de <style>.
- *   - Tipografía sistema (no font hosting).
- *   - Ancho 640px máximo, mobile-friendly por colapso natural de tablas.
- *   - Sin imágenes externas — el "logo" es texto compuesto.
+ * Voz visual: replica los tokens del dashboard NewFenixBrands
+ *   - Paleta: brand #465fff, gray 50/200/600/900, success/error/warning del DS.
+ *   - StatCard pattern: label uppercase tracking-widest 11px gray-400 +
+ *     valor bold tabular-nums + sub-label gray-500 12px.
+ *   - Cards: border 1px gray-200, rounded 16px, padding 20px, fondo blanco
+ *     sobre gray-50 page.
+ *   - Tipografía sistema (Inter-ish via -apple-system fallback) sin font hosting.
+ *   - Layout tabular para compatibilidad Outlook + Gmail.
+ *   - 100% CSS inline; sin <style> blocks; sin imágenes externas.
  *
  * Función PURA: input → string. Sin DOM, sin Resend, sin BD.
  */
@@ -33,20 +36,368 @@ interface RenderOptions {
 
 const APP_URL_DEFAULT = "https://fenix-brands-one.vercel.app";
 
-const COLORS = {
-  bg:        "#f4f5f7",
-  card:      "#ffffff",
-  border:    "#e5e7eb",
-  text:      "#111827",
-  muted:     "#6b7280",
-  brand:     "#1d4ed8",
-  good:      "#15803d",
-  bad:       "#b91c1c",
-  warn:      "#b45309",
-  goodBg:    "#ecfdf5",
-  badBg:     "#fef2f2",
-  warnBg:    "#fffbeb",
+// ─── Design tokens (espejo de src/index.css) ────────────────────────────────
+const C = {
+  bgPage:        "#f9fafb",   // gray-50
+  bgCard:        "#ffffff",
+  bgSubtle:      "#f2f4f7",   // gray-100
+  border:        "#e4e7ec",   // gray-200
+  borderStrong:  "#d0d5dd",   // gray-300
+  textPrimary:   "#101828",   // gray-900
+  textBody:      "#344054",   // gray-700
+  textMuted:     "#475467",   // gray-600
+  textSubtle:    "#667085",   // gray-500
+  textTiny:      "#98a2b3",   // gray-400
+  brand:         "#465fff",   // brand-500
+  brandHover:    "#3641f5",   // brand-600
+  brand50:       "#ecf3ff",   // brand-50
+  brand700:      "#2a31d8",
+  successBg:     "#ecfdf3",   // success-50
+  successFg:     "#027a48",   // success-700
+  successBorder: "#a6f4c5",   // success-200
+  errorBg:       "#fef3f2",   // error-50
+  errorFg:       "#b42318",   // error-700
+  errorBorder:   "#fecdca",   // error-200
+  warningBg:     "#fffaeb",   // warning-50
+  warningFg:     "#b54708",   // warning-700
+  warningBorder: "#fedf89",   // warning-200
 };
+
+const FONT_STACK =
+  "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,'Helvetica Neue',Arial,sans-serif";
+
+// ─── Helpers presentación ───────────────────────────────────────────────────
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[ch]!);
+}
+const esc = escapeHtml;
+
+function truncate(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return `${s.slice(0, max - 1)}…`;
+}
+
+// ─── Atomic components ──────────────────────────────────────────────────────
+
+/** Pequeño label uppercase tracking-widest, 11px (igual al StatCard). */
+function tinyLabel(text: string, color: string = C.textTiny): string {
+  return `<div style="font-family:${FONT_STACK};font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:${color};">${esc(text)}</div>`;
+}
+
+/** Pill de delta WoW/YoY (verde/rojo/gris). */
+function deltaPill(label: string, pct: number | null): string {
+  if (pct === null) {
+    return `<span style="display:inline-block;background:${C.bgSubtle};color:${C.textMuted};font-size:11px;font-weight:600;padding:4px 10px;border-radius:999px;margin-right:6px;">${esc(label)} —</span>`;
+  }
+  const positive = pct >= 0;
+  const bg = positive ? C.successBg : C.errorBg;
+  const fg = positive ? C.successFg : C.errorFg;
+  const sign = positive ? "▲" : "▼";
+  const num = positive ? `+${pct.toFixed(1)}` : pct.toFixed(1);
+  return `<span style="display:inline-block;background:${bg};color:${fg};font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;margin-right:6px;letter-spacing:0.2px;">${esc(label)} ${sign} ${num}%</span>`;
+}
+
+/** Mini-StatCard tipo dashboard: label tiny + valor grande tabular-nums + sub. */
+function miniStat(label: string, value: string, sub?: string): string {
+  return `<td valign="top" style="background:${C.bgCard};border:1px solid ${C.border};border-radius:14px;padding:14px 16px;width:25%;">
+    ${tinyLabel(label)}
+    <div style="font-family:${FONT_STACK};font-size:18px;font-weight:700;line-height:1.2;color:${C.textPrimary};margin-top:6px;font-variant-numeric:tabular-nums;">${esc(value)}</div>
+    ${sub ? `<div style="font-family:${FONT_STACK};font-size:11px;color:${C.textSubtle};margin-top:4px;line-height:1.4;">${esc(sub)}</div>` : ""}
+  </td>`;
+}
+
+/** Card section wrapper con header + slot. */
+function sectionCard(headerLabel: string, headerSub: string | null, body: string): string {
+  return `<tr><td style="background:${C.bgCard};border:1px solid ${C.border};border-radius:16px;padding:24px;">
+    <div style="margin-bottom:18px;">
+      ${tinyLabel(headerLabel)}
+      ${headerSub ? `<div style="font-family:${FONT_STACK};font-size:13px;color:${C.textMuted};margin-top:4px;line-height:1.5;">${esc(headerSub)}</div>` : ""}
+    </div>
+    ${body}
+  </td></tr>`;
+}
+
+function spacer(px: number): string {
+  return `<tr><td style="height:${px}px;line-height:${px}px;font-size:0;">&nbsp;</td></tr>`;
+}
+
+/** Barra de progreso (tipo Tailwind utility con tabla). */
+function progressBar(pct: number): string {
+  const fill = Math.max(0, Math.min(100, pct));
+  const fg = fill >= 100 ? C.successFg : fill >= 70 ? C.brand : fill >= 40 ? C.warningFg : C.errorFg;
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:${C.bgSubtle};border-radius:999px;height:8px;overflow:hidden;">
+    <tr><td style="background:${fg};width:${fill}%;height:8px;font-size:0;line-height:0;">&nbsp;</td><td style="width:${100 - fill}%;font-size:0;line-height:0;">&nbsp;</td></tr>
+  </table>`;
+}
+
+// ─── Sub-renders ────────────────────────────────────────────────────────────
+
+function header(p: SalesPulsePayload): string {
+  return `<tr><td style="padding:0 4px 16px 4px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td style="vertical-align:middle;">
+          <span style="display:inline-block;width:28px;height:28px;border-radius:8px;background:${C.brand};vertical-align:middle;text-align:center;line-height:28px;color:#fff;font-family:${FONT_STACK};font-weight:700;font-size:14px;">F</span>
+          <span style="font-family:${FONT_STACK};font-size:15px;font-weight:700;color:${C.textPrimary};margin-left:10px;letter-spacing:-0.2px;">FenixBrands</span>
+          <span style="font-family:${FONT_STACK};font-size:11px;font-weight:600;color:${C.textTiny};margin-left:8px;letter-spacing:1px;text-transform:uppercase;">· Dash IA</span>
+        </td>
+        <td align="right" style="font-family:${FONT_STACK};font-size:11px;color:${C.textSubtle};letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">
+          Sales Pulse · Sem ${p.isoWeek}
+        </td>
+      </tr>
+    </table>
+  </td></tr>`;
+}
+
+function heroCard(p: SalesPulsePayload): string {
+  const moment = classifyMomentum(p.sales.wowPct);
+  const dateRange = `${formatDateShort(p.weekStart)} – ${formatDateShort(p.weekEnd)}`;
+  return `<tr><td style="background:${C.bgCard};border:1px solid ${C.border};border-radius:16px;padding:28px 28px 24px 28px;">
+    ${tinyLabel(`Semana ${p.isoWeek} · ${dateRange}`, C.brand700)}
+    <div style="font-family:${FONT_STACK};font-size:34px;font-weight:800;line-height:1.1;color:${C.textPrimary};margin-top:12px;letter-spacing:-0.8px;font-variant-numeric:tabular-nums;">
+      ${esc(formatPyg(p.sales.netoWeek))}
+    </div>
+    <div style="margin-top:14px;">
+      ${deltaPill("WoW", p.sales.wowPct)}${deltaPill("YoY", p.sales.yoyPct)}
+    </div>
+    <div style="font-family:${FONT_STACK};font-size:13px;color:${C.textMuted};margin-top:16px;line-height:1.5;">
+      La actividad <strong style="color:${C.textPrimary};">${esc(moment)}</strong> respecto a la semana anterior${
+        p.sales.unitsWeek > 0
+          ? ` · <strong style="color:${C.textPrimary};font-variant-numeric:tabular-nums;">${p.sales.unitsWeek.toLocaleString("es-PY")}</strong> unidades movidas`
+          : ""
+      }.
+    </div>
+  </td></tr>`;
+}
+
+function monthlyCard(p: SalesPulsePayload): string {
+  const m = p.monthly;
+  const pct = m.monthProgressPct ?? 0;
+  const hasTarget = m.monthTarget > 0;
+
+  const subtitle = hasTarget
+    ? `${pct.toFixed(0)}% del target — proyectamos cerrar en ${formatPyg(m.runRateProjection)}${m.gapToTarget > 0 ? `, faltan ${formatPyg(m.gapToTarget)}` : ", superamos la meta"}`
+    : `${formatPyg(m.monthActual)} acumulado · meta sin cargar`;
+
+  const bar = hasTarget ? `
+    <div style="margin-top:18px;">
+      ${progressBar(pct)}
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:8px;">
+        <tr>
+          <td style="font-family:${FONT_STACK};font-size:11px;color:${C.textSubtle};">0</td>
+          <td align="center" style="font-family:${FONT_STACK};font-size:11px;color:${C.textSubtle};">${pct.toFixed(0)}%</td>
+          <td align="right" style="font-family:${FONT_STACK};font-size:11px;color:${C.textSubtle};">100%</td>
+        </tr>
+      </table>
+    </div>` : "";
+
+  const stats = `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:18px;border-collapse:separate;border-spacing:8px 0;">
+      <tr>
+        ${miniStat("Acumulado", formatPyg(m.monthActual), `Día ${m.daysElapsed} de ${m.daysInMonth}`)}
+        ${miniStat("Meta del mes", hasTarget ? formatPyg(m.monthTarget) : "Sin cargar", hasTarget ? "Budget mensual" : "")}
+        ${miniStat("Proyección", formatPyg(m.runRateProjection), "Run-rate al cierre")}
+        ${miniStat("Gap a meta", hasTarget ? formatPyg(Math.max(0, m.gapToTarget)) : "—", hasTarget ? (m.gapToTarget > 0 ? "Faltan" : "Superada") : "")}
+      </tr>
+    </table>`;
+
+  return sectionCard(
+    `Cumplimiento de ${m.monthLabel}`,
+    subtitle,
+    `${bar}${stats}`,
+  );
+}
+
+function moversCard(p: SalesPulsePayload): string {
+  const { brands, skus, stores } = p.movers;
+
+  const moverList = (
+    items: Array<{ title: string; sub: string; tail?: string; tone?: "good" | "bad" | "neutral" }>,
+  ): string => {
+    if (items.length === 0) {
+      return `<div style="font-family:${FONT_STACK};font-size:12px;color:${C.textTiny};padding:8px 0;">Sin movimiento</div>`;
+    }
+    return items.map((it, i) => {
+      const tailColor = it.tone === "good" ? C.successFg : it.tone === "bad" ? C.errorFg : C.textMuted;
+      return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:${i < items.length - 1 ? 10 : 0}px;">
+        <tr>
+          <td valign="top" style="width:24px;font-family:${FONT_STACK};font-size:13px;font-weight:700;color:${C.textTiny};font-variant-numeric:tabular-nums;">${i + 1}</td>
+          <td valign="top">
+            <div style="font-family:${FONT_STACK};font-size:13px;font-weight:600;color:${C.textPrimary};line-height:1.4;">${esc(it.title)}</div>
+            <div style="font-family:${FONT_STACK};font-size:11px;color:${C.textSubtle};margin-top:2px;line-height:1.4;">${esc(it.sub)}</div>
+          </td>
+          ${it.tail ? `<td valign="top" align="right" style="font-family:${FONT_STACK};font-size:11px;font-weight:700;color:${tailColor};white-space:nowrap;font-variant-numeric:tabular-nums;">${esc(it.tail)}</td>` : ""}
+        </tr>
+      </table>`;
+    }).join("");
+  };
+
+  const brandItems = brands.map(b => ({
+    title: b.name,
+    sub: formatPyg(b.neto),
+    tail: b.wowPct !== null ? formatDelta(b.wowPct) : undefined,
+    tone: (b.wowPct !== null ? (b.wowPct >= 0 ? "good" : "bad") : "neutral") as "good" | "bad" | "neutral",
+  }));
+
+  const skuItems = skus.map(s => ({
+    title: truncate(s.description, 40),
+    sub: `${esc(s.brand)} · ${s.units.toLocaleString("es-PY")} u.`,
+    tail: formatPyg(s.neto),
+    tone: "neutral" as const,
+  }));
+
+  const storeItems = stores.map(st => ({
+    title: st.store,
+    sub: `${st.channel} · ${formatPyg(st.neto)}`,
+    tail: st.wowPct !== null ? formatDelta(st.wowPct) : undefined,
+    tone: (st.wowPct !== null ? (st.wowPct >= 0 ? "good" : "bad") : "neutral") as "good" | "bad" | "neutral",
+  }));
+
+  const body = `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:12px 0;">
+      <tr>
+        <td valign="top" width="33%" style="background:${C.bgPage};border-radius:12px;padding:14px;">
+          ${tinyLabel("Marcas", C.brand700)}
+          <div style="margin-top:10px;">${moverList(brandItems)}</div>
+        </td>
+        <td valign="top" width="34%" style="background:${C.bgPage};border-radius:12px;padding:14px;">
+          ${tinyLabel("SKUs", C.brand700)}
+          <div style="margin-top:10px;">${moverList(skuItems)}</div>
+        </td>
+        <td valign="top" width="33%" style="background:${C.bgPage};border-radius:12px;padding:14px;">
+          ${tinyLabel("Tiendas", C.brand700)}
+          <div style="margin-top:10px;">${moverList(storeItems)}</div>
+        </td>
+      </tr>
+    </table>`;
+
+  return sectionCard("Top movers", "Variación semana contra semana anterior", body);
+}
+
+function alertsCard(p: SalesPulsePayload): string {
+  const a = p.alerts;
+  const blocks: string[] = [];
+
+  // Novedades
+  if (a.noveltyUndistributed.count > 0) {
+    blocks.push(alertBlock(
+      "warning",
+      "Novedades sin distribuir",
+      `${a.noveltyUndistributed.count} SKUs viven en depósito sin presencia en tienda`,
+      a.noveltyUndistributed.examples.map(e =>
+        `<strong style="color:${C.textPrimary};">${esc(truncate(e.description, 40))}</strong> · ${esc(e.brand)} · ${e.units.toLocaleString("es-PY")} u.`,
+      ),
+    ));
+  }
+
+  // STH bajo
+  if (a.lowSellThrough30d.count > 0) {
+    blocks.push(alertBlock(
+      "error",
+      "Sell-through bajo 30-90d",
+      `${a.lowSellThrough30d.count} SKUs cohorte joven con STH < 30%`,
+      a.lowSellThrough30d.examples.map(e =>
+        `<strong style="color:${C.textPrimary};">${esc(truncate(e.description, 40))}</strong> · ${esc(e.brand)} · STH ${e.sthPct.toFixed(0)}% (${e.unitsReceived.toLocaleString("es-PY")} u.)`,
+      ),
+    ));
+  }
+
+  // DSO
+  const dso = a.dso;
+  if (dso.currentDays !== null) {
+    const delta = dso.fourWeeksAgoDays !== null ? dso.currentDays - dso.fourWeeksAgoDays : null;
+    const tone = delta === null ? "info" : delta > 5 ? "error" : delta < -5 ? "success" : "info";
+    const trendCopy = delta === null
+      ? "(sin base 4 semanas atrás)"
+      : delta > 5
+        ? `▲ +${delta} días vs hace 4 semanas`
+        : delta < -5
+          ? `▼ ${delta} días vs hace 4 semanas`
+          : "≈ estable vs hace 4 semanas";
+    blocks.push(alertBlock(
+      tone,
+      "Días de cobranza (DSO)",
+      `${dso.currentDays} días · ${trendCopy}`,
+      [`Saldo abierto al cierre: <strong style="color:${C.textPrimary};">${esc(formatPyg(dso.cxcCurrent))}</strong>`],
+    ));
+  }
+
+  if (blocks.length === 0) {
+    return sectionCard(
+      "Alertas accionables",
+      null,
+      `<div style="background:${C.successBg};border:1px solid ${C.successBorder};border-radius:12px;padding:14px 16px;">
+        <div style="font-family:${FONT_STACK};font-size:13px;font-weight:600;color:${C.successFg};">Sin alertas activas esta semana</div>
+        <div style="font-family:${FONT_STACK};font-size:12px;color:${C.textMuted};margin-top:4px;line-height:1.5;">No hay novedades sin distribuir, sell-through bajo ni cambios bruscos de DSO detectados.</div>
+      </div>`,
+    );
+  }
+
+  return sectionCard("Alertas accionables", null, blocks.join(""));
+}
+
+type AlertTone = "info" | "warning" | "error" | "success";
+
+function alertBlock(tone: AlertTone, title: string, subtitle: string, lines: string[]): string {
+  const palette = {
+    info:    { bg: C.brand50,    border: "#c2d6ff", fg: C.brand700 },
+    warning: { bg: C.warningBg,  border: C.warningBorder, fg: C.warningFg },
+    error:   { bg: C.errorBg,    border: C.errorBorder,   fg: C.errorFg },
+    success: { bg: C.successBg,  border: C.successBorder, fg: C.successFg },
+  }[tone];
+
+  const list = lines.length === 0
+    ? ""
+    : `<ul style="margin:10px 0 0 0;padding:0 0 0 18px;list-style:disc;">${lines.map(l =>
+        `<li style="font-family:${FONT_STACK};font-size:12px;color:${C.textBody};line-height:1.55;margin:3px 0;">${l}</li>`,
+      ).join("")}</ul>`;
+
+  return `<div style="background:${palette.bg};border:1px solid ${palette.border};border-radius:12px;padding:14px 16px;margin-bottom:10px;">
+    <div style="font-family:${FONT_STACK};font-size:13px;font-weight:700;color:${palette.fg};letter-spacing:0.1px;">${esc(title)}</div>
+    <div style="font-family:${FONT_STACK};font-size:12px;color:${C.textMuted};margin-top:3px;line-height:1.5;">${esc(subtitle)}</div>
+    ${list}
+  </div>`;
+}
+
+function freshnessFooter(p: SalesPulsePayload, now: Date): string {
+  const fa = freshnessAge(p.freshness, now);
+  const dataDate = p.freshness.maxDataDate ? formatDateShort(p.freshness.maxDataDate) : "—";
+  const ageStr = !Number.isFinite(fa.hoursAgo) ? "—"
+                : fa.hoursAgo < 1 ? "hace minutos"
+                : fa.hoursAgo < 24 ? `hace ${Math.round(fa.hoursAgo)}h`
+                : `hace ${Math.round(fa.hoursAgo / 24)}d`;
+  const dotColor = fa.stale ? C.warningFg : C.successFg;
+  const dotBg    = fa.stale ? C.warningBg : C.successBg;
+  return `<tr><td align="center" style="padding:14px 8px 0 8px;">
+    <span style="display:inline-block;background:${dotBg};border:1px solid ${dotColor};border-radius:999px;padding:5px 12px;font-family:${FONT_STACK};font-size:11px;color:${C.textMuted};font-weight:500;">
+      <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${dotColor};vertical-align:middle;margin-right:6px;"></span>
+      Datos hasta ${esc(dataDate)} · refrescados ${esc(ageStr)}${fa.stale ? " (stale)" : ""}
+    </span>
+  </td></tr>`;
+}
+
+function ctaBlock(url: string): string {
+  return `<tr><td align="center" style="padding:24px 0 8px 0;">
+    <a href="${esc(url)}" style="display:inline-block;background:${C.brand};color:#ffffff;text-decoration:none;font-family:${FONT_STACK};font-size:13px;font-weight:600;padding:12px 28px;border-radius:10px;letter-spacing:0.1px;">
+      Ver detalle en el dashboard →
+    </a>
+  </td></tr>`;
+}
+
+function footer(): string {
+  return `<tr><td style="padding:18px 8px 0 8px;text-align:center;">
+    <div style="font-family:${FONT_STACK};font-size:11px;color:${C.textTiny};line-height:1.6;">
+      Este correo lo envía Dash IA automáticamente cada lunes desde
+      <span style="color:${C.textMuted};">dash@fenixbrands.com.py</span>.<br>
+      Para sumar o quitar destinatarios contactá a tu administrador interno.
+    </div>
+  </td></tr>`;
+}
+
+// ─── Render principal ───────────────────────────────────────────────────────
 
 export function renderSalesPulseHtml(p: SalesPulsePayload, opts: RenderOptions = {}): string {
   const appUrl = opts.appUrl ?? APP_URL_DEFAULT;
@@ -55,252 +406,37 @@ export function renderSalesPulseHtml(p: SalesPulsePayload, opts: RenderOptions =
   return [
     `<!DOCTYPE html>`,
     `<html lang="es">`,
-    `<head><meta charset="utf-8"><title>Sales Pulse · Semana ${p.isoWeek}</title></head>`,
-    `<body style="margin:0;padding:0;background:${COLORS.bg};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,sans-serif;color:${COLORS.text};">`,
-    `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:${COLORS.bg};">`,
-    `<tr><td align="center" style="padding:24px 12px;">`,
+    `<head>`,
+    `<meta charset="utf-8">`,
+    `<meta name="viewport" content="width=device-width,initial-scale=1">`,
+    `<title>Sales Pulse · Semana ${p.isoWeek}</title>`,
+    `</head>`,
+    `<body style="margin:0;padding:0;background:${C.bgPage};font-family:${FONT_STACK};color:${C.textPrimary};-webkit-font-smoothing:antialiased;">`,
+    `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:${C.bgPage};">`,
+    `<tr><td align="center" style="padding:32px 16px;">`,
     `<table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;">`,
 
-    headerSection(p),
-    headlineCard(p),
+    header(p),
+    heroCard(p),
+    spacer(14),
     monthlyCard(p),
+    spacer(14),
     moversCard(p),
+    spacer(14),
     alertsCard(p),
-    freshnessCard(p, now),
-    ctaSection(appUrl, p),
-    footerSection(),
+    freshnessFooter(p, now),
+    ctaBlock(appUrl),
+    footer(),
 
     `</table></td></tr></table>`,
     `</body></html>`,
   ].join("");
-
-  // ── Sub-rendering helpers (closure-friendly, también testeables) ─────────
-  function headerSection(payload: SalesPulsePayload): string {
-    return [
-      `<tr><td style="padding:0 0 16px 0;">`,
-      `<table role="presentation" width="100%" cellspacing="0" cellpadding="0">`,
-      `<tr>`,
-      `<td style="font-size:14px;color:${COLORS.muted};letter-spacing:0.06em;text-transform:uppercase;">Dash IA · FenixBrands</td>`,
-      `<td align="right" style="font-size:13px;color:${COLORS.muted};">Sales Pulse · Sem ${payload.isoWeek}</td>`,
-      `</tr></table></td></tr>`,
-    ].join("");
-  }
-
-  function headlineCard(payload: SalesPulsePayload): string {
-    const headline = buildHeadline(payload);
-    const moment   = classifyMomentum(payload.sales.wowPct);
-    return [
-      `<tr><td style="background:${COLORS.card};border:1px solid ${COLORS.border};border-radius:12px;padding:24px;">`,
-      `<div style="font-size:13px;color:${COLORS.muted};letter-spacing:0.04em;text-transform:uppercase;margin-bottom:8px;">Pulso de la semana</div>`,
-      `<div style="font-size:22px;font-weight:600;line-height:1.3;color:${COLORS.text};">${escapeHtml(headline)}</div>`,
-      `<div style="font-size:14px;color:${COLORS.muted};margin-top:12px;">La actividad ${escapeHtml(moment)} respecto a la semana anterior. ${escapeHtml(unitsLine(payload))}</div>`,
-      `</td></tr>`,
-      spacer(12),
-    ].join("");
-  }
-
-  function monthlyCard(payload: SalesPulsePayload): string {
-    const m = payload.monthly;
-    const pct = m.monthProgressPct ?? 0;
-    const barPct = Math.max(0, Math.min(100, pct));
-    return [
-      `<tr><td style="background:${COLORS.card};border:1px solid ${COLORS.border};border-radius:12px;padding:24px;">`,
-      `<div style="font-size:13px;color:${COLORS.muted};letter-spacing:0.04em;text-transform:uppercase;margin-bottom:8px;">Cumplimiento mensual</div>`,
-      `<div style="font-size:16px;color:${COLORS.text};margin-bottom:12px;">${escapeHtml(buildMonthlyLine(m))}</div>`,
-      m.monthTarget > 0 ? progressBar(barPct) : "",
-      `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:12px;font-size:13px;color:${COLORS.muted};">`,
-      `<tr>`,
-      `<td>Acumulado: <strong style="color:${COLORS.text};">${escapeHtml(formatPyg(m.monthActual))}</strong></td>`,
-      `<td align="right">Meta: <strong style="color:${COLORS.text};">${escapeHtml(m.monthTarget > 0 ? formatPyg(m.monthTarget) : "sin cargar")}</strong></td>`,
-      `</tr>`,
-      `<tr><td colspan="2" style="padding-top:6px;">Día ${m.daysElapsed} de ${m.daysInMonth}</td></tr>`,
-      `</table>`,
-      `</td></tr>`,
-      spacer(12),
-    ].join("");
-  }
-
-  function moversCard(payload: SalesPulsePayload): string {
-    const { brands, skus, stores } = payload.movers;
-    return [
-      `<tr><td style="background:${COLORS.card};border:1px solid ${COLORS.border};border-radius:12px;padding:24px;">`,
-      `<div style="font-size:13px;color:${COLORS.muted};letter-spacing:0.04em;text-transform:uppercase;margin-bottom:12px;">Top movers</div>`,
-      `<table role="presentation" width="100%" cellspacing="0" cellpadding="0">`,
-      `<tr>`,
-      moverColumn("Marcas", brands.length === 0 ? `<div style="color:${COLORS.muted};font-size:13px;">Sin movimiento</div>` :
-        brands.map((b, i) =>
-          `<div style="font-size:14px;line-height:1.5;margin-bottom:6px;">
-            <span style="color:${COLORS.muted};">${i + 1}.</span>
-            <strong style="color:${COLORS.text};">${escapeHtml(b.name)}</strong> ·
-            <span style="color:${COLORS.text};">${escapeHtml(formatPyg(b.neto))}</span>
-            ${b.wowPct === null ? "" : `<span style="color:${b.wowPct >= 0 ? COLORS.good : COLORS.bad};font-size:12px;"> ${escapeHtml(formatDelta(b.wowPct))}</span>`}
-          </div>`).join("")),
-      moverColumn("SKUs", skus.length === 0 ? `<div style="color:${COLORS.muted};font-size:13px;">Sin movimiento</div>` :
-        skus.map((s, i) =>
-          `<div style="font-size:14px;line-height:1.4;margin-bottom:8px;">
-            <span style="color:${COLORS.muted};">${i + 1}.</span>
-            <strong style="color:${COLORS.text};">${escapeHtml(truncate(s.description, 36))}</strong>
-            <span style="color:${COLORS.muted};font-size:12px;"> · ${escapeHtml(s.brand)}</span><br>
-            <span style="color:${COLORS.text};font-size:13px;padding-left:14px;">${escapeHtml(formatPyg(s.neto))} · ${s.units} u.</span>
-          </div>`).join("")),
-      moverColumn("Tiendas", stores.length === 0 ? `<div style="color:${COLORS.muted};font-size:13px;">Sin movimiento</div>` :
-        stores.map((st, i) =>
-          `<div style="font-size:14px;line-height:1.5;margin-bottom:6px;">
-            <span style="color:${COLORS.muted};">${i + 1}.</span>
-            <strong style="color:${COLORS.text};">${escapeHtml(st.store)}</strong>
-            <span style="color:${COLORS.muted};font-size:12px;"> · ${st.channel}</span><br>
-            <span style="color:${COLORS.text};font-size:13px;padding-left:14px;">${escapeHtml(formatPyg(st.neto))}${st.wowPct === null ? "" : ` · <span style="color:${st.wowPct >= 0 ? COLORS.good : COLORS.bad};">${escapeHtml(formatDelta(st.wowPct))}</span>`}</span>
-          </div>`).join("")),
-      `</tr></table>`,
-      `</td></tr>`,
-      spacer(12),
-    ].join("");
-  }
-
-  function alertsCard(payload: SalesPulsePayload): string {
-    const a = payload.alerts;
-    const blocks: string[] = [];
-
-    // Novedades sin distribuir
-    if (a.noveltyUndistributed.count > 0) {
-      blocks.push(alertBlock(
-        "Novedades sin distribuir",
-        `${a.noveltyUndistributed.count} SKUs en depósito sin presencia en tienda`,
-        COLORS.warn, COLORS.warnBg,
-        a.noveltyUndistributed.examples.map(e =>
-          `<li style="margin:2px 0;"><strong>${escapeHtml(truncate(e.description, 40))}</strong> · ${escapeHtml(e.brand)} · ${e.units} u. en depósito</li>`).join(""),
-      ));
-    }
-
-    // STH bajo
-    if (a.lowSellThrough30d.count > 0) {
-      blocks.push(alertBlock(
-        "Sell-through bajo (30-90 días)",
-        `${a.lowSellThrough30d.count} SKUs cohorte joven con STH < 30%`,
-        COLORS.bad, COLORS.badBg,
-        a.lowSellThrough30d.examples.map(e =>
-          `<li style="margin:2px 0;"><strong>${escapeHtml(truncate(e.description, 40))}</strong> · ${escapeHtml(e.brand)} · STH ${e.sthPct.toFixed(0)}% (${e.unitsReceived} u. recibidas)</li>`).join(""),
-      ));
-    }
-
-    // DSO
-    const dso = a.dso;
-    if (dso.currentDays !== null) {
-      const delta = dso.fourWeeksAgoDays !== null ? dso.currentDays - dso.fourWeeksAgoDays : null;
-      const tone = delta !== null && delta > 5 ? "bad" : delta !== null && delta < -5 ? "good" : "neutral";
-      const fg = tone === "bad" ? COLORS.bad : tone === "good" ? COLORS.good : COLORS.muted;
-      const bg = tone === "bad" ? COLORS.badBg : tone === "good" ? COLORS.goodBg : COLORS.bg;
-      const trendCopy = delta === null ? "(sin base 4 semanas atrás)"
-                       : delta > 5 ? `▲ +${delta} días vs hace 4 semanas`
-                       : delta < -5 ? `▼ ${delta} días vs hace 4 semanas`
-                       : `≈ estable vs hace 4 semanas`;
-      blocks.push(alertBlock(
-        "Días de cobranza (DSO)",
-        `${dso.currentDays} días · ${trendCopy}`,
-        fg, bg,
-        `<li style="margin:2px 0;color:${COLORS.muted};">Saldo abierto: ${escapeHtml(formatPyg(dso.cxcCurrent))}</li>`,
-      ));
-    }
-
-    if (blocks.length === 0) {
-      blocks.push(`<div style="color:${COLORS.muted};font-size:14px;">Sin alertas activas esta semana.</div>`);
-    }
-
-    return [
-      `<tr><td style="background:${COLORS.card};border:1px solid ${COLORS.border};border-radius:12px;padding:24px;">`,
-      `<div style="font-size:13px;color:${COLORS.muted};letter-spacing:0.04em;text-transform:uppercase;margin-bottom:12px;">Alertas accionables</div>`,
-      blocks.join(""),
-      `</td></tr>`,
-      spacer(12),
-    ].join("");
-  }
-
-  function freshnessCard(payload: SalesPulsePayload, nowDate: Date): string {
-    const fa = freshnessAge(payload.freshness, nowDate);
-    const ageStr = !Number.isFinite(fa.hoursAgo) ? "—"
-                  : fa.hoursAgo < 1 ? "hace minutos"
-                  : fa.hoursAgo < 24 ? `hace ${Math.round(fa.hoursAgo)}h`
-                  : `hace ${Math.round(fa.hoursAgo / 24)}d`;
-    const dataDate = payload.freshness.maxDataDate ? formatDateShort(payload.freshness.maxDataDate) : "—";
-    return [
-      `<tr><td style="font-size:12px;color:${COLORS.muted};padding:8px 8px 0 8px;text-align:center;">`,
-      `Data al ${escapeHtml(dataDate)} · refrescada ${escapeHtml(ageStr)}${fa.stale ? ` <span style="color:${COLORS.warn};">(stale)</span>` : ""}`,
-      `</td></tr>`,
-    ].join("");
-  }
-
-  function ctaSection(url: string, payload: SalesPulsePayload): string {
-    return [
-      `<tr><td align="center" style="padding:20px 0 12px 0;">`,
-      `<a href="${escapeAttr(url)}" style="display:inline-block;background:${COLORS.brand};color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;">Ver detalle en la app →</a>`,
-      `<div style="font-size:11px;color:${COLORS.muted};margin-top:8px;">Semana cerrada: ${escapeHtml(formatDateShort(payload.weekStart))} – ${escapeHtml(formatDateShort(payload.weekEnd))}</div>`,
-      `</td></tr>`,
-    ].join("");
-  }
-
-  function footerSection(): string {
-    return [
-      `<tr><td style="font-size:11px;color:${COLORS.muted};text-align:center;padding:16px 8px 0 8px;line-height:1.5;">`,
-      `Este correo lo envía Dash IA automáticamente cada lunes desde dash@fenixbrands.com.py.<br>`,
-      `Para sumar o quitar destinatarios contactá a tu administrador interno.`,
-      `</td></tr>`,
-    ].join("");
-  }
 }
 
-// ─── Helpers de presentación reutilizables ──────────────────────────────────
+// Function kept intentionally — tests + EF imports it
+export { buildSubject };
 
-function unitsLine(p: SalesPulsePayload): string {
-  if (p.sales.unitsWeek <= 0) return "";
-  return `${p.sales.unitsWeek} unidades movidas en total.`;
-}
-
-function moverColumn(title: string, body: string): string {
-  return `<td valign="top" width="33%" style="padding:0 6px;">
-    <div style="font-size:12px;color:${COLORS.muted};font-weight:600;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:8px;">${escapeHtml(title)}</div>
-    <div>${body}</div>
-  </td>`;
-}
-
-function alertBlock(title: string, subtitle: string, fg: string, bg: string, listItems: string): string {
-  return `<div style="background:${bg};border-left:3px solid ${fg};border-radius:6px;padding:12px 14px;margin-bottom:10px;">
-    <div style="font-size:14px;font-weight:600;color:${fg};">${escapeHtml(title)}</div>
-    <div style="font-size:13px;color:${COLORS.text};margin:2px 0 6px 0;">${escapeHtml(subtitle)}</div>
-    ${listItems ? `<ul style="margin:4px 0 0 16px;padding:0;font-size:12px;color:${COLORS.text};">${listItems}</ul>` : ""}
-  </div>`;
-}
-
-function progressBar(pct: number): string {
-  const fill = Math.max(0, Math.min(100, pct));
-  const fg = fill >= 90 ? COLORS.good : fill >= 60 ? COLORS.brand : COLORS.warn;
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:${COLORS.bg};border-radius:6px;height:10px;overflow:hidden;">
-    <tr><td style="background:${fg};width:${fill}%;height:10px;font-size:0;line-height:0;">&nbsp;</td><td style="width:${100 - fill}%;font-size:0;line-height:0;">&nbsp;</td></tr>
-  </table>`;
-}
-
-function spacer(px: number): string {
-  return `<tr><td style="height:${px}px;line-height:${px}px;font-size:0;">&nbsp;</td></tr>`;
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, ch => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  })[ch]!);
-}
-
-function escapeAttr(s: string): string {
-  return escapeHtml(s);
-}
-
-function truncate(s: string, max: number): string {
-  if (s.length <= max) return s;
-  return `${s.slice(0, max - 1)}…`;
-}
-
-/**
- * Subject usado por la EF al enviar. Pure así puede testearse junto con el HTML.
- */
-export function buildSubject(p: SalesPulsePayload): string {
+function buildSubject(p: SalesPulsePayload): string {
   const wow = p.sales.wowPct;
   const tag = wow === null ? ""
             : wow >= 5    ? " · ▲"
