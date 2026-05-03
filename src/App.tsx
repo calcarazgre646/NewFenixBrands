@@ -42,6 +42,7 @@ const ChangePasswordPage   = lazy(() => import("@/features/auth/ChangePasswordPa
 const UsersPage            = lazy(() => import("@/features/users/UsersPage"));
 const CommissionsPage      = lazy(() => import("@/features/commissions/CommissionsPage"));
 const MarketingPage        = lazy(() => import("@/features/marketing/MarketingPage"));
+const SalesPulseAdminPage  = lazy(() => import("@/features/salesPulse/SalesPulseAdminPage"));
 const HelpPage             = lazy(() => import("@/features/help/HelpPage"));
 
 // ─── Loading fallback ─────────────────────────────────────────────────────────
@@ -193,6 +194,13 @@ export default function App() {
             <Route path="usuarios" element={
               <PermissionGuard allowed={(p) => p.canManageUsers}>
                 <FeatureErrorBoundary feature="Usuarios"><UsersPage /></FeatureErrorBoundary>
+              </PermissionGuard>
+            } />
+
+            {/* Sales Pulse Semanal — admin (solo super_user) */}
+            <Route path="sales-pulse" element={
+              <PermissionGuard allowed={(p) => p.canManageSalesPulse}>
+                <FeatureErrorBoundary feature="Sales Pulse"><SalesPulseAdminPage /></FeatureErrorBoundary>
               </PermissionGuard>
             } />
 

@@ -236,6 +236,13 @@ export const markdownKeys = {
   history: (skuComercial: string) => ["markdowns", "history", skuComercial] as const,
 };
 
+// ─── Sales Pulse Semanal ────────────────────────────────────────────────────
+export const salesPulseKeys = {
+  all: ["salesPulse"] as const,
+  subscribers: () => ["salesPulse", "subscribers"] as const,
+  runs: (limit: number = 12) => ["salesPulse", "runs", limit] as const,
+};
+
 // ─── Calendar Events: SKUs, stores, allocation proposals ─────────────────────
 export const eventKeys = {
   all: ["events"] as const,
