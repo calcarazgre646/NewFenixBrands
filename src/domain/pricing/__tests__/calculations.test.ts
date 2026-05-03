@@ -3,7 +3,7 @@ import {
   calcMBP,
   calcMBM,
   isNovelty,
-  getPromotionStatus,
+  NO_PROMOTION,
   MIN_VALID_PRICE,
 } from "../calculations";
 
@@ -154,22 +154,8 @@ describe("isNovelty — reutilizada de domain/depots", () => {
   });
 });
 
-describe("getPromotionStatus — placeholder hasta definición de cliente", () => {
-  it("retorna estado neutro para cualquier SKU", () => {
-    expect(getPromotionStatus("MACA004428")).toEqual({
-      active: false,
-      markdownPct: 0,
-    });
-  });
-
-  it("retorna misma estructura para SKU vacío (nunca throw)", () => {
-    expect(getPromotionStatus("")).toEqual({
-      active: false,
-      markdownPct: 0,
-    });
-  });
-
-  it("es idempotente (dos llamadas devuelven igual resultado)", () => {
-    expect(getPromotionStatus("SKU1")).toEqual(getPromotionStatus("SKU1"));
+describe("NO_PROMOTION — estado neutro para SKUs sin markdown", () => {
+  it("active=false, markdownPct=0", () => {
+    expect(NO_PROMOTION).toEqual({ active: false, markdownPct: 0 });
   });
 });
