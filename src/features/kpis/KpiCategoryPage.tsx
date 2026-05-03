@@ -18,7 +18,8 @@ import {
 } from "@/domain/kpis/categories";
 import type { KpiCategory } from "@/domain/kpis/types";
 import type { FenixPst } from "@/domain/kpis/fenix.catalog";
-import GlobalFilters from "@/components/filters/GlobalFilters";
+import DeclareViewFilters from "@/components/filters/DeclareViewFilters";
+import { ALL_FILTERS_ENABLED } from "@/domain/filters/viewSupport";
 
 // ─── Filter options ──────────────────────────────────────────────────────────
 
@@ -64,8 +65,8 @@ export default function KpiCategoryPage() {
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
-      {/* Filtros globales — top-left, consistente entre vistas */}
-      <GlobalFilters />
+      {/* Filtros globales viven en el AppHeader. */}
+      <DeclareViewFilters support={ALL_FILTERS_ENABLED} />
 
       {/* Breadcrumb + Header de categoría */}
       <div>

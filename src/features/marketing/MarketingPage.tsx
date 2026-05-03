@@ -17,7 +17,8 @@ import { useState } from "react";
 import { PageHeader } from "@/components/ui/page-header/PageHeader";
 import { Tabs, type TabItem } from "@/components/ui/tabs/Tabs";
 import { Spinner } from "@/components/ui/spinner/Spinner";
-import GlobalFilters from "@/components/filters/GlobalFilters";
+import DeclareViewFilters from "@/components/filters/DeclareViewFilters";
+import { ALL_FILTERS_ENABLED } from "@/domain/filters/viewSupport";
 import { MarketingStatsBar } from "./components/MarketingStatsBar";
 import { SyncStatusBar } from "./components/SyncStatusBar";
 import { TriggerInsights } from "./components/TriggerInsights";
@@ -108,9 +109,9 @@ export default function MarketingPage() {
         description="Motor Automatizado de Marketing (SAM)"
       />
 
-      {/* Filtros globales — top-left consistente. Afectan Inventario y Productos.
+      {/* Filtros globales viven en el AppHeader. Afectan Inventario y Productos.
           Clientes/Triggers son cross-channel por diseño (metadata no filtrada). */}
-      <GlobalFilters />
+      <DeclareViewFilters support={ALL_FILTERS_ENABLED} />
 
       {/* Sync status — sutil, siempre visible */}
       <SyncStatusBar

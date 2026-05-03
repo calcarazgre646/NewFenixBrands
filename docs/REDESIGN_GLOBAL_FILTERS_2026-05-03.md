@@ -3,7 +3,7 @@
 **Fecha:** 2026-05-03
 **Branch:** `feat/global-filters-unified-header`
 **Auditoría previa:** `docs/AUDIT_GLOBAL_FILTERS_2026-05-03.md`
-**Pedido del cliente:** los 3 filtros globales (Marca / Canal / Período) deben aparecer **siempre y en el mismo lugar** (top-left del header de cada vista que los usa), y deben ser **dropdowns** — no pills/buttons — para que el orden y el espacio sean sostenibles entre vistas.
+**Pedido del cliente:** los 3 filtros globales (Marca / Canal / Período) deben aparecer **siempre y en el mismo lugar** del header de la app — alineados a la izquierda, junto al buscador — y deben ser **dropdowns** custom alineados al design system, no pills/buttons. Cada vista declara qué filtros le aplican.
 
 ---
 
@@ -11,25 +11,28 @@
 
 | # | Decisión | Razón |
 |---|---|---|
-| 1 | Componente único `<GlobalFilters>` reutilizable, montado top-left de cada Page que use filtros | Una sola fuente de verdad visual + un solo punto de mantenimiento. |
-| 2 | UI = 3 `<select>` nativos (Marca · Canal · Período) en ese orden, alineados a la izquierda | Orden fijo = músculo visual del usuario entre vistas. Native select = UX mobile cero-config. |
-| 3 | Sub-canal B2B nesteado en el dropdown de Canal (`B2B (todos)`, `B2B · Mayorista`, `B2B · UTP`) | Una sola interacción para llegar al sub-canal; antes era una segunda fila condicional. |
-| 4 | Cuando un filtro NO aplica matemáticamente a la vista, se muestra **deshabilitado con tooltip** explicativo (no se oculta) | Mantiene los 3 controles siempre visibles → consistencia. El usuario sabe por qué no puede tocarlo. |
-| 5 | Role-locking (canal asignado por rol): select disabled + ícono 🔒 + tooltip `"Canal asignado por tu rol"` | Mismo lenguaje visual que un filtro no-soportado, sin distinción innecesaria. |
-| 6 | El AppHeader global pierde la barra de filtros entera; solo conserva sidebar toggle, búsqueda, tema, notificaciones, usuario | Elimina la duplicación header-global vs in-page que existía con `brandOnly`. |
-| 7 | Las vistas sin filtros (`/calendario`, `/usuarios`, `/comisiones`, `/ayuda`) simplemente no renderizan `<GlobalFilters>` | Cero magia: si no usás filtros, no los mostrás. |
+| 1 | Componente único `<GlobalFilters>` que vive en el `AppHeader` (junto al buscador) | Una sola fuente de verdad visual, posición consistente entre vistas, sin duplicación in-page. |
+| 2 | Cada Page declara su soporte vía `<DeclareViewFilters support={...} />`; un Context (`ViewFilterSupportProvider`) lo lleva al header | Co-localización del soporte con la Page, sin acoplar el header a un mapa pathname→support. |
+| 3 | Triggers custom (no `<select>` nativo), siguiendo el design system del repo (`shadow-theme-lg`, `rounded-xl`, `bg-gray-dark`, paleta `brand-*`) | Aspecto unificado con `NotificationDropdown`, `Button`, `Dropdown` del DS. |
+| 4 | Trigger compacto: solo el VALOR seleccionado + caret. Tooltip al hover muestra el contexto (`Marca: Martel`) | Los 3 entran en una línea cómoda en el header desktop. |
+| 5 | Dropdown de Canal con sub-canal B2B nesteado y rayita vertical estilo tree-view: `Mayorista` y `UTP` indentados bajo `B2B` | Una sola interacción para llegar al sub-canal; el usuario entiende la jerarquía sin etiquetas explícitas. |
+| 6 | Cuando un filtro NO aplica a la vista: trigger deshabilitado (opacity, cursor not-allowed) + tooltip explicativo | Mantiene los 3 controles siempre visibles → consistencia visual. |
+| 7 | Role-locking (canal asignado por rol): trigger deshabilitado + ícono 🔒 + tooltip `"Canal asignado por tu rol"` | Mismo lenguaje visual que un filtro no-soportado, sin distinción innecesaria. |
+| 8 | El AppHeader pierde el toggle del sidebar duplicado en desktop (el sidebar ya tiene su propio toggle); el toggle mobile se conserva | Libera ~50px de ancho para que los filtros entren cómodos en una sola línea. |
+| 9 | Vistas sin filtros (`/calendario`, `/usuarios`, `/comisiones`, `/ayuda`) NO declaran soporte → el header no muestra la barra | Cero magia: ausencia de declaración = sin barra. |
+| 10 | Sin dots de color por marca | Por pedido explícito del cliente. |
 
 **Fuera de scope (issues separados):**
 - Persistencia URL/localStorage de filtros entre recargas o tabs.
 - Exposición del filtro `store` (existe en el state pero sin UI hoy).
 - Refactor de DSO/UPT para soportar filtros (bloqueado por BD: `c_cobrar` y vista de Derlys).
-- Drawer de filtros mobile (los 3 dropdowns nativos quedan cómodos en wrap-flex).
+- Drawer de filtros mobile (en mobile la barra del header se oculta; los dropdowns viven solo en desktop).
 
 ---
 
 ## Arquitectura
 
-### Contrato `viewSupportedFilters`
+### Contrato `ViewFilterSupport`
 **Archivo:** `src/domain/filters/viewSupport.ts`
 
 ```ts
@@ -57,39 +60,54 @@ export const FILTER_REASONS = {
 };
 ```
 
+### Contexto y declaración por vista
+
+```
+AppLayout
+└── ViewFilterSupportProvider          // useState<ViewFilterSupport | null>
+    ├── AppHeader
+    │   └── <GlobalFilters support={ctx.support} />   // si support != null
+    └── <Outlet>
+        └── PageX
+            └── <DeclareViewFilters support={...} />  // setea ctx en mount, null en unmount
+```
+
+- `src/context/viewFilters.context.ts` — Context (separado para HMR).
+- `src/context/ViewFilterSupportProvider.tsx` — Provider con `useState`.
+- `src/components/filters/DeclareViewFilters.tsx` — componente que cada Page monta una vez con su `support`. Usa `JSON.stringify` para depender del valor (no de la referencia) y evitar re-mounts innecesarios.
+
 ### Componente `<GlobalFilters>`
 **Archivo:** `src/components/filters/GlobalFilters.tsx`
 
-```tsx
-<GlobalFilters />                                    // ALL_FILTERS_ENABLED
-<GlobalFilters support={{
-  brand: true,
-  channel: FILTER_REASONS.noChannelInventory,
-  period: FILTER_REASONS.noPeriodLogistics,
-}} />
-```
+- Render: 3 `<FilterDropdown>` en orden Marca → Canal → Período.
+- Cada `FilterDropdown` = trigger (botón pill `h-9 lg:h-10`) + panel `Dropdown`-style (`rounded-xl`, `shadow-theme-lg`, `bg-white dark:bg-gray-dark`).
+- Trigger muestra solo el `valueLabel` + caret (no prefijos, no dots).
+- Panel: lista de `<OptionRow>`, opciones activas con `bg-brand-50` + check ✓.
+- Sub-opciones de Canal (Mayorista/UTP) renderizan con un wrapper `pl-5` y una rayita vertical `absolute left-3 top-2 bottom-2 w-px bg-gray-200 dark:bg-gray-700`. El botón mantiene el padding-right del panel (no se desplaza).
 
-- Lee/escribe en `FilterContext` vía `useFilters()`. **No tiene estado propio.**
-- Helper puro extraído: `src/components/filters/compositeChannel.ts` (`toComposite` / `fromComposite`) para la lógica del dropdown de Canal.
-- Helper puro extraído: `src/domain/filters/scopeMapping.ts` (`scopeToChannel`) — antes inline en `FilterContext`.
+### Helpers puros
+- `src/components/filters/compositeChannel.ts` — serializa Canal + sub-canal B2B en un único value para el dropdown (`toComposite` / `fromComposite`).
+- `src/domain/filters/scopeMapping.ts` — `scopeToChannel`, antes inline en `FilterContext`.
 
-### Map de soporte por vista (estado actual)
+---
 
-| Ruta | Brand | Channel | Period | Notas |
+## Map de soporte por vista
+
+| Ruta | Brand | Channel | Period | Cómo se declara |
 |---|---|---|---|---|
 | `/` Inicio | ✅ | ✅ | ✅ | `ALL_FILTERS_ENABLED` |
 | `/ventas` | ✅ | ✅ | ✅ | `ALL_FILTERS_ENABLED` |
 | `/acciones` | ✅ | ✅ | ✅ | `ALL_FILTERS_ENABLED` |
-| `/logistica` | ✅ | 🔒 `noChannelInventory` | 🔒 `noPeriodLogistics` | El hook solo lee `filters.brand` |
-| `/depositos` | ✅ | 🔒 `noChannelInventory` | 🔒 `noPeriodDepots` | Stock físico transversal |
-| `/precios` | ✅ | 🔒 `noChannelPricing` | 🔒 `noPeriodSnapshot` | Snapshot de catálogo |
-| `/kpis` | ✅ | ✅ | ✅ | Cada KPI declara su propio `supportedFilters` internamente |
-| `/kpis/:cat` | ✅ | ✅ | ✅ | Idem |
+| `/logistica` | ✅ | 🔒 `noChannelInventory` | 🔒 `noPeriodLogistics` | Custom |
+| `/depositos` | ✅ | 🔒 `noChannelInventory` | 🔒 `noPeriodDepots` | Custom |
+| `/precios` | ✅ | 🔒 `noChannelPricing` | 🔒 `noPeriodSnapshot` | Custom |
+| `/kpis` | ✅ | ✅ | ✅ | `ALL_FILTERS_ENABLED` (cada KPI declara su propio soporte interno) |
+| `/kpis/:cat` | ✅ | ✅ | ✅ | `ALL_FILTERS_ENABLED` |
 | `/marketing` | ✅ | ✅ | ✅ | `ALL_FILTERS_ENABLED` |
-| `/comisiones` | — | — | — | No renderiza `<GlobalFilters>` (filtros propios internos) |
-| `/calendario` | — | — | — | No renderiza |
-| `/usuarios` | — | — | — | No renderiza |
-| `/ayuda` | — | — | — | No renderiza |
+| `/comisiones` | — | — | — | NO declara (header no muestra la barra) |
+| `/calendario` | — | — | — | NO declara |
+| `/usuarios` | — | — | — | NO declara |
+| `/ayuda` | — | — | — | NO declara |
 
 ---
 
@@ -98,9 +116,12 @@ export const FILTER_REASONS = {
 ### Creados
 | Archivo | Propósito |
 |---|---|
-| `src/components/filters/GlobalFilters.tsx` | Componente unificado de los 3 dropdowns. |
-| `src/components/filters/compositeChannel.ts` | Helper puro Canal + sub-canal B2B → value compuesto. |
+| `src/components/filters/GlobalFilters.tsx` | Componente unificado de los 3 dropdowns (custom, DS-aligned). |
+| `src/components/filters/DeclareViewFilters.tsx` | Cada Page lo monta para declarar su soporte. |
+| `src/components/filters/compositeChannel.ts` | Helper Canal + sub-canal B2B → value compuesto. |
 | `src/components/filters/__tests__/compositeChannel.test.ts` | 11 tests round-trip. |
+| `src/context/viewFilters.context.ts` | Context para el `support` activo. |
+| `src/context/ViewFilterSupportProvider.tsx` | Provider con useState (en AppLayout). |
 | `src/domain/filters/viewSupport.ts` | Contrato `ViewFilterSupport` + `FILTER_REASONS` + helpers. |
 | `src/domain/filters/__tests__/viewSupport.test.ts` | 8 tests. |
 | `src/domain/filters/scopeMapping.ts` | `scopeToChannel` extraído de `FilterContext`. |
@@ -109,23 +130,16 @@ export const FILTER_REASONS = {
 ### Eliminados
 | Archivo | Reemplazado por |
 |---|---|
-| `src/components/filters/FilterBar.tsx` | `<GlobalFilters>` |
-| `src/features/executive/components/ExecutiveFilters.tsx` | `<GlobalFilters>` |
+| `src/components/filters/FilterBar.tsx` | `<GlobalFilters>` en `AppHeader` |
+| `src/features/executive/components/ExecutiveFilters.tsx` | `<GlobalFilters>` en `AppHeader` |
 
 ### Modificados
 | Archivo | Cambio |
 |---|---|
-| `src/context/FilterContext.tsx` | Importa `scopeToChannel` del nuevo módulo (era inline). Sin cambio de comportamiento. |
-| `src/layout/AppHeader.tsx` | Removido `<FilterBar>`, `hideFilters`/`hasInPageFilters` y el subcomponente `<ChannelSelector>`. AppHeader ya solo tiene sidebar toggle, búsqueda, tema, notificaciones, usuario. |
-| `src/features/executive/ExecutivePage.tsx` | `<ExecutiveFilters>` → `<GlobalFilters>` (2 instancias: desktop + mobile). Filtros pasan a la izquierda; `DataFreshnessTag` queda a la derecha. |
-| `src/features/sales/SalesPage.tsx` | Idem. |
-| `src/features/kpis/KpiDashboardPage.tsx` | Idem. |
-| `src/features/kpis/KpiCategoryPage.tsx` | `<GlobalFilters>` arriba, breadcrumb + título debajo (antes filtros estaban a la derecha del título). |
-| `src/features/marketing/MarketingPage.tsx` | `<ExecutiveFilters>` → `<GlobalFilters>`. |
-| `src/features/action-queue/ActionQueuePage.tsx` | Nueva fila de filtros + freshness arriba; tab bar pierde el freshness embebido. Removida la dependencia del `<ChannelSelector>` que antes vivía en `AppHeader`. |
-| `src/features/logistics/LogisticsPage.tsx` | Agregado `<GlobalFilters support={{ brand:true, channel: …noChannelInventory, period: …noPeriodLogistics }} />`. |
-| `src/features/depots/DepotsPage.tsx` | Agregado `<GlobalFilters support={{ brand:true, channel: …noChannelInventory, period: …noPeriodDepots }} />`. |
-| `src/features/pricing/PricingPage.tsx` | Agregado `<GlobalFilters support={{ brand:true, channel: …noChannelPricing, period: …noPeriodSnapshot }} />`. |
+| `src/context/FilterContext.tsx` | Importa `scopeToChannel` del nuevo módulo (sin cambio funcional). |
+| `src/layout/AppLayout.tsx` | Wrappea con `<ViewFilterSupportProvider>`. |
+| `src/layout/AppHeader.tsx` | Renderiza `<GlobalFilters support={...} />` cuando hay soporte declarado. Removido el toggle desktop del sidebar (duplicado) y la lógica vieja `hideFilters`/`hasInPageFilters`. Mobile toggle conservado. |
+| 9 Pages (`Executive`, `Sales`, `Action Queue`, `Logistics`, `Depots`, `Pricing`, `Kpi Dashboard`, `Kpi Category`, `Marketing`) | Cada una monta `<DeclareViewFilters support={...} />` y removió cualquier render de filtros in-page. |
 
 ---
 
@@ -134,42 +148,33 @@ export const FILTER_REASONS = {
 | Check | Resultado |
 |---|---|
 | `npx tsc --noEmit` | ✅ 0 errores |
-| `npm run lint` | ✅ 0 errores (2 warnings preexistentes en `marketing/useMarketingProducts.ts`, no introducidos por este PR) |
-| `npx vitest run` | ✅ **1841 / 1841 passing** (66 suites; +26 tests vs baseline 1815) |
-| `npm run build` | ✅ built in 2.85s |
+| `npm run lint` | ✅ 0 errores (2 warnings preexistentes en `marketing/useMarketingProducts.ts`, no introducidos) |
+| `npx vitest run` | ✅ **1841 / 1841** (66 suites; +26 tests vs baseline 1815) |
+| `npm run build` | ✅ build OK |
 
 **Tests nuevos (26):**
-- `viewSupport.test.ts` — 8 tests del contrato
-- `compositeChannel.test.ts` — 11 tests del helper de Canal
+- `viewSupport.test.ts` — 8 tests del contrato + razones
+- `compositeChannel.test.ts` — 11 tests del helper Canal compuesto
 - `scopeMapping.test.ts` — 7 tests del mapper de role-locking
 
 ---
 
-## Verificación visual pendiente (responsabilidad del usuario)
+## Verificación visual realizada
 
-El repo no tiene infra de component testing (no jsdom, no @testing-library/react), así que el comportamiento del componente y el layout final por vista necesitan verificarse en el navegador antes de mergear.
-
-**Checklist sugerido (`npm run dev`):**
-- [ ] `/` Inicio: 3 dropdowns top-left + DataFreshnessTag top-right; cambiar marca y verificar que datos refresquen.
-- [ ] `/ventas`: idem, cambiar canal a B2B → Mayorista en 1 click.
-- [ ] `/acciones`: filtros arriba de la tab bar; tabs siguen funcionando.
-- [ ] `/logistica`: dropdown Canal y Período aparecen disabled; hover → tooltip explicativo.
-- [ ] `/depositos`: idem.
-- [ ] `/precios`: dropdown Canal y Período disabled.
-- [ ] `/kpis`: 3 dropdowns activos; cambiar período afecta los cards.
-- [ ] `/kpis/:categoria`: filtros arriba del breadcrumb.
-- [ ] `/marketing`: 3 dropdowns activos.
-- [ ] `/comisiones`, `/calendario`, `/usuarios`, `/ayuda`: NO debe aparecer la barra de filtros.
-- [ ] Mobile (<lg): los 3 dropdowns hacen wrap correctamente.
-- [ ] Rol con `channel_scope` distinto de `total`: dropdown de Canal aparece con 🔒 + tooltip "Canal asignado por tu rol".
+Verificada manualmente por el usuario en `npm run dev` (http://localhost:5173):
+- Los 3 dropdowns aparecen en el header alineados a la izquierda en una sola línea.
+- Vistas sin soporte declarado no muestran la barra.
+- Hover/abierto/disabled/locked funcionan como esperado.
+- Sub-opciones B2B (Mayorista, UTP) indentadas con rayita vertical conectándolas a B2B.
+- Sin dots de color en marca (por pedido del cliente).
 
 ---
 
 ## Beneficios concretos
 
-1. **Consistencia visual entre vistas** — los 3 controles SIEMPRE en el mismo lugar y orden.
-2. **Menos código duplicado** — eliminadas 3 implementaciones (FilterBar header, ExecutiveFilters in-page, ChannelSelector ad-hoc en AppHeader para `/acciones`) por una sola.
-3. **Tipado del soporte por vista** — `ViewFilterSupport` declara explícitamente qué filtros aplican y por qué, queda compilado en el código.
-4. **Mejor UX mobile** — `<select>` nativo abre el picker del SO.
-5. **Sub-canal B2B en una sola interacción** — antes era 2 clicks (elegir B2B + elegir sub).
-6. **Honestidad sobre limitaciones** — DSO/UPT/etc. no esconden el filtro, lo deshabilitan con razón explícita.
+1. **Consistencia visual entre vistas** — los 3 controles SIEMPRE en el mismo lugar (header global) y orden.
+2. **Menos código duplicado** — eliminadas 3 implementaciones (FilterBar header, ExecutiveFilters in-page, ChannelSelector ad-hoc en `AppHeader` para `/acciones`) por una sola.
+3. **Soporte por vista tipado y co-localizado** — cada Page declara qué filtros aplican y por qué; el header reacciona automáticamente.
+4. **Sub-canal B2B en una sola interacción** — antes eran 2 clicks; ahora se elige `B2B`, `Mayorista` o `UTP` directamente.
+5. **Honestidad sobre limitaciones** — DSO/UPT/etc. no esconden el filtro, lo deshabilitan con razón explícita.
+6. **UI alineada al design system** — mismo lenguaje visual que `Dropdown`, `NotificationDropdown`, `Button`.
