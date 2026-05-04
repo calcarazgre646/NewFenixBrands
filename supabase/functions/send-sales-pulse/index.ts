@@ -171,7 +171,9 @@ Deno.serve(async (req) => {
       recipients = (subs ?? []).map((r: { email: string }) => r.email);
     }
 
-    if (recipients.length === 0) {
+    // En dry_run no necesitamos destinatarios — solo se previsualiza el HTML.
+    // Solo bloqueamos cuando es envío real.
+    if (recipients.length === 0 && !body.dry_run) {
       await logRun(authClient, {
         triggeredBy: sourceLabel, triggeredByUser, weekStart, weekEnd,
         recipients: [], resendIds: [], status: "failed",
