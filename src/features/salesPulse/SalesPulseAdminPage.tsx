@@ -40,6 +40,8 @@ export default function SalesPulseAdminPage() {
         runs={admin.runs}
         isLoading={admin.isLoadingRuns}
         error={admin.runsError}
+        onDelete={(id) => admin.deleteRun.mutate(id)}
+        isDeleting={admin.deleteRun.isPending}
       />
     </div>
   );

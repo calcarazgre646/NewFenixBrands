@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GC_60MIN, STALE_5MIN, salesPulseKeys } from "@/queries/keys";
 import {
   addSubscriber,
+  deleteRun,
   fetchRuns,
   fetchSubscribers,
   removeSubscriber,
@@ -52,6 +53,11 @@ export function useSalesPulseAdmin() {
     onSuccess: () => qc.invalidateQueries({ queryKey: salesPulseKeys.runs(12) }),
   });
 
+  const deleteRunMutation = useMutation({
+    mutationFn: deleteRun,
+    onSuccess: () => qc.invalidateQueries({ queryKey: salesPulseKeys.runs(12) }),
+  });
+
   return {
     subscribers: subsQuery.data ?? [],
     isLoadingSubscribers: subsQuery.isLoading,
@@ -65,5 +71,6 @@ export function useSalesPulseAdmin() {
     toggleActive: toggleActiveMutation,
     removeSubscriber: removeMutation,
     triggerSalesPulse: triggerMutation,
+    deleteRun: deleteRunMutation,
   };
 }

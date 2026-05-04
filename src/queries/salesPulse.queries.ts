@@ -122,6 +122,14 @@ export async function removeSubscriber(id: string): Promise<void> {
 
 // ─── Runs (audit log) ───────────────────────────────────────────────────────
 
+export async function deleteRun(id: string): Promise<void> {
+  const { error } = await authClient
+    .from("sales_pulse_runs")
+    .delete()
+    .eq("id", id);
+  if (error) throw new Error(`deleteRun: ${error.message}`);
+}
+
 export async function fetchRuns(limit = 12): Promise<SalesPulseRun[]> {
   const { data, error } = await authClient
     .from("sales_pulse_runs")

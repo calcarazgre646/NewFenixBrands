@@ -6,11 +6,14 @@
  */
 import { useState } from "react";
 import type { SalesPulseRun } from "@/queries/salesPulse.queries";
+import { TrashBinIcon } from "@/icons";
 
 interface Props {
   runs: SalesPulseRun[];
   isLoading: boolean;
   error: Error | null;
+  onDelete?: (id: string) => void;
+  isDeleting?: boolean;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -20,7 +23,7 @@ const STATUS_STYLES: Record<string, string> = {
   pending: "bg-gray-50 text-gray-700 ring-gray-600/20 dark:bg-gray-700/40 dark:text-gray-300",
 };
 
-export function RunsSection({ runs, isLoading, error }: Props) {
+export function RunsSection({ runs, isLoading, error, onDelete, isDeleting }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   return (
@@ -47,6 +50,7 @@ export function RunsSection({ runs, isLoading, error }: Props) {
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 text-right font-medium">Enviados</th>
                 <th className="px-3 py-2 font-medium"></th>
+                <th className="px-3 py-2 font-medium"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -57,7 +61,9 @@ export function RunsSection({ runs, isLoading, error }: Props) {
                 });
                 return (
                   <RunRow key={r.id} run={r} dateLabel={dateLabel} isOpen={isOpen}
-                          onToggle={() => setExpanded(isOpen ? null : r.id)} />
+                          onToggle={() => setExpanded(isOpen ? null : r.id)}
+                          onDelete={onDelete}
+                          isDeleting={isDeleting} />
                 );
               })}
             </tbody>
@@ -68,8 +74,13 @@ export function RunsSection({ runs, isLoading, error }: Props) {
   );
 }
 
-function RunRow({ run, dateLabel, isOpen, onToggle }: {
-  run: SalesPulseRun; dateLabel: string; isOpen: boolean; onToggle: () => void;
+function RunRow({ run, dateLabel, isOpen, onToggle, onDelete, isDeleting }: {
+  run: SalesPulseRun;
+  dateLabel: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  onDelete?: (id: string) => void;
+  isDeleting?: boolean;
 }) {
   const styleCls = STATUS_STYLES[run.status] ?? STATUS_STYLES.pending;
   return (
@@ -93,10 +104,25 @@ function RunRow({ run, dateLabel, isOpen, onToggle }: {
             {isOpen ? "Ocultar" : "Ver"}
           </button>
         </td>
+        <td className="px-3 py-2 text-right">
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(`¿Borrar este envío del historial? (${dateLabel})`)) onDelete(run.id);
+              }}
+              disabled={isDeleting}
+              aria-label="Borrar envío"
+              className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-500/10"
+            >
+              <TrashBinIcon className="h-4 w-4" />
+            </button>
+          )}
+        </td>
       </tr>
       {isOpen && (
         <tr>
-          <td colSpan={6} className="bg-gray-50 px-3 py-3 dark:bg-gray-800/40">
+          <td colSpan={7} className="bg-gray-50 px-3 py-3 dark:bg-gray-800/40">
             <div className="grid gap-3 text-xs sm:grid-cols-2">
               <div>
                 <div className="font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Destinatarios</div>

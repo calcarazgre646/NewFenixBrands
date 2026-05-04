@@ -100,6 +100,10 @@ CREATE POLICY sales_pulse_runs_select
   ON sales_pulse_runs FOR SELECT TO authenticated
   USING (get_my_role() IN ('super_user', 'gerencia'));
 
+CREATE POLICY sales_pulse_runs_delete
+  ON sales_pulse_runs FOR DELETE TO authenticated
+  USING (get_my_role() = 'super_user');
+
 -- Insert/update lo hace solo la EF con service_role (no policies para authenticated).
 
 
