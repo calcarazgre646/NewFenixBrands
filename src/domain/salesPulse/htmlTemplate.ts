@@ -17,8 +17,6 @@
  */
 
 import {
-  buildHeadline,
-  buildMonthlyLine,
   classifyMomentum,
   formatDateShort,
   formatDelta,
