@@ -112,9 +112,12 @@ BEGIN
   -- y la EF muestra "sin meta" en el bloque.
   v_target_table := format('"Budget_%s"', v_year);
   BEGIN
+    -- regexp_replace extrae solo dígitos/punto/signo: invariante al formato
+    -- (PYG con o sin separadores, espacios, NBSP, etc). Después NULLIF +
+    -- cast numérico. trim(Month) evita falsos negativos por whitespace.
     v_target_query := format(
-      'SELECT COALESCE(SUM(replace(replace(replace(coalesce(%I, ''0''), ''.'', ''''), '','', ''.''), '' '', ''''))::numeric, 0)
-       FROM %s WHERE %I = $1 AND lower(%I) = lower($2)',
+      'SELECT COALESCE(SUM(NULLIF(regexp_replace(coalesce(%I::text, ''''), ''[^0-9.-]'', '''', ''g''), '''')::numeric), 0)
+       FROM %s WHERE %I = $1 AND lower(trim(%I)) = lower($2)',
       'Revenue', v_target_table, 'Year', 'Month'
     );
     EXECUTE v_target_query
@@ -123,6 +126,7 @@ BEGIN
             (ARRAY['enero','febrero','marzo','abril','mayo','junio',
                    'julio','agosto','septiembre','octubre','noviembre','diciembre'])[v_month];
   EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Budget query failed (target=0): %', SQLERRM;
     v_month_target := 0;
   END;
 
