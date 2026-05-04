@@ -1,11 +1,12 @@
 /**
  * features/action-queue/ActionQueuePage.tsx
  *
- * Centro de Acciones — shell con dos pestañas:
+ * Centro de Acciones — shell con tres pestañas:
  *   1. Acciones: movimientos + intervenciones lifecycle (un solo motor waterfall)
- *   2. Planificación de Compra: SKUs con demanda insatisfecha (gap)
+ *   2. Oportunidad: déficit no cubierto monetizado por compañía y por tienda
+ *   3. Planificación de Compra: SKUs con demanda insatisfecha (gap)
  *
- * El channel selector (B2C/B2B) es compartido — afecta el waterfall para ambas pestañas.
+ * El channel selector (B2C/B2B) es compartido — afecta el waterfall para las tres pestañas.
  * Cada pestaña maneja sus propios controles internos.
  *
  * REGLA: Sin logica de negocio. Solo layout + composicion.
@@ -17,13 +18,14 @@ import { useDataFreshness } from "@/hooks/useDataFreshness";
 import { DataFreshnessTag } from "@/features/executive/components/DataFreshnessTag";
 import { ActionsTab } from "./components/ActionsTab";
 import { PurchasePlanningTab } from "./components/PurchasePlanningTab";
+import { LostOpportunityTab } from "./components/LostOpportunityTab";
 import { ActionQueueLoader } from "./components/ActionQueueLoader";
 import DeclareViewFilters from "@/components/filters/DeclareViewFilters";
 import { ALL_FILTERS_ENABLED } from "@/domain/filters/viewSupport";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type ActiveTab = "actions" | "planning";
+type ActiveTab = "actions" | "opportunity" | "planning";
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
@@ -79,6 +81,21 @@ export default function ActionQueuePage() {
             )}
           </TabButton>
           <TabButton
+            active={activeTab === "opportunity"}
+            onClick={() => setActiveTab("opportunity")}
+          >
+            Oportunidad
+            {data.totalGapUnits > 0 && (
+              <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                activeTab === "opportunity"
+                  ? "bg-error-500 text-white"
+                  : "bg-error-100 text-error-700 dark:bg-error-500/20 dark:text-error-400"
+              }`}>
+                {data.totalGapUnits.toLocaleString("es-PY")}
+              </span>
+            )}
+          </TabButton>
+          <TabButton
             active={activeTab === "planning"}
             onClick={() => setActiveTab("planning")}
           >
@@ -113,6 +130,9 @@ export default function ActionQueuePage() {
           brand={data.filters.brand}
           expandStore={expandStore}
         />
+      )}
+      {activeTab === "opportunity" && (
+        <LostOpportunityTab items={data.items} />
       )}
       {activeTab === "planning" && (
         <PurchasePlanningTab
