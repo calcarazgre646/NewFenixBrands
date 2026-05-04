@@ -14,6 +14,13 @@ interface Props {
   error: Error | null;
   onDelete?: (id: string) => void;
   isDeleting?: boolean;
+  // Paginación
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  isFetching?: boolean;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -23,14 +30,29 @@ const STATUS_STYLES: Record<string, string> = {
   pending: "bg-gray-50 text-gray-700 ring-gray-600/20 dark:bg-gray-700/40 dark:text-gray-300",
 };
 
-export function RunsSection({ runs, isLoading, error, onDelete, isDeleting }: Props) {
+export function RunsSection({
+  runs, isLoading, error, onDelete, isDeleting,
+  total, page, pageSize, totalPages, onPageChange, isFetching,
+}: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  const fromIdx = total === 0 ? 0 : page * pageSize + 1;
+  const toIdx   = Math.min(total, page * pageSize + runs.length);
 
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-      <header className="mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Historial de envíos</h2>
-        <p className="text-xs text-gray-500 dark:text-gray-400">Últimos 12 disparos (cron + manuales).</p>
+      <header className="mb-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Historial de envíos</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {total > 0
+              ? `Mostrando ${fromIdx}–${toIdx} de ${total} disparos (cron + manuales)`
+              : "Sin disparos registrados (cron + manuales)"}
+          </p>
+        </div>
+        {isFetching && !isLoading && (
+          <span className="text-xs text-gray-400 dark:text-gray-500">Actualizando…</span>
+        )}
       </header>
 
       {isLoading ? (
@@ -68,6 +90,50 @@ export function RunsSection({ runs, isLoading, error, onDelete, isDeleting }: Pr
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+          <span className="text-gray-500 dark:text-gray-400">
+            Página {page + 1} de {totalPages}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onPageChange(0)}
+              disabled={page === 0 || isFetching}
+              className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-gray-700 hover:bg-gray-50 disabled:opacity-40 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              aria-label="Primera página"
+            >
+              «
+            </button>
+            <button
+              type="button"
+              onClick={() => onPageChange(Math.max(0, page - 1))}
+              disabled={page === 0 || isFetching}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50 disabled:opacity-40 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              ← Anterior
+            </button>
+            <button
+              type="button"
+              onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))}
+              disabled={page >= totalPages - 1 || isFetching}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50 disabled:opacity-40 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              Siguiente →
+            </button>
+            <button
+              type="button"
+              onClick={() => onPageChange(totalPages - 1)}
+              disabled={page >= totalPages - 1 || isFetching}
+              className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-gray-700 hover:bg-gray-50 disabled:opacity-40 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              aria-label="Última página"
+            >
+              »
+            </button>
+          </div>
         </div>
       )}
     </section>

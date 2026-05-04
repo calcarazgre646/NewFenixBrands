@@ -130,16 +130,26 @@ export async function deleteRun(id: string): Promise<void> {
   if (error) throw new Error(`deleteRun: ${error.message}`);
 }
 
-export async function fetchRuns(limit = 12): Promise<SalesPulseRun[]> {
-  const { data, error } = await authClient
+export interface FetchRunsResult {
+  rows: SalesPulseRun[];
+  total: number;
+}
+
+export async function fetchRuns(page = 0, pageSize = 12): Promise<FetchRunsResult> {
+  const from = page * pageSize;
+  const to   = from + pageSize - 1;
+  const { data, error, count } = await authClient
     .from("sales_pulse_runs")
-    .select("id, triggered_by, triggered_by_user, scheduled_at, sent_at, week_start, week_end, recipients, resend_ids, status, error_msg, payload, is_test")
+    .select(
+      "id, triggered_by, triggered_by_user, scheduled_at, sent_at, week_start, week_end, recipients, resend_ids, status, error_msg, payload, is_test",
+      { count: "exact" },
+    )
     .order("scheduled_at", { ascending: false })
-    .limit(limit);
+    .range(from, to);
 
   if (error) throw new Error(`fetchRuns: ${error.message}`);
 
-  return (data ?? []).map((r) => ({
+  const rows = (data ?? []).map((r) => ({
     id: r.id,
     triggeredBy:    (r.triggered_by === "cron" ? "cron" : "manual") as "cron" | "manual",
     triggeredByUser: r.triggered_by_user ?? null,
@@ -154,6 +164,8 @@ export async function fetchRuns(limit = 12): Promise<SalesPulseRun[]> {
     payload:     r.payload ?? {},
     isTest:      !!r.is_test,
   }));
+
+  return { rows, total: count ?? rows.length };
 }
 
 // ─── Trigger manual / test ──────────────────────────────────────────────────

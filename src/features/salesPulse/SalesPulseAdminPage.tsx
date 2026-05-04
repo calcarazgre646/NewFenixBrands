@@ -42,6 +42,12 @@ export default function SalesPulseAdminPage() {
         error={admin.runsError}
         onDelete={(id) => admin.deleteRun.mutate(id)}
         isDeleting={admin.deleteRun.isPending}
+        total={admin.runsTotal}
+        page={admin.runsPage}
+        pageSize={admin.runsPageSize}
+        totalPages={admin.runsTotalPages}
+        onPageChange={admin.setRunsPage}
+        isFetching={admin.isFetchingRuns}
       />
     </div>
   );
