@@ -137,37 +137,52 @@ BEGIN
     ELSE 0
   END;
 
-  -- ── Bloque 3.a: top 3 marcas WoW ───────────────────────────────────────
-  WITH w AS (
-    SELECT brand, SUM(neto) AS neto_week
+  -- ── Bloque 3.a: las 3 marcas oficiales (Martel/Wrangler/Lee) ───────────
+  -- Replica la lógica de normalizeBrand() del frontend: cualquier valor crudo
+  -- de v_marca que no matchee se descarta (ej: "Niella", "Varias" son ruido
+  -- del ERP). Siempre se muestran las 3 ordenadas por neto desc, aunque
+  -- alguna haya sido 0 esa semana. WoW% null cuando la base previa es 0.
+  WITH official_brands(name) AS (
+    VALUES ('Martel'), ('Wrangler'), ('Lee')
+  ),
+  norm AS (
+    SELECT
+      CASE
+        WHEN lower(brand) LIKE '%martel%'   THEN 'Martel'
+        WHEN lower(brand) LIKE '%wrangler%' THEN 'Wrangler'
+        WHEN lower(brand) LIKE '%lee%'      THEN 'Lee'
+        ELSE NULL
+      END AS brand,
+      neto, year, month, day
     FROM mv_ventas_diarias
-    WHERE make_date(year, month, day) BETWEEN p_week_start AND v_week_end
+  ),
+  w AS (
+    SELECT brand, SUM(neto) AS neto_week
+    FROM norm
+    WHERE brand IS NOT NULL
+      AND make_date(year, month, day) BETWEEN p_week_start AND v_week_end
     GROUP BY brand
   ),
   pw AS (
     SELECT brand, SUM(neto) AS neto_prev
-    FROM mv_ventas_diarias
-    WHERE make_date(year, month, day) BETWEEN v_prev_week_start AND v_prev_week_end
+    FROM norm
+    WHERE brand IS NOT NULL
+      AND make_date(year, month, day) BETWEEN v_prev_week_start AND v_prev_week_end
     GROUP BY brand
   )
-  SELECT COALESCE(jsonb_agg(pg_catalog.to_jsonb(t) ORDER BY t.wow_pct DESC NULLS LAST) FILTER (WHERE rn <= 3), '[]'::jsonb)
+  SELECT COALESCE(jsonb_agg(pg_catalog.to_jsonb(t) ORDER BY t.neto DESC), '[]'::jsonb)
   INTO v_movers_brands
   FROM (
     SELECT
-      w.brand AS name,
-      w.neto_week::numeric AS neto,
+      ob.name AS name,
+      COALESCE(w.neto_week, 0)::numeric AS neto,
       COALESCE(pw.neto_prev, 0)::numeric AS neto_prev,
-      CASE
-        WHEN COALESCE(pw.neto_prev, 0) > 0
-        THEN ROUND(((w.neto_week - pw.neto_prev) / pw.neto_prev * 100)::numeric, 1)
-        ELSE NULL
-      END AS wow_pct,
-      ROW_NUMBER() OVER (ORDER BY (
-        CASE WHEN COALESCE(pw.neto_prev, 0) > 0
-          THEN ((w.neto_week - pw.neto_prev) / pw.neto_prev) ELSE 0 END
-      ) DESC NULLS LAST) AS rn
-    FROM w LEFT JOIN pw USING (brand)
-    WHERE w.neto_week > 0
+      CASE WHEN COALESCE(pw.neto_prev, 0) > 0
+           THEN ROUND(((COALESCE(w.neto_week, 0) - pw.neto_prev) / pw.neto_prev * 100)::numeric, 1)
+           ELSE NULL END AS wow_pct
+    FROM official_brands ob
+    LEFT JOIN w  ON w.brand = ob.name
+    LEFT JOIN pw ON pw.brand = ob.name
   ) t;
 
   -- ── Bloque 3.b: top 3 SKUs por neto de la semana ───────────────────────
